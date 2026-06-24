@@ -1,0 +1,42 @@
+# VettiFlow 1.0
+
+Projeto Flutter/Dart base para implementar as telas do VettiFlow.
+
+## Rodar localmente
+
+```powershell
+flutter pub get
+flutter run -d web-server --web-hostname 127.0.0.1 --web-port 5174
+```
+
+Abra:
+
+```text
+http://127.0.0.1:5174
+```
+
+## Estrutura inicial
+
+```text
+lib/
+  app/
+    vetti_flow_app.dart
+  ui/
+    auth/
+      login_page.dart
+      widgets/
+        login_brand_panel.dart
+        login_form_panel.dart
+  shared/
+    theme/
+      app_colors.dart
+      app_theme.dart
+```
+
+## Base pronta
+
+- App Flutter criado com o package `vetti_flow_1_0`.
+- Login inicial responsivo para desktop e mobile, seguindo a tela de referencia do VettiFlow.
+- Tema central com a cor Vetti `#0077BD`.
+- Logo VettiFlow em `assets/images/vetti-flow-logo.png`.
+- Tela preparada para trocar o `SnackBar` por chamada real de backend depois.
