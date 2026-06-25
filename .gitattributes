@@ -1,0 +1,49 @@
+# Normalize line endings across Windows / Mac / Linux
+* text=auto eol=lf
+
+# Dart / Flutter source
+*.dart text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.xml text eol=lf
+*.plist text eol=lf
+*.swift text eol=lf
+*.h text eol=lf
+*.m text eol=lf
+*.cc text eol=lf
+*.cpp text eol=lf
+*.cmake text eol=lf
+*.gradle text eol=lf
+*.kts text eol=lf
+*.properties text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.rc text eol=crlf
+
+# Binary files — no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.jar binary
+*.keystore binary
+*.jks binary
+*.so binary
+*.dylib binary
+*.dll binary
+*.exe binary
+
+# Lock files — exact merge to reduce conflicts
+pubspec.lock merge=ours -diff

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/repositories/mock_op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
 import 'package:vetti_flow_1_0/ui/auth/login_page.dart';
 import 'package:vetti_flow_1_0/ui/expedition/expedition_page.dart';
@@ -13,10 +16,14 @@ class VettiFlowApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'VettiFlow 1.0',
-      theme: AppTheme.light,
+    return RepositoryProvider<OpRepository>(
+      create: (_) => MockOpRepository(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'VettiFlow 1.0',
+        theme: AppTheme.light,
+        home: const LoginPage(),
+      ),
       initialRoute: '/soldagem',
       routes: {
         '/login': (context) => const LoginPage(),
