@@ -340,7 +340,7 @@ class _MobileSolderingLayout extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'Toque na OP para ver instrucoes e acoes.',
+                          'Toque na OP para ver detalhes e acoes.',
                           style: TextStyle(
                             color: AppColors.muted,
                             fontSize: 12,

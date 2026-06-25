@@ -25,15 +25,21 @@ class KpiCards extends StatelessWidget {
       final sub = switch (s) {
         StatusOP.aAbrir => 'aguardando abertura',
         StatusOP.naoIniciada => 'prontas para iniciar',
-        StatusOP.emAndamento => atrasadas > 0
-            ? '$atrasadas atrasada${atrasadas > 1 ? 's' : ''}'
-            : 'todas no prazo',
+        StatusOP.emAndamento =>
+          atrasadas > 0
+              ? '$atrasadas atrasada${atrasadas > 1 ? 's' : ''}'
+              : 'todas no prazo',
         StatusOP.finalizada => 'no período',
       };
       final subColor = (s == StatusOP.emAndamento && atrasadas > 0)
           ? AppColors.danger
           : AppColors.muted;
-      return _KpiData(status: s, count: counts[s] ?? 0, sub: sub, subColor: subColor);
+      return _KpiData(
+        status: s,
+        count: counts[s] ?? 0,
+        sub: sub,
+        subColor: subColor,
+      );
     }).toList();
 
     if (compact) {
@@ -43,7 +49,7 @@ class KpiCards extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          separatorBuilder: (_, index) => const SizedBox(width: 10),
           itemBuilder: (_, i) => SizedBox(
             width: 138,
             child: _KpiCard(
@@ -58,16 +64,22 @@ class KpiCards extends StatelessWidget {
     }
 
     return Row(
-      children: items.map((d) => Expanded(
-        child: Padding(
-          padding: EdgeInsets.only(right: d.status != StatusOP.finalizada ? 14 : 0),
-          child: _KpiCard(
-            data: d,
-            active: activeFilter == d.status,
-            onTap: () => onToggle(d.status),
-          ),
-        ),
-      )).toList(),
+      children: items
+          .map(
+            (d) => Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: d.status != StatusOP.finalizada ? 14 : 0,
+                ),
+                child: _KpiCard(
+                  data: d,
+                  active: activeFilter == d.status,
+                  onTap: () => onToggle(d.status),
+                ),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -78,7 +90,12 @@ class _KpiData {
   final String sub;
   final Color subColor;
 
-  const _KpiData({required this.status, required this.count, required this.sub, required this.subColor});
+  const _KpiData({
+    required this.status,
+    required this.count,
+    required this.sub,
+    required this.subColor,
+  });
 }
 
 class _KpiCard extends StatelessWidget {
@@ -87,7 +104,12 @@ class _KpiCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool compact;
 
-  const _KpiCard({required this.data, required this.active, required this.onTap, this.compact = false});
+  const _KpiCard({
+    required this.data,
+    required this.active,
+    required this.onTap,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {

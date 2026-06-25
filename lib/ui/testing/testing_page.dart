@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
+import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 
@@ -10,6 +12,9 @@ class TestOperation {
     required this.quantity,
     required this.origin,
     required this.receivedAt,
+    required this.receivedAgo,
+    required this.station,
+    required this.checklist,
     required this.firmwareDefects,
   });
 
@@ -18,6 +23,9 @@ class TestOperation {
   final String quantity;
   final String origin;
   final String receivedAt;
+  final String receivedAgo;
+  final String station;
+  final List<String> checklist;
   final List<DefectEntry> firmwareDefects;
 }
 
@@ -33,6 +41,58 @@ class DefectEntry {
   final String quantity;
 }
 
+class TestDefectOption {
+  const TestDefectOption({required this.code, required this.title});
+
+  final String code;
+  final String title;
+
+  static const all = [
+    TestDefectOption(code: 'T1', title: 'Nao liga'),
+    TestDefectOption(code: 'T2', title: 'Sem resposta'),
+    TestDefectOption(code: 'T3', title: 'Consumo alto'),
+    TestDefectOption(code: 'T4', title: 'Falha RF'),
+    TestDefectOption(code: 'T5', title: 'LED incorreto'),
+    TestDefectOption(code: 'T6', title: 'Botao falhando'),
+    TestDefectOption(code: 'T7', title: 'Falha intermitente'),
+    TestDefectOption(code: 'T8', title: 'Outro defeito'),
+  ];
+}
+
+enum TestingStatus {
+  waiting(
+    'Aguardando',
+    AppColors.muted,
+    Color(0xFFEFF3F7),
+    Icons.schedule_rounded,
+  ),
+  active(
+    'Em teste',
+    AppColors.primary,
+    Color(0xFFE7F4FB),
+    Icons.science_rounded,
+  ),
+  paused(
+    'Pausada',
+    AppColors.orangeText,
+    Color(0xFFFBF1E2),
+    Icons.pause_rounded,
+  ),
+  completed(
+    'Concluida',
+    AppColors.green,
+    Color(0xFFE7F6EC),
+    Icons.check_circle_rounded,
+  );
+
+  const TestingStatus(this.label, this.color, this.surface, this.icon);
+
+  final String label;
+  final Color color;
+  final Color surface;
+  final IconData icon;
+}
+
 class TestingPage extends StatefulWidget {
   const TestingPage({super.key});
 
@@ -46,8 +106,15 @@ class _TestingPageState extends State<TestingPage> {
       number: 'OP-00564-345',
       product: 'CR4 - Controle 4 teclas',
       quantity: '2985 un',
-      origin: 'Gravacao',
+      origin: 'Soldagem',
       receivedAt: '11:14',
+      receivedAgo: 'Recebida ha 14 min',
+      station: 'Bancada T-02',
+      checklist: [
+        'Inicializacao e consumo em repouso',
+        'Resposta dos quatro canais',
+        'Alcance RF em bancada',
+      ],
       firmwareDefects: [
         DefectEntry(code: 'A', title: 'Nao gravou', quantity: '12 un'),
         DefectEntry(code: 'D', title: 'Firmware incorreto', quantity: '3 un'),
@@ -57,8 +124,15 @@ class _TestingPageState extends State<TestingPage> {
       number: 'OP-00564-346',
       product: '105-141 - Central Vetti Smart',
       quantity: '496 un',
-      origin: 'Gravacao',
+      origin: 'Soldagem',
       receivedAt: '11:22',
+      receivedAgo: 'Recebida ha 6 min',
+      station: 'Bancada T-04',
+      checklist: [
+        'Boot completo da central',
+        'Comunicacao com teclado e sensores',
+        'Sirene, relé e alimentacao auxiliar',
+      ],
       firmwareDefects: [
         DefectEntry(code: 'A', title: 'Nao gravou', quantity: '4 un'),
       ],
@@ -67,35 +141,81 @@ class _TestingPageState extends State<TestingPage> {
       number: 'OP-00564-347',
       product: 'TX-433 - Transmissor RF',
       quantity: '1200 un',
-      origin: 'Gravacao',
+      origin: 'Soldagem',
       receivedAt: '11:35',
+      receivedAgo: 'Recebida agora',
+      station: 'Bancada T-01',
+      checklist: [
+        'Pareamento com receptor',
+        'Medicao de consumo no disparo',
+        'Inspecao de alcance minimo',
+      ],
       firmwareDefects: [],
     ),
   ];
 
   var _selectedIndex = 0;
-  var _status = 'Aguardando';
+  final _statuses = <int, TestingStatus>{};
 
   TestOperation get _selectedOperation => _operations[_selectedIndex];
+  TestingStatus _statusOf(int index) =>
+      _statuses[index] ?? TestingStatus.waiting;
 
-  void _startTest() {
-    setState(() => _status = 'Em teste');
+  void _select(int index) {
+    setState(() => _selectedIndex = index);
   }
 
-  void _pauseOperation() {
-    setState(() => _status = 'Pausada');
+  void _setStatus(int index, TestingStatus status) {
+    setState(() => _statuses[index] = status);
   }
+
+  void _startTest() => _setStatus(_selectedIndex, TestingStatus.active);
+
+  void _pauseOperation() => _setStatus(_selectedIndex, TestingStatus.paused);
 
   Future<void> _completeTest() async {
-    final confirmed = await showTestDefectsDialog(context, _selectedOperation);
-    if (!mounted || confirmed != true) return;
+    final defects = await showTestDefectsDialog(context, _selectedOperation);
+    if (!mounted || defects == null) return;
 
-    setState(() => _status = 'Concluida');
+    final signed = await showTestPinDialog(
+      context,
+      _selectedOperation,
+      defects: defects,
+    );
+    if (!mounted || signed != true) return;
+
+    _setStatus(_selectedIndex, TestingStatus.completed);
+    final suffix = defects.isEmpty
+        ? 'aprovada para expedicao.'
+        : 'com defeitos enviados ao suporte.';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${_selectedOperation.number}: defeitos seguem ao suporte e saldo aprovado segue para frente.',
-        ),
+      SnackBar(content: Text('${_selectedOperation.number} $suffix')),
+    );
+  }
+
+  void _showMobileActions(BuildContext context) {
+    final status = _statusOf(_selectedIndex);
+    final operation = _selectedOperation;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _MobileTestingActionSheet(
+        operation: operation,
+        status: status,
+        onStart: () {
+          Navigator.pop(ctx);
+          _startTest();
+        },
+        onPause: () {
+          Navigator.pop(ctx);
+          _pauseOperation();
+        },
+        onComplete: () {
+          Navigator.pop(ctx);
+          _completeTest();
+        },
       ),
     );
   }
@@ -104,28 +224,26 @@ class _TestingPageState extends State<TestingPage> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final formFactor = constraints.maxWidth >= 1180
-            ? AppFormFactor.expanded
-            : AppBreakpoints.fromWidth(constraints.maxWidth);
+        final formFactor = AppBreakpoints.fromWidth(constraints.maxWidth);
         final isMobile = formFactor != AppFormFactor.expanded;
 
         if (isMobile) {
           return _MobileTestingLayout(
             operations: _operations,
             selectedIndex: _selectedIndex,
-            status: _status,
-            onSelect: (index) => setState(() => _selectedIndex = index),
-            onStart: _startTest,
-            onPause: _pauseOperation,
-            onComplete: _completeTest,
+            statuses: _statuses,
+            onSelect: (index) {
+              _select(index);
+              _showMobileActions(context);
+            },
           );
         }
 
         return _DesktopTestingLayout(
           operations: _operations,
           selectedIndex: _selectedIndex,
-          status: _status,
-          onSelect: (index) => setState(() => _selectedIndex = index),
+          statuses: _statuses,
+          onSelect: _select,
           onStart: _startTest,
           onPause: _pauseOperation,
           onComplete: _completeTest,
@@ -135,75 +253,102 @@ class _TestingPageState extends State<TestingPage> {
   }
 }
 
-class _DesktopTestingLayout extends StatelessWidget {
-  const _DesktopTestingLayout({
-    required this.operations,
-    required this.selectedIndex,
+class _MobileTestingActionSheet extends StatelessWidget {
+  const _MobileTestingActionSheet({
+    required this.operation,
     required this.status,
-    required this.onSelect,
     required this.onStart,
     required this.onPause,
     required this.onComplete,
   });
 
-  final List<TestOperation> operations;
-  final int selectedIndex;
-  final String status;
-  final ValueChanged<int> onSelect;
+  final TestOperation operation;
+  final TestingStatus status;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onComplete;
 
-  TestOperation get selectedOperation => operations[selectedIndex];
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.pageBackground,
-      body: Column(
-        children: [
-          const VettiTopBar(
-            title: 'Teste de Producao',
-            operatorName: 'Joao',
-            operatorRole: 'Teste',
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+      ),
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
           ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(40, 46, 40, 36),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: AppBreakpoints.maxContentWidth,
-                    minWidth: 1040,
-                  ),
-                  child: Row(
+        ],
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD7E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(
-                        width: 390,
-                        child: _TestingQueue(
-                          operations: operations,
-                          selectedIndex: selectedIndex,
-                          onSelect: onSelect,
+                      Text(
+                        operation.number,
+                        style: const TextStyle(
+                          color: AppColors.text,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(width: 72),
-                      Expanded(
-                        child: _TestingDetails(
-                          operation: selectedOperation,
-                          status: status,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onComplete: onComplete,
+                      const SizedBox(height: 4),
+                      Text(
+                        operation.product,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                _TestingStatusChip(status: status, compact: true),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            _TestingMetrics(operation: operation, compact: true),
+            const SizedBox(height: 16),
+            _FirmwareDefectsPanel(operation: operation, compact: true),
+            const SizedBox(height: 16),
+            _ChecklistPanel(operation: operation, compact: true),
+            const SizedBox(height: 20),
+            _TestingActions(
+              status: status,
+              compact: true,
+              onStart: onStart,
+              onPause: onPause,
+              onComplete: onComplete,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -213,22 +358,14 @@ class _MobileTestingLayout extends StatelessWidget {
   const _MobileTestingLayout({
     required this.operations,
     required this.selectedIndex,
-    required this.status,
+    required this.statuses,
     required this.onSelect,
-    required this.onStart,
-    required this.onPause,
-    required this.onComplete,
   });
 
   final List<TestOperation> operations;
   final int selectedIndex;
-  final String status;
+  final Map<int, TestingStatus> statuses;
   final ValueChanged<int> onSelect;
-  final VoidCallback onStart;
-  final VoidCallback onPause;
-  final VoidCallback onComplete;
-
-  TestOperation get selectedOperation => operations[selectedIndex];
 
   @override
   Widget build(BuildContext context) {
@@ -249,39 +386,43 @@ class _MobileTestingLayout extends StatelessWidget {
               children: [
                 const VettiTopBar(
                   title: 'Teste de Producao',
-                  operatorName: 'Joao',
+                  operatorName: 'Ana',
                   compact: true,
                 ),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(12, 18, 12, 24),
+                    padding: const EdgeInsets.fromLTRB(14, 18, 14, 22),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: _TestingHeader(compact: true),
+                        const Text(
+                          'OPs para teste',
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Toque na OP para ver checklist e acoes.',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         for (var i = 0; i < operations.length; i++) ...[
                           _TestingCard(
                             operation: operations[i],
                             selected: i == selectedIndex,
+                            status: statuses[i] ?? TestingStatus.waiting,
                             compact: true,
                             onTap: () => onSelect(i),
                           ),
                           if (i < operations.length - 1)
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                         ],
-                        const SizedBox(height: 26),
-                        _FirmwareDefectsPanel(operation: selectedOperation),
-                        const SizedBox(height: 18),
-                        _TestingActions(
-                          compact: true,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onComplete: onComplete,
-                        ),
                       ],
                     ),
                   ),
@@ -295,70 +436,146 @@ class _MobileTestingLayout extends StatelessWidget {
   }
 }
 
-class _TestingQueue extends StatelessWidget {
-  const _TestingQueue({
+class _DesktopTestingLayout extends StatelessWidget {
+  const _DesktopTestingLayout({
     required this.operations,
     required this.selectedIndex,
+    required this.statuses,
+    required this.onSelect,
+    required this.onStart,
+    required this.onPause,
+    required this.onComplete,
+  });
+
+  final List<TestOperation> operations;
+  final int selectedIndex;
+  final Map<int, TestingStatus> statuses;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onStart;
+  final VoidCallback onPause;
+  final VoidCallback onComplete;
+
+  TestOperation get selectedOperation => operations[selectedIndex];
+  TestingStatus get status => statuses[selectedIndex] ?? TestingStatus.waiting;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.pageBackground,
+      body: Column(
+        children: [
+          const VettiTopBar(
+            title: 'Teste de Producao',
+            operatorName: 'Ana',
+            operatorRole: 'Teste',
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(40, 32, 40, 36),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1180),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 340,
+                        child: _DesktopTestingQueue(
+                          operations: operations,
+                          selectedIndex: selectedIndex,
+                          statuses: statuses,
+                          onSelect: onSelect,
+                        ),
+                      ),
+                      const SizedBox(width: 36),
+                      Expanded(
+                        child: _DesktopTestingDetail(
+                          operation: selectedOperation,
+                          status: status,
+                          onStart: onStart,
+                          onPause: onPause,
+                          onComplete: onComplete,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopTestingQueue extends StatelessWidget {
+  const _DesktopTestingQueue({
+    required this.operations,
+    required this.selectedIndex,
+    required this.statuses,
     required this.onSelect,
   });
 
   final List<TestOperation> operations;
   final int selectedIndex;
+  final Map<int, TestingStatus> statuses;
   final ValueChanged<int> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _TestingHeader(),
-        const SizedBox(height: 38),
-        for (var i = 0; i < operations.length; i++) ...[
-          _TestingCard(
-            operation: operations[i],
-            selected: i == selectedIndex,
-            onTap: () => onSelect(i),
+    return _Panel(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.fact_check_rounded,
+                size: 20,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'OPs para teste',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _CountBadge(value: '${operations.length}'),
+            ],
           ),
-          if (i < operations.length - 1) const SizedBox(height: 23),
+          const SizedBox(height: 6),
+          const Text(
+            'Liberadas pela soldagem para teste funcional.',
+            style: TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 18),
+          for (var i = 0; i < operations.length; i++) ...[
+            _TestingCard(
+              operation: operations[i],
+              selected: i == selectedIndex,
+              status: statuses[i] ?? TestingStatus.waiting,
+              onTap: () => onSelect(i),
+            ),
+            if (i < operations.length - 1) const SizedBox(height: 10),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
-class _TestingHeader extends StatelessWidget {
-  const _TestingHeader({this.compact = false});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'OPs para teste',
-          style: TextStyle(
-            color: AppColors.text,
-            fontSize: compact ? 24 : 32,
-            fontWeight: FontWeight.w900,
-            height: 1.1,
-          ),
-        ),
-        SizedBox(height: compact ? 6 : 8),
-        Text(
-          compact
-              ? 'Recebidas da gravacao.'
-              : 'Defeitos da gravacao ficam fixos na OP; defeitos do teste vao ao suporte.',
-          style: TextStyle(color: AppColors.muted, fontSize: compact ? 13 : 16),
-        ),
-      ],
-    );
-  }
-}
-
-class _TestingDetails extends StatelessWidget {
-  const _TestingDetails({
+class _DesktopTestingDetail extends StatelessWidget {
+  const _DesktopTestingDetail({
     required this.operation,
     required this.status,
     required this.onStart,
@@ -367,55 +584,88 @@ class _TestingDetails extends StatelessWidget {
   });
 
   final TestOperation operation;
-  final String status;
+  final TestingStatus status;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onComplete;
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 900),
+    return _Panel(
+      padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            operation.number,
-            style: const TextStyle(
-              color: AppColors.text,
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      operation.number,
+                      style: const TextStyle(
+                        color: AppColors.text,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      operation.product,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      operation.receivedAgo,
+                      style: const TextStyle(
+                        color: AppColors.smallText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              _TestingStatusChip(status: status),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            operation.product,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-            ),
+          const SizedBox(height: 24),
+          _TestingMetrics(operation: operation),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _FirmwareDefectsPanel(operation: operation)),
+              const SizedBox(width: 16),
+              Expanded(child: _ChecklistPanel(operation: operation)),
+            ],
           ),
-          const SizedBox(height: 42),
-          _TestingMetrics(operation: operation, status: status),
-          const SizedBox(height: 32),
-          _FirmwareDefectsPanel(operation: operation),
-          const SizedBox(height: 54),
+          const SizedBox(height: 28),
+          _DividerLine(),
+          const SizedBox(height: 28),
           const Text(
             'Acoes do teste',
             style: TextStyle(
               color: AppColors.text,
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Ao concluir, registre defeitos do teste. Defeitos seguem ao suporte e o saldo aprovado segue para frente.',
-            style: TextStyle(color: AppColors.muted, fontSize: 16),
+          const SizedBox(height: 6),
+          Text(
+            _actionHint(status),
+            style: const TextStyle(color: AppColors.muted, fontSize: 13),
           ),
-          const SizedBox(height: 36),
+          const SizedBox(height: 20),
           _TestingActions(
+            status: status,
             onStart: onStart,
             onPause: onPause,
             onComplete: onComplete,
@@ -424,82 +674,135 @@ class _TestingDetails extends StatelessWidget {
       ),
     );
   }
+
+  String _actionHint(TestingStatus status) {
+    return switch (status) {
+      TestingStatus.waiting => 'Inicie o teste para liberar pausa e conclusao.',
+      TestingStatus.active => 'Teste em andamento. Pause ou conclua a OP.',
+      TestingStatus.paused => 'OP pausada. Retome ou conclua com assinatura.',
+      TestingStatus.completed => 'OP finalizada nesta etapa.',
+    };
+  }
 }
 
 class _TestingCard extends StatelessWidget {
   const _TestingCard({
     required this.operation,
     required this.selected,
+    required this.status,
     required this.onTap,
     this.compact = false,
   });
 
   final TestOperation operation;
   final bool selected;
+  final TestingStatus status;
   final VoidCallback onTap;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(compact ? 10 : 8);
+    final active = status != TestingStatus.waiting;
+    final radius = BorderRadius.circular(14);
 
     return Material(
-      color: selected ? const Color(0xFFEAF7FF) : Colors.white,
+      color: selected
+          ? const Color(0xFFEAF7FF)
+          : active
+          ? status.surface
+          : Colors.white,
       borderRadius: radius,
       child: InkWell(
         onTap: onTap,
         borderRadius: radius,
         child: Container(
           width: double.infinity,
-          constraints: BoxConstraints(minHeight: compact ? 112 : 126),
           padding: EdgeInsets.fromLTRB(
-            compact ? 16 : 20,
             compact ? 14 : 16,
-            compact ? 16 : 20,
-            compact ? 13 : 14,
+            compact ? 13 : 15,
+            compact ? 14 : 16,
+            compact ? 13 : 15,
           ),
           decoration: BoxDecoration(
             borderRadius: radius,
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border,
-              width: selected ? 2 : 1,
+              color: selected
+                  ? AppColors.primary
+                  : active
+                  ? status.color.withValues(alpha: 0.35)
+                  : AppColors.border,
+              width: selected ? 1.5 : 1,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                operation.number,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: compact ? 17 : 22,
-                  fontWeight: FontWeight.w900,
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                if (active) ...[
+                  Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: status.color,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              operation.number,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.text,
+                                fontSize: compact ? 15 : 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (active)
+                            _TestingStatusChip(status: status, compact: true),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        operation.product,
+                        maxLines: compact ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        '${operation.quantity} · ${operation.station}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.smallText,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              SizedBox(height: compact ? 10 : 12),
-              Text(
-                operation.product,
-                maxLines: compact ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: compact ? 13 : 17,
-                  fontWeight: FontWeight.w900,
+                const SizedBox(width: 10),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 20,
+                  color: selected ? AppColors.primary : AppColors.iconMuted,
                 ),
-              ),
-              SizedBox(height: compact ? 12 : 14),
-              Text(
-                'Qtd: ${operation.quantity} · Origem: ${operation.origin}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.smallText,
-                  fontSize: compact ? 11 : 13,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -507,82 +810,34 @@ class _TestingCard extends StatelessWidget {
   }
 }
 
-class _TestingMetrics extends StatelessWidget {
-  const _TestingMetrics({required this.operation, required this.status});
+class _TestingStatusChip extends StatelessWidget {
+  const _TestingStatusChip({required this.status, this.compact = false});
 
-  final TestOperation operation;
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final metrics = [
-      ('Saldo para teste', operation.quantity),
-      ('Origem', operation.origin),
-      ('Recebida', operation.receivedAt),
-      ('Status atual', status),
-    ];
-
-    return Wrap(
-      spacing: 24,
-      runSpacing: 18,
-      children: [
-        for (final metric in metrics)
-          _MetricCard(
-            label: metric.$1,
-            value: metric.$2,
-            wide:
-                metric.$1 == 'Saldo para teste' || metric.$1 == 'Status atual',
-          ),
-      ],
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    required this.wide,
-  });
-
-  final String label;
-  final String value;
-  final bool wide;
+  final TestingStatus status;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: wide ? 205 : 160,
-      constraints: const BoxConstraints(minHeight: 98),
-      padding: const EdgeInsets.fromLTRB(20, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFFE4EDF4)),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 14,
+        vertical: compact ? 5 : 7,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: status.surface,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(status.icon, size: compact ? 12 : 14, color: status.color),
+          SizedBox(width: compact ? 4 : 6),
           Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.label,
-              fontSize: 14,
+            status.label,
+            style: TextStyle(
+              color: status.color,
+              fontSize: compact ? 10 : 12,
               fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 9),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-              ),
             ),
           ),
         ],
@@ -591,46 +846,200 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _FirmwareDefectsPanel extends StatelessWidget {
-  const _FirmwareDefectsPanel({required this.operation});
+class _TestingMetrics extends StatelessWidget {
+  const _TestingMetrics({required this.operation, this.compact = false});
 
   final TestOperation operation;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = [
+      ('Quantidade', operation.quantity),
+      ('Origem', operation.origin),
+      ('Recebida', operation.receivedAt),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 18,
+        vertical: compact ? 12 : 15,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE4EDF4)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < metrics.length; i++) ...[
+            Expanded(
+              child: _MetricItem(
+                label: metrics[i].$1,
+                value: metrics[i].$2,
+                compact: compact,
+              ),
+            ),
+            if (i < metrics.length - 1)
+              Container(
+                width: 1,
+                height: compact ? 36 : 42,
+                margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 14),
+                color: const Color(0xFFE9F0F5),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricItem extends StatelessWidget {
+  const _MetricItem({
+    required this.label,
+    required this.value,
+    required this.compact,
+  });
+
+  final String label;
+  final String value;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.label,
+            fontSize: compact ? 11 : 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.text,
+            fontSize: compact ? 16 : 19,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FirmwareDefectsPanel extends StatelessWidget {
+  const _FirmwareDefectsPanel({required this.operation, this.compact = false});
+
+  final TestOperation operation;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(compact ? 14 : 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF9EF),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF4D7A7)),
+        color: const Color(0xFFFFF8EC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEFDFBF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Defeitos fixos da gravacao',
+          Text(
+            'Defeitos da gravacao',
             style: TextStyle(
               color: AppColors.text,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontSize: compact ? 15 : 16,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (operation.firmwareDefects.isEmpty)
             const Text(
-              'Nenhum defeito registrado na gravacao.',
-              style: TextStyle(color: AppColors.muted),
+              'Nenhum defeito herdado.',
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
             )
           else
             for (final defect in operation.firmwareDefects) ...[
               Text(
                 '${defect.code} - ${defect.title}: ${defect.quantity}',
-                style: const TextStyle(color: AppColors.orangeText),
+                style: const TextStyle(
+                  color: AppColors.orangeText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
             ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ChecklistPanel extends StatelessWidget {
+  const _ChecklistPanel({required this.operation, this.compact = false});
+
+  final TestOperation operation;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 14 : 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE4EDF4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Checklist de teste',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: compact ? 15 : 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (var i = 0; i < operation.checklist.length; i++) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 17,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    operation.checklist[i],
+                    style: TextStyle(
+                      color: AppColors.muted,
+                      fontSize: compact ? 12 : 13,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (i < operation.checklist.length - 1) const SizedBox(height: 8),
+          ],
         ],
       ),
     );
@@ -639,12 +1048,14 @@ class _FirmwareDefectsPanel extends StatelessWidget {
 
 class _TestingActions extends StatelessWidget {
   const _TestingActions({
+    required this.status,
     required this.onStart,
     required this.onPause,
     required this.onComplete,
     this.compact = false,
   });
 
+  final TestingStatus status;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onComplete;
@@ -652,83 +1063,89 @@ class _TestingActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Acoes da OP',
-            style: TextStyle(
-              color: AppColors.text,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
+    if (status == TestingStatus.completed) {
+      return Container(
+        width: compact ? double.infinity : 480,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE7F6EC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFBFE5CC)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: AppColors.green, size: 18),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Teste assinado. Aprovados seguem para expedicao e defeitos para suporte.',
+                style: TextStyle(
+                  color: AppColors.green,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
+          ],
+        ),
+      );
+    }
+
+    if (status == TestingStatus.waiting) {
+      return _ActionButton(
+        label: 'Iniciar teste',
+        icon: Icons.play_arrow_rounded,
+        onPressed: onStart,
+        fillColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        width: compact ? double.infinity : 220,
+      );
+    }
+
+    if (status == TestingStatus.paused) {
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
           _ActionButton(
-            label: 'Iniciar teste',
+            label: 'Retomar teste',
             icon: Icons.play_arrow_rounded,
             onPressed: onStart,
             fillColor: AppColors.primary,
             foregroundColor: Colors.white,
-            width: double.infinity,
-            height: 54,
+            width: compact ? double.infinity : 220,
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionButton(
-                  label: 'Pausar OP',
-                  onPressed: onPause,
-                  foregroundColor: AppColors.orangeText,
-                  borderColor: AppColors.orange,
-                  height: 54,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _ActionButton(
-                  label: 'Concluir',
-                  onPressed: onComplete,
-                  foregroundColor: AppColors.green,
-                  borderColor: AppColors.green,
-                  height: 54,
-                ),
-              ),
-            ],
+          _ActionButton(
+            label: 'Concluir teste',
+            icon: Icons.check_rounded,
+            onPressed: onComplete,
+            foregroundColor: AppColors.green,
+            borderColor: AppColors.green,
+            width: compact ? double.infinity : 220,
           ),
         ],
       );
     }
 
     return Wrap(
-      spacing: 24,
-      runSpacing: 16,
+      spacing: 12,
+      runSpacing: 12,
       children: [
-        _ActionButton(
-          label: 'Iniciar teste',
-          icon: Icons.play_arrow_rounded,
-          onPressed: onStart,
-          fillColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          width: 250,
-        ),
         _ActionButton(
           label: 'Pausar OP',
           icon: Icons.pause_rounded,
           onPressed: onPause,
           foregroundColor: AppColors.orangeText,
           borderColor: AppColors.orange,
-          width: 250,
+          width: compact ? double.infinity : 190,
         ),
         _ActionButton(
           label: 'Concluir teste',
           icon: Icons.check_rounded,
           onPressed: onComplete,
-          foregroundColor: AppColors.green,
-          borderColor: AppColors.green,
-          width: 250,
+          fillColor: AppColors.green,
+          foregroundColor: Colors.white,
+          width: compact ? double.infinity : 220,
         ),
       ],
     );
@@ -744,7 +1161,6 @@ class _ActionButton extends StatelessWidget {
     this.fillColor,
     this.borderColor,
     this.width,
-    this.height = 74,
   });
 
   final String label;
@@ -754,35 +1170,321 @@ class _ActionButton extends StatelessWidget {
   final Color? fillColor;
   final Color? borderColor;
   final double? width;
-  final double height;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      height: height,
-      child: OutlinedButton(
+      height: 52,
+      child: OutlinedButton.icon(
         onPressed: onPressed,
+        icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 20),
+        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         style: OutlinedButton.styleFrom(
           backgroundColor: fillColor ?? Colors.white,
           foregroundColor: foregroundColor,
           side: BorderSide(
             color: borderColor ?? fillColor ?? Colors.white,
-            width: 2,
+            width: 1.5,
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child, required this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE4EDF4)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CountBadge extends StatelessWidget {
+  const _CountBadge({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF7FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        value,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _DividerLine extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 1,
+      color: const Color(0xFFEEF3F7),
+    );
+  }
+}
+
+Future<List<TestDefectOption>?> showTestDefectsDialog(
+  BuildContext context,
+  TestOperation operation,
+) {
+  final compact = MediaQuery.sizeOf(context).width < 720;
+
+  if (compact) {
+    return showModalBottomSheet<List<TestDefectOption>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) =>
+          _TestDefectsSheet(operation: operation, compact: true),
+    );
+  }
+
+  return showDialog<List<TestDefectOption>>(
+    context: context,
+    builder: (context) => Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
+      backgroundColor: Colors.transparent,
+      child: _TestDefectsSheet(operation: operation),
+    ),
+  );
+}
+
+class _TestDefectsSheet extends StatefulWidget {
+  const _TestDefectsSheet({required this.operation, this.compact = false});
+
+  final TestOperation operation;
+  final bool compact;
+
+  @override
+  State<_TestDefectsSheet> createState() => _TestDefectsSheetState();
+}
+
+class _TestDefectsSheetState extends State<_TestDefectsSheet> {
+  final _selected = <String>{};
+
+  void _toggle(String code) {
+    setState(() {
+      if (_selected.contains(code)) {
+        _selected.remove(code);
+      } else {
+        _selected.add(code);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDefects = TestDefectOption.all
+        .where((defect) => _selected.contains(defect.code))
+        .toList();
+
+    return _ModalSurface(
+      compact: widget.compact,
+      maxWidth: 540,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.compact) const _SheetHandle(),
+          const Text(
+            'Defeitos do teste',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${widget.operation.number} · selecione os defeitos encontrados no teste.',
+            style: const TextStyle(color: AppColors.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+          _InheritedDefectsSummary(operation: widget.operation),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final defect in TestDefectOption.all)
+                _DefectChip(
+                  defect: defect,
+                  selected: _selected.contains(defect.code),
+                  onTap: () => _toggle(defect.code),
+                ),
+            ],
+          ),
+          if (selectedDefects.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8EC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEFDFBF)),
+              ),
+              child: Text(
+                'Defeitos: ${selectedDefects.map((d) => d.code).join(', ')}',
+                style: const TextStyle(
+                  color: AppColors.orangeText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: _DialogButton(
+                  label: 'Cancelar',
+                  onPressed: () => Navigator.of(context).pop(null),
+                  fillColor: const Color(0xFFF6F9FB),
+                  foregroundColor: AppColors.muted,
+                  borderColor: AppColors.border,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _DialogButton(
+                  label: selectedDefects.isEmpty
+                      ? 'Continuar sem defeitos'
+                      : 'Continuar com ${selectedDefects.length}',
+                  onPressed: () => Navigator.of(context).pop(selectedDefects),
+                  fillColor: AppColors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InheritedDefectsSummary extends StatelessWidget {
+  const _InheritedDefectsSummary({required this.operation});
+
+  final TestOperation operation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8EC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFEFDFBF)),
+      ),
+      child: Text(
+        operation.firmwareDefects.isEmpty
+            ? 'Sem defeitos herdados da gravacao.'
+            : 'Herdados da gravacao: ${operation.firmwareDefects.map((d) => d.code).join(', ')}',
+        style: const TextStyle(
+          color: AppColors.orangeText,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _DefectChip extends StatelessWidget {
+  const _DefectChip({
+    required this.defect,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final TestDefectOption defect;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF4DB) : const Color(0xFFF8FBFD),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.orange : const Color(0xFFE3EDF4),
+            width: selected ? 1.5 : 1,
+          ),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) ...[
-              Icon(icon, size: 22),
-              const SizedBox(width: 6),
-            ],
-            Flexible(
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Container(
+              width: 28,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.orange : const Color(0xFFEBF1F6),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Text(
+                defect.code,
+                style: TextStyle(
+                  color: selected ? Colors.white : AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              defect.title,
+              style: TextStyle(
+                color: selected ? AppColors.orangeText : AppColors.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -791,19 +1493,20 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-Future<bool?> showTestDefectsDialog(
+Future<bool?> showTestPinDialog(
   BuildContext context,
-  TestOperation operation,
-) {
+  TestOperation operation, {
+  List<TestDefectOption> defects = const [],
+}) {
   final compact = MediaQuery.sizeOf(context).width < 720;
-  final content = _TestDefectsSheet(operation: operation, compact: compact);
 
   if (compact) {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => content,
+      builder: (context) =>
+          _TestPinSheet(operation: operation, defects: defects, compact: true),
     );
   }
 
@@ -812,149 +1515,291 @@ Future<bool?> showTestDefectsDialog(
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
       backgroundColor: Colors.transparent,
-      child: content,
+      child: _TestPinSheet(operation: operation, defects: defects),
     ),
   );
 }
 
-class _TestDefectsSheet extends StatelessWidget {
-  const _TestDefectsSheet({required this.operation, required this.compact});
+class _TestPinSheet extends StatefulWidget {
+  const _TestPinSheet({
+    required this.operation,
+    this.defects = const [],
+    this.compact = false,
+  });
 
   final TestOperation operation;
+  final List<TestDefectOption> defects;
   final bool compact;
 
-  static const _testDefects = [
-    DefectEntry(code: 'T2', title: 'Sem resposta', quantity: '12 un'),
-    DefectEntry(code: 'T7', title: 'Falha intermitente', quantity: '5 un'),
-  ];
+  @override
+  State<_TestPinSheet> createState() => _TestPinSheetState();
+}
+
+class _TestPinSheetState extends State<_TestPinSheet> {
+  final _pinController = TextEditingController();
+  Operator? _operator;
+  bool _invalidPin = false;
+  bool _wrongStage = false;
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  void _onPinChanged(String value) {
+    if (value.length < 4) {
+      setState(() {
+        _operator = null;
+        _invalidPin = false;
+        _wrongStage = false;
+      });
+      return;
+    }
+
+    final operator = Operator.findByPin(value);
+    setState(() {
+      _operator = operator;
+      _invalidPin = operator == null;
+      _wrongStage = operator != null && operator.stage != WorkStage.testing;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final valid = _operator != null && !_wrongStage;
+
+    return _ModalSurface(
+      compact: widget.compact,
+      maxWidth: 480,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.compact) const _SheetHandle(),
+          const Text(
+            'Assinatura do operador',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Digite o PIN para concluir o teste da ${widget.operation.number}.',
+            style: const TextStyle(color: AppColors.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'PIN (4 digitos)',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pinController,
+            onChanged: _onPinChanged,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            obscureText: true,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 12,
+            ),
+            textAlign: TextAlign.center,
+            decoration: InputDecoration(
+              counterText: '',
+              filled: true,
+              fillColor: const Color(0xFFF8FBFD),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
+              border: _pinBorder(AppColors.border),
+              enabledBorder: _pinBorder(
+                _invalidPin
+                    ? const Color(0xFFD45B5B)
+                    : valid
+                    ? AppColors.green
+                    : AppColors.border,
+              ),
+              focusedBorder: _pinBorder(
+                _invalidPin
+                    ? const Color(0xFFD45B5B)
+                    : valid
+                    ? AppColors.green
+                    : AppColors.primary,
+                width: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_invalidPin)
+            const _PinFeedback(
+              icon: Icons.error_outline_rounded,
+              color: Color(0xFFD45B5B),
+              bgColor: Color(0xFFFFF0F0),
+              borderColor: Color(0xFFE8C4C4),
+              text: 'PIN nao encontrado. Verifique e tente novamente.',
+            ),
+          if (valid)
+            _PinFeedback(
+              icon: Icons.check_circle_rounded,
+              color: AppColors.green,
+              bgColor: const Color(0xFFE7F6EC),
+              borderColor: const Color(0xFFBFE5CC),
+              text: 'Operador: ${_operator!.name} (${_operator!.stage.label})',
+            ),
+          if (_wrongStage && _operator != null)
+            _PinFeedback(
+              icon: Icons.warning_amber_rounded,
+              color: AppColors.orangeText,
+              bgColor: const Color(0xFFFFF8EC),
+              borderColor: const Color(0xFFEFDFBF),
+              text:
+                  'PIN de ${_operator!.name}, vinculado a etapa "${_operator!.stage.label}". '
+                  'Voce esta na etapa "Teste".',
+            ),
+          if (widget.defects.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8EC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEFDFBF)),
+              ),
+              child: Text(
+                'Defeitos do teste: ${widget.defects.map((d) => d.code).join(', ')}',
+                style: const TextStyle(
+                  color: AppColors.orangeText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _DialogButton(
+                  label: 'Cancelar',
+                  onPressed: () => Navigator.of(context).pop(false),
+                  fillColor: const Color(0xFFF6F9FB),
+                  foregroundColor: AppColors.muted,
+                  borderColor: AppColors.border,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _DialogButton(
+                  label: 'Concluir OP',
+                  onPressed: valid
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  fillColor: valid ? AppColors.green : const Color(0xFFE4EDF4),
+                  foregroundColor: valid ? Colors.white : AppColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  OutlineInputBorder _pinBorder(Color color, {double width = 1}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
+}
+
+class _ModalSurface extends StatelessWidget {
+  const _ModalSurface({
+    required this.child,
+    required this.compact,
+    required this.maxWidth,
+  });
+
+  final Widget child;
+  final bool compact;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: compact ? Alignment.bottomCenter : Alignment.center,
       child: Container(
-        width: compact ? double.infinity : 620,
+        width: compact ? double.infinity : null,
+        constraints: BoxConstraints(
+          maxWidth: compact ? double.infinity : maxWidth,
+        ),
         margin: EdgeInsets.only(
           left: compact ? 10 : 0,
           right: compact ? 10 : 0,
           bottom: compact ? 10 : 0,
         ),
-        padding: EdgeInsets.fromLTRB(34, compact ? 20 : 38, 34, 32),
+        padding: EdgeInsets.fromLTRB(
+          compact ? 24 : 36,
+          compact ? 16 : 32,
+          compact ? 24 : 36,
+          compact ? 24 : 28,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(compact ? 22 : 8),
+          borderRadius: BorderRadius.circular(compact ? 22 : 16),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (compact) const _SheetHandle(),
-              const Text(
-                'Defeitos do teste',
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${operation.number} · informe defeitos encontrados no teste.',
-                style: const TextStyle(color: AppColors.muted),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Defeitos da gravacao (fixos)',
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _CompactDefectList(defects: operation.firmwareDefects),
-              const SizedBox(height: 24),
-              const Text(
-                'Defeitos apontados no teste',
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const _CompactDefectList(defects: _testDefects),
-              const SizedBox(height: 20),
-              TextField(
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'Observacao opcional',
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Voltar'),
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('Concluir'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+        child: SingleChildScrollView(child: child),
       ),
     );
   }
 }
 
-class _CompactDefectList extends StatelessWidget {
-  const _CompactDefectList({required this.defects});
+class _DialogButton extends StatelessWidget {
+  const _DialogButton({
+    required this.label,
+    required this.fillColor,
+    required this.foregroundColor,
+    this.onPressed,
+    this.borderColor,
+  });
 
-  final List<DefectEntry> defects;
+  final String label;
+  final VoidCallback? onPressed;
+  final Color fillColor;
+  final Color foregroundColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
-    if (defects.isEmpty) {
-      return const Text(
-        'Nenhum defeito registrado.',
-        style: TextStyle(color: AppColors.muted),
-      );
-    }
-
-    return Column(
-      children: [
-        for (final defect in defects) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FBFD),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE3EDF4)),
-            ),
-            child: Text(
-              '${defect.code} - ${defect.title}: ${defect.quantity}',
-              style: const TextStyle(
-                color: AppColors.text,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: fillColor,
+          foregroundColor: foregroundColor,
+          disabledBackgroundColor: const Color(0xFFE4EDF4),
+          disabledForegroundColor: AppColors.muted,
+          side: BorderSide(color: borderColor ?? fillColor),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(height: 10),
-        ],
-      ],
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
     );
   }
 }
@@ -966,13 +1811,59 @@ class _SheetHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 70,
-        height: 5,
-        margin: const EdgeInsets.only(bottom: 28),
+        width: 50,
+        height: 4,
+        margin: const EdgeInsets.only(bottom: 22),
         decoration: BoxDecoration(
           color: const Color(0xFFCBD7E1),
           borderRadius: BorderRadius.circular(3),
         ),
+      ),
+    );
+  }
+}
+
+class _PinFeedback extends StatelessWidget {
+  const _PinFeedback({
+    required this.icon,
+    required this.color,
+    required this.bgColor,
+    required this.borderColor,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color bgColor;
+  final Color borderColor;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

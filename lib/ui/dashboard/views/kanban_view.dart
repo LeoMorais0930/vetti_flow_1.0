@@ -18,7 +18,9 @@ class KanbanView extends StatelessWidget {
         final items = ordens.where((op) => op.status == status).toList();
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: status != StatusOP.finalizada ? 14 : 0),
+            padding: EdgeInsets.only(
+              right: status != StatusOP.finalizada ? 14 : 0,
+            ),
             child: _KanbanColumn(
               status: status,
               items: items,
@@ -36,7 +38,11 @@ class _KanbanColumn extends StatelessWidget {
   final List<OrdemProducao> items;
   final ValueChanged<String> onOpenOP;
 
-  const _KanbanColumn({required this.status, required this.items, required this.onOpenOP});
+  const _KanbanColumn({
+    required this.status,
+    required this.items,
+    required this.onOpenOP,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -57,24 +63,38 @@ class _KanbanColumn extends StatelessWidget {
                 Container(
                   width: 9,
                   height: 9,
-                  decoration: BoxDecoration(color: status.dot, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: status.dot,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     status.shortLabel,
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.bgHeader,
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
                     '${items.length}',
-                    style: GoogleFonts.ibmPlexMono(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.muted,
+                    ),
                   ),
                 ),
               ],
@@ -84,7 +104,10 @@ class _KanbanColumn extends StatelessWidget {
           if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text('Nenhuma OP', style: TextStyle(fontSize: 12, color: AppColors.textWeak)),
+              child: Text(
+                'Nenhuma OP',
+                style: TextStyle(fontSize: 12, color: AppColors.textWeak),
+              ),
             )
           else
             Flexible(
@@ -92,7 +115,7 @@ class _KanbanColumn extends StatelessWidget {
                 shrinkWrap: true,
                 padding: const EdgeInsets.all(10),
                 itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                separatorBuilder: (_, index) => const SizedBox(height: 10),
                 itemBuilder: (_, i) => OpCard(
                   op: items[i],
                   accentColor: status.dot,

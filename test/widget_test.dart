@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
 import 'package:vetti_flow_1_0/ui/auth/login_page.dart';
 import 'package:vetti_flow_1_0/ui/firmware/firmware_page.dart';
 import 'package:vetti_flow_1_0/ui/soldering/soldering_page.dart';
 
 void main() {
+  test('dashboard operator routes to dashboard', () {
+    final operator = Operator.authenticate('marina', '0000');
+
+    expect(operator, isNotNull);
+    expect(operator!.stage, WorkStage.dashboard);
+    expect(operator.stage.route, '/dashboard');
+  });
+
   testWidgets('shows the initial login screen', (tester) async {
     await tester.pumpWidget(_testApp());
 

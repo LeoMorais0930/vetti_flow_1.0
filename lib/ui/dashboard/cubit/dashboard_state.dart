@@ -36,13 +36,21 @@ class DashboardState {
 
   List<OrdemProducao> get ordensFiltradas {
     var result = ordens.where((op) {
-      if (filtroPeriodo != 'todos' && op.mes != filtroPeriodo) return false;
-      if (filtroResponsavel != 'todos' && op.responsavel != filtroResponsavel) return false;
-      if (filtroProduto != 'todos' && op.produto != filtroProduto) return false;
+      if (filtroPeriodo != 'todos' && op.mes != filtroPeriodo) {
+        return false;
+      }
+      if (filtroResponsavel != 'todos' && op.responsavel != filtroResponsavel) {
+        return false;
+      }
+      if (filtroProduto != 'todos' && op.produto != filtroProduto) {
+        return false;
+      }
       if (busca.isNotEmpty) {
         final q = busca.toLowerCase();
         if (!op.numero.toLowerCase().contains(q) &&
-            !op.produto.toLowerCase().contains(q)) return false;
+            !op.produto.toLowerCase().contains(q)) {
+          return false;
+        }
       }
       return true;
     }).toList();
@@ -56,13 +64,21 @@ class DashboardState {
 
   Map<StatusOP, int> get kpiCounts {
     final base = ordens.where((op) {
-      if (filtroPeriodo != 'todos' && op.mes != filtroPeriodo) return false;
-      if (filtroResponsavel != 'todos' && op.responsavel != filtroResponsavel) return false;
-      if (filtroProduto != 'todos' && op.produto != filtroProduto) return false;
+      if (filtroPeriodo != 'todos' && op.mes != filtroPeriodo) {
+        return false;
+      }
+      if (filtroResponsavel != 'todos' && op.responsavel != filtroResponsavel) {
+        return false;
+      }
+      if (filtroProduto != 'todos' && op.produto != filtroProduto) {
+        return false;
+      }
       if (busca.isNotEmpty) {
         final q = busca.toLowerCase();
         if (!op.numero.toLowerCase().contains(q) &&
-            !op.produto.toLowerCase().contains(q)) return false;
+            !op.produto.toLowerCase().contains(q)) {
+          return false;
+        }
       }
       return true;
     });
@@ -78,11 +94,12 @@ class DashboardState {
       .where((op) => op.status == StatusOP.emAndamento && op.atrasada)
       .length;
 
-  OrdemProducao? get selectedOrdem =>
-      selectedOP == null ? null : ordens.cast<OrdemProducao?>().firstWhere(
-        (op) => op?.numero == selectedOP,
-        orElse: () => null,
-      );
+  OrdemProducao? get selectedOrdem => selectedOP == null
+      ? null
+      : ordens.cast<OrdemProducao?>().firstWhere(
+          (op) => op?.numero == selectedOP,
+          orElse: () => null,
+        );
 
   bool get hasActiveFilters =>
       filtroPeriodo != 'todos' ||

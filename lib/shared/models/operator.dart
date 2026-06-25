@@ -1,5 +1,6 @@
 /// Etapa de trabalho do operador — define pra qual tela ele é direcionado.
 enum WorkStage {
+  dashboard('Dashboard', '/dashboard'),
   firmware('Gravacao', '/firmware'),
   soldering('Soldagem', '/soldagem'),
   testing('Teste', '/teste'),
@@ -29,6 +30,13 @@ class Operator {
   final WorkStage stage;
 
   static const all = [
+    Operator(
+      name: 'Marina',
+      username: 'marina',
+      password: '0000',
+      pin: '0000',
+      stage: WorkStage.dashboard,
+    ),
     Operator(
       name: 'Fernando',
       username: 'fernando',
