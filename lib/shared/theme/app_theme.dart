@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 
 abstract final class AppTheme {
+  static String get _fontFamily => GoogleFonts.ibmPlexSans().fontFamily!;
+
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
@@ -11,7 +14,7 @@ abstract final class AppTheme {
         surface: AppColors.surface,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Arial',
+      fontFamily: _fontFamily,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.field,
@@ -52,7 +55,7 @@ abstract final class AppTheme {
           backgroundColor: AppColors.buttonSoft,
           foregroundColor: Colors.white,
           elevation: 0,
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size(0, 56),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),

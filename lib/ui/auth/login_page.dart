@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/auth/widgets/login_brand_panel.dart';
 import 'package:vetti_flow_1_0/ui/auth/widgets/login_form_panel.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,8 +29,14 @@ class _LoginPageState extends State<LoginPage> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Login pronto para integrar ao backend.')),
+    final repo = context.read<OpRepository>();
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => BlocProvider(
+          create: (_) => DashboardCubit(repo),
+          child: const DashboardPage(),
+        ),
+      ),
     );
   }
 
