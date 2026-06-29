@@ -133,7 +133,10 @@ class _LoginFormPanelState extends State<LoginFormPanel> {
                 const SizedBox(height: 14),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF0F0),
                     borderRadius: BorderRadius.circular(10),
@@ -141,7 +144,11 @@ class _LoginFormPanelState extends State<LoginFormPanel> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFD45B5B)),
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        size: 18,
+                        color: Color(0xFFD45B5B),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(

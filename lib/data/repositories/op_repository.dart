@@ -17,8 +17,9 @@ class NovaOrdemDTO {
 
 abstract class OpRepository {
   Future<List<OrdemProducao>> fetchOrdens();
+  Future<List<OrdemArmazenada>> fetchOrdensArmazenadas();
   Future<OrdemProducao> criarOrdem(NovaOrdemDTO dto);
-  Future<void> avancarStatus(String numero);
+  Future<void> avancarStatus(String numero, {int quantidadeArmazenada = 0});
   Future<void> voltarStatus(String numero);
   Future<void> cancelarOrdem(String numero);
   Future<List<Responsavel>> fetchResponsaveis();

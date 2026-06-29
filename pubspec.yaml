@@ -34,6 +34,8 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_bloc: ^9.1.0
   intl: ^0.20.2
+  provider: ^6.1.5
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

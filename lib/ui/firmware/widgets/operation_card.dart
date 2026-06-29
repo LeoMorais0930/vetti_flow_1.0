@@ -29,8 +29,8 @@ class OperationCard extends StatelessWidget {
         color: selected
             ? const Color(0xFFEAF7FF)
             : isActive
-                ? status.surface
-                : Colors.white,
+            ? status.surface
+            : Colors.white,
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
@@ -48,8 +48,8 @@ class OperationCard extends StatelessWidget {
                 color: selected
                     ? AppColors.primary
                     : isActive
-                        ? status.color.withValues(alpha: 0.35)
-                        : AppColors.border,
+                    ? status.color.withValues(alpha: 0.35)
+                    : AppColors.border,
                 width: selected ? 1.5 : 1,
               ),
             ),
@@ -116,7 +116,9 @@ class OperationCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Icon(
-                  selected ? Icons.radio_button_checked_rounded : Icons.chevron_right_rounded,
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.chevron_right_rounded,
                   size: 18,
                   color: selected ? AppColors.primary : AppColors.iconMuted,
                 ),

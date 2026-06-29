@@ -38,6 +38,14 @@ class AppHeader extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            tooltip: 'Sair',
+            onPressed: () =>
+                Navigator.of(context).pushReplacementNamed('/login'),
+            icon: const Icon(Icons.logout_rounded),
+            color: AppColors.muted,
+          ),
+          const SizedBox(width: 8),
           _NovaOPButton(onPressed: onNovaOP),
         ],
       ),
@@ -61,7 +69,10 @@ class _NovaOPButton extends StatelessWidget {
         minimumSize: Size.zero,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-        textStyle: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w600),
+        textStyle: GoogleFonts.ibmPlexSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       icon: const Text('+', style: TextStyle(fontSize: 17)),
       label: const Text('Nova OP'),

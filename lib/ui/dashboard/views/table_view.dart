@@ -65,77 +65,150 @@ class TableView extends StatelessWidget {
               return DataRow(
                 onSelectChanged: (_) => onOpenOP(op.numero),
                 cells: [
-                  DataCell(Text(
-                    op.numero,
-                    style: GoogleFonts.ibmPlexMono(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textCode),
-                  )),
-                  DataCell(Text(op.produto, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textStrong))),
-                  DataCell(Text(op.qtdLabel, style: const TextStyle(color: AppColors.textMuted))),
-                  DataCell(Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (resp != null) ...[
-                        Container(
-                          width: 24, height: 24,
-                          decoration: BoxDecoration(color: resp.cor, shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: Text(resp.iniciais, style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w600)),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(op.responsavel, style: const TextStyle(color: AppColors.textSecondary)),
-                    ],
-                  )),
-                  DataCell(Text(op.dataAbertura, style: const TextStyle(color: AppColors.textMuted))),
-                  DataCell(Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        op.prazo,
-                        style: TextStyle(
-                          color: op.atrasada ? AppColors.danger : AppColors.textMuted,
-                          fontWeight: op.atrasada ? FontWeight.w600 : FontWeight.w400,
-                        ),
+                  DataCell(
+                    Text(
+                      op.numero,
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textCode,
                       ),
-                      if (op.atrasada) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(color: AppColors.dangerBg, borderRadius: BorderRadius.circular(99)),
-                          child: const Text('Atrasada', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.danger)),
-                        ),
-                      ],
-                    ],
-                  )),
-                  DataCell(_StatusBadge(status: op.status)),
-                  DataCell(SizedBox(
-                    width: 160,
-                    child: Row(
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      op.produto,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textStrong,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      op.qtdLabel,
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Container(
-                            height: 5,
-                            decoration: BoxDecoration(color: AppColors.bgProgress, borderRadius: BorderRadius.circular(99)),
-                            child: FractionallySizedBox(
-                              alignment: Alignment.centerLeft,
-                              widthFactor: (op.progresso / 100).clamp(0, 1),
-                              child: Container(
-                                decoration: BoxDecoration(color: op.status.barColor, borderRadius: BorderRadius.circular(99)),
+                        if (resp != null) ...[
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: resp.cor,
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              resp.iniciais,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 9),
-                        SizedBox(
-                          width: 30,
-                          child: Text(
-                            op.percentLabel,
-                            style: GoogleFonts.ibmPlexMono(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                          const SizedBox(width: 8),
+                        ],
+                        Text(
+                          op.responsavel,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
-                  )),
+                  ),
+                  DataCell(
+                    Text(
+                      op.dataAbertura,
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          op.prazo,
+                          style: TextStyle(
+                            color: op.atrasada
+                                ? AppColors.danger
+                                : AppColors.textMuted,
+                            fontWeight: op.atrasada
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                        if (op.atrasada) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.dangerBg,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: const Text(
+                              'Atrasada',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.danger,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  DataCell(_StatusBadge(status: op.status)),
+                  DataCell(
+                    SizedBox(
+                      width: 160,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: AppColors.bgProgress,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: (op.progresso / 100).clamp(0, 1),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: op.status.barColor,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          SizedBox(
+                            width: 30,
+                            child: Text(
+                              op.percentLabel,
+                              style: GoogleFonts.ibmPlexMono(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               );
             }).toList(),
@@ -182,13 +255,21 @@ class _StatusBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 7, height: 7,
-            decoration: BoxDecoration(color: status.dot, shape: BoxShape.circle),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: status.dot,
+              shape: BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 6),
           Text(
             status.shortLabel,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: status.textColor),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: status.textColor,
+            ),
           ),
         ],
       ),

@@ -4,9 +4,7 @@ import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/firmware_models.dart';
 
-Future<List<FirmwareDefect>?> showFirmwareDefectsDialog(
-  BuildContext context,
-) {
+Future<List<FirmwareDefect>?> showFirmwareDefectsDialog(BuildContext context) {
   final compact = MediaQuery.sizeOf(context).width < 720;
 
   if (compact) {
@@ -154,8 +152,13 @@ class _DefectsSheetState extends State<_DefectsSheet> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    selectedDefects.map((d) => '${d.code} - ${d.title}').join(', '),
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                    selectedDefects
+                        .map((d) => '${d.code} - ${d.title}')
+                        .join(', '),
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -358,11 +361,16 @@ class _PinSheetState extends State<_PinSheet> {
               counterText: '',
               filled: true,
               fillColor: const Color(0xFFF8FBFD),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
-                  color: _invalidPin ? const Color(0xFFD45B5B) : AppColors.border,
+                  color: _invalidPin
+                      ? const Color(0xFFD45B5B)
+                      : AppColors.border,
                 ),
               ),
               enabledBorder: OutlineInputBorder(
@@ -371,8 +379,8 @@ class _PinSheetState extends State<_PinSheet> {
                   color: _invalidPin
                       ? const Color(0xFFD45B5B)
                       : _resolvedOperator != null
-                          ? AppColors.green
-                          : AppColors.border,
+                      ? AppColors.green
+                      : AppColors.border,
                 ),
               ),
               focusedBorder: OutlineInputBorder(
@@ -381,8 +389,8 @@ class _PinSheetState extends State<_PinSheet> {
                   color: _invalidPin
                       ? const Color(0xFFD45B5B)
                       : _resolvedOperator != null
-                          ? AppColors.green
-                          : AppColors.primary,
+                      ? AppColors.green
+                      : AppColors.primary,
                   width: 1.5,
                 ),
               ),
@@ -407,7 +415,8 @@ class _PinSheetState extends State<_PinSheet> {
               color: AppColors.green,
               bgColor: const Color(0xFFE7F6EC),
               borderColor: const Color(0xFFBFE5CC),
-              text: 'Operador: ${_resolvedOperator!.name} (${_resolvedOperator!.stage.label})',
+              text:
+                  'Operador: ${_resolvedOperator!.name} (${_resolvedOperator!.stage.label})',
             ),
 
           if (_wrongStage && _resolvedOperator != null)
@@ -416,7 +425,8 @@ class _PinSheetState extends State<_PinSheet> {
               color: AppColors.orangeText,
               bgColor: const Color(0xFFFFF8EC),
               borderColor: const Color(0xFFEFDFBF),
-              text: 'PIN de ${_resolvedOperator!.name}, vinculado a etapa "${_resolvedOperator!.stage.label}". '
+              text:
+                  'PIN de ${_resolvedOperator!.name}, vinculado a etapa "${_resolvedOperator!.stage.label}". '
                   'Voce esta na etapa "${widget.currentStage.label}".',
             ),
 
@@ -541,7 +551,9 @@ class _ModalSurface extends StatelessWidget {
       alignment: compact ? Alignment.bottomCenter : Alignment.center,
       child: Container(
         width: compact ? double.infinity : null,
-        constraints: BoxConstraints(maxWidth: compact ? double.infinity : maxWidth),
+        constraints: BoxConstraints(
+          maxWidth: compact ? double.infinity : maxWidth,
+        ),
         margin: EdgeInsets.only(
           left: compact ? 10 : 0,
           right: compact ? 10 : 0,
@@ -590,7 +602,9 @@ class _DialogButton extends StatelessWidget {
           disabledBackgroundColor: const Color(0xFFE4EDF4),
           disabledForegroundColor: AppColors.muted,
           side: BorderSide(color: borderColor ?? fillColor),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
         ),
         child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),

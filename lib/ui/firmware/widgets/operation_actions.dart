@@ -132,7 +132,11 @@ class _CompletedBanner extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: AppColors.green, size: 20),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.green,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -187,15 +191,22 @@ class _ActionButton extends StatelessWidget {
             color: borderColor ?? fillColor ?? Colors.white,
             width: 1.4,
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 7)],
-            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            if (icon != null) ...[
+              Icon(icon, size: 18),
+              const SizedBox(width: 7),
+            ],
+            Flexible(
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
       ),

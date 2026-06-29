@@ -17,9 +17,11 @@ class VettiTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void logout() => Navigator.of(context).pushReplacementNamed('/login');
+
     if (compact) {
       return Container(
-        height: 104,
+        height: 112,
         padding: const EdgeInsets.fromLTRB(18, 16, 20, 14),
         decoration: const BoxDecoration(
           color: AppColors.primary,
@@ -34,6 +36,8 @@ class VettiTopBar extends StatelessWidget {
                 const _HeaderLogo(compact: true),
                 const Spacer(),
                 _OperatorBlock(name: operatorName, compact: true),
+                const SizedBox(width: 8),
+                _LogoutButton(compact: true, onPressed: logout),
               ],
             ),
             const SizedBox(height: 10),
@@ -73,6 +77,8 @@ class VettiTopBar extends StatelessWidget {
           ),
           const Spacer(),
           _OperatorBlock(name: operatorName, role: operatorRole),
+          const SizedBox(width: 16),
+          _LogoutButton(onPressed: logout),
         ],
       ),
     );
@@ -146,6 +152,32 @@ class _OperatorBlock extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  const _LogoutButton({required this.onPressed, this.compact = false});
+
+  final VoidCallback onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Sair',
+      onPressed: onPressed,
+      icon: Icon(
+        Icons.logout_rounded,
+        color: Colors.white,
+        size: compact ? 20 : 22,
+      ),
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.13),
+        minimumSize: Size.square(compact ? 34 : 40),
+        fixedSize: Size.square(compact ? 34 : 40),
+        padding: EdgeInsets.zero,
+      ),
     );
   }
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
@@ -101,101 +104,108 @@ class TestingPage extends StatefulWidget {
 }
 
 class _TestingPageState extends State<TestingPage> {
-  final _operations = const [
-    TestOperation(
-      number: 'OP-00564-345',
-      product: 'CR4 - Controle 4 teclas',
-      quantity: '2985 un',
-      origin: 'Soldagem',
-      receivedAt: '11:14',
-      receivedAgo: 'Recebida ha 14 min',
-      station: 'Bancada T-02',
-      checklist: [
-        'Inicializacao e consumo em repouso',
-        'Resposta dos quatro canais',
-        'Alcance RF em bancada',
-      ],
-      firmwareDefects: [
-        DefectEntry(code: 'A', title: 'Nao gravou', quantity: '12 un'),
-        DefectEntry(code: 'D', title: 'Firmware incorreto', quantity: '3 un'),
-      ],
-    ),
-    TestOperation(
-      number: 'OP-00564-346',
-      product: '105-141 - Central Vetti Smart',
-      quantity: '496 un',
-      origin: 'Soldagem',
-      receivedAt: '11:22',
-      receivedAgo: 'Recebida ha 6 min',
-      station: 'Bancada T-04',
-      checklist: [
-        'Boot completo da central',
-        'Comunicacao com teclado e sensores',
-        'Sirene, relé e alimentacao auxiliar',
-      ],
-      firmwareDefects: [
-        DefectEntry(code: 'A', title: 'Nao gravou', quantity: '4 un'),
-      ],
-    ),
-    TestOperation(
-      number: 'OP-00564-347',
-      product: 'TX-433 - Transmissor RF',
-      quantity: '1200 un',
-      origin: 'Soldagem',
-      receivedAt: '11:35',
-      receivedAgo: 'Recebida agora',
-      station: 'Bancada T-01',
-      checklist: [
-        'Pareamento com receptor',
-        'Medicao de consumo no disparo',
-        'Inspecao de alcance minimo',
-      ],
-      firmwareDefects: [],
-    ),
-  ];
-
   var _selectedIndex = 0;
-  final _statuses = <int, TestingStatus>{};
 
-  TestOperation get _selectedOperation => _operations[_selectedIndex];
-  TestingStatus _statusOf(int index) =>
-      _statuses[index] ?? TestingStatus.waiting;
+  List<ProductionOrderFlow> _flowOrders() => context
+      .read<ProductionFlowStore>()
+      .ordersAtStage(ProductionStage.testing);
+
+  ProductionOrderFlow? _selectedFlowOrder() {
+    final orders = _flowOrders();
+    if (orders.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, orders.length - 1).toInt();
+    return orders[index];
+  }
+
+  TestOperation _operationFromFlow(ProductionOrderFlow order) {
+    final catalog = context.read<ProductionFlowStore>().catalogItem(
+      order.productCode,
+    );
+    final elapsed = order.activeElapsed(DateTime.now());
+    final checklist = catalog.components.isEmpty
+        ? const [
+            'Inicializacao e consumo em repouso',
+            'Resposta funcional do produto',
+            'Inspecao visual final',
+          ]
+        : [
+            'Inicializacao e consumo em repouso',
+            'Validar ${catalog.components.first.description}',
+            'Inspecao visual final',
+          ];
+    return TestOperation(
+      number: order.number,
+      product: order.productLabel,
+      quantity: order.quantityLabel,
+      origin: 'Soldagem',
+      receivedAt: _clockLabel(order.updatedAt),
+      receivedAgo: order.timings[ProductionStage.testing]?.startedAt == null
+          ? 'Aguardando inicio'
+          : 'Tempo na etapa: ${formatProductionDuration(elapsed)}',
+      station: order.productCode.contains('SMART')
+          ? 'Bancada T-04'
+          : 'Bancada T-02',
+      checklist: checklist,
+      firmwareDefects: const [],
+    );
+  }
+
+  TestingStatus _statusFromFlow(ProductionOrderFlow order) {
+    return switch (order.status) {
+      ProductionRunStatus.waiting => TestingStatus.waiting,
+      ProductionRunStatus.active => TestingStatus.active,
+      ProductionRunStatus.paused => TestingStatus.paused,
+      ProductionRunStatus.completed => TestingStatus.completed,
+    };
+  }
 
   void _select(int index) {
     setState(() => _selectedIndex = index);
   }
 
-  void _setStatus(int index, TestingStatus status) {
-    setState(() => _statuses[index] = status);
+  void _startTest() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().startStage(
+      order.number,
+      operatorName: 'Ana',
+    );
   }
 
-  void _startTest() => _setStatus(_selectedIndex, TestingStatus.active);
-
-  void _pauseOperation() => _setStatus(_selectedIndex, TestingStatus.paused);
+  void _pauseOperation() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().pauseStage(order.number);
+  }
 
   Future<void> _completeTest() async {
-    final defects = await showTestDefectsDialog(context, _selectedOperation);
+    final flowOrder = _selectedFlowOrder();
+    if (flowOrder == null) return;
+    final operation = _operationFromFlow(flowOrder);
+    final defects = await showTestDefectsDialog(context, operation);
     if (!mounted || defects == null) return;
 
     final signed = await showTestPinDialog(
       context,
-      _selectedOperation,
+      operation,
       defects: defects,
     );
     if (!mounted || signed != true) return;
 
-    _setStatus(_selectedIndex, TestingStatus.completed);
+    context.read<ProductionFlowStore>().completeStage(flowOrder.number);
     final suffix = defects.isEmpty
         ? 'aprovada para expedicao.'
-        : 'com defeitos enviados ao suporte.';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_selectedOperation.number} $suffix')),
-    );
+        : 'concluida com defeitos registrados.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${operation.number} $suffix')));
   }
 
   void _showMobileActions(BuildContext context) {
-    final status = _statusOf(_selectedIndex);
-    final operation = _selectedOperation;
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    final status = _statusFromFlow(order);
+    final operation = _operationFromFlow(order);
 
     showModalBottomSheet<void>(
       context: context,
@@ -222,16 +232,32 @@ class _TestingPageState extends State<TestingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final flowOrders = context.watch<ProductionFlowStore>().ordersAtStage(
+      ProductionStage.testing,
+    );
+    if (_selectedIndex >= flowOrders.length) {
+      _selectedIndex = flowOrders.isEmpty ? 0 : flowOrders.length - 1;
+    }
+    final operations = flowOrders.map(_operationFromFlow).toList();
+    final statuses = {
+      for (var i = 0; i < flowOrders.length; i++)
+        i: _statusFromFlow(flowOrders[i]),
+    };
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final formFactor = AppBreakpoints.fromWidth(constraints.maxWidth);
         final isMobile = formFactor != AppFormFactor.expanded;
 
+        if (operations.isEmpty) {
+          return _EmptyTestingStage(compact: isMobile);
+        }
+
         if (isMobile) {
           return _MobileTestingLayout(
-            operations: _operations,
+            operations: operations,
             selectedIndex: _selectedIndex,
-            statuses: _statuses,
+            statuses: statuses,
             onSelect: (index) {
               _select(index);
               _showMobileActions(context);
@@ -240,15 +266,112 @@ class _TestingPageState extends State<TestingPage> {
         }
 
         return _DesktopTestingLayout(
-          operations: _operations,
+          operations: operations,
           selectedIndex: _selectedIndex,
-          statuses: _statuses,
+          statuses: statuses,
           onSelect: _select,
           onStart: _startTest,
           onPause: _pauseOperation,
           onComplete: _completeTest,
         );
       },
+    );
+  }
+
+  String _clockLabel(DateTime value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+}
+
+class _EmptyTestingStage extends StatelessWidget {
+  const _EmptyTestingStage({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: compact
+          ? const Color(0xFF101820)
+          : AppColors.pageBackground,
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(
+              maxWidth: compact ? 430 : double.infinity,
+            ),
+            margin: compact ? const EdgeInsets.all(10) : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: AppColors.pageBackground,
+              borderRadius: BorderRadius.circular(compact ? 22 : 0),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: const Column(
+              children: [
+                VettiTopBar(
+                  title: 'Teste de Producao',
+                  operatorName: 'Ana',
+                  operatorRole: 'Teste',
+                ),
+                Expanded(
+                  child: _EmptyStageMessage(
+                    icon: Icons.science_rounded,
+                    title: 'Nenhuma OP em teste',
+                    text:
+                        'As OPs aparecem aqui assim que a soldagem for concluida.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyStageMessage extends StatelessWidget {
+  const _EmptyStageMessage({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 44, color: AppColors.primary),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

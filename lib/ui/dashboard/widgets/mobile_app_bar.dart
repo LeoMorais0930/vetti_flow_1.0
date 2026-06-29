@@ -25,7 +25,12 @@ class MobileAppBar extends StatelessWidget {
             alignment: Alignment.center,
             child: const Text(
               'F',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 1),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 1,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -35,7 +40,11 @@ class MobileAppBar extends StatelessWidget {
               children: [
                 Text(
                   'Painel de Produção',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: -0.1),
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
                 ),
                 const SizedBox(height: 1),
                 Text(
@@ -53,7 +62,26 @@ class MobileAppBar extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Text('AR', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
+            child: const Text(
+              'AR',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Sair',
+            onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+            icon: const Icon(Icons.logout_rounded, size: 20),
+            color: AppColors.muted,
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFF2F5F8),
+              minimumSize: const Size(34, 34),
+              fixedSize: const Size(34, 34),
+            ),
           ),
         ],
       ),

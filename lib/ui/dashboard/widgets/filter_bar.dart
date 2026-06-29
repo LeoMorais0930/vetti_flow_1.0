@@ -53,16 +53,17 @@ class FilterBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Flexible(
-                flex: 3,
-                child: _SearchField(onChanged: onBusca),
-              ),
+              Flexible(flex: 3, child: _SearchField(onChanged: onBusca)),
               const SizedBox(width: 8),
               Flexible(
                 flex: 2,
                 child: _Dropdown(
                   value: filtroPeriodo,
-                  items: const {'todos': 'Todos os períodos', 'jun': 'Junho 2026', 'mai': 'Maio 2026'},
+                  items: const {
+                    'todos': 'Todos os períodos',
+                    'jun': 'Junho 2026',
+                    'mai': 'Maio 2026',
+                  },
                   onChanged: onPeriodo,
                 ),
               ),
@@ -71,7 +72,10 @@ class FilterBar extends StatelessWidget {
                 flex: 2,
                 child: _Dropdown(
                   value: filtroResponsavel,
-                  items: {'todos': 'Todos os responsáveis', for (final r in responsaveis) r: r},
+                  items: {
+                    'todos': 'Todos os responsáveis',
+                    for (final r in responsaveis) r: r,
+                  },
                   onChanged: onResponsavel,
                 ),
               ),
@@ -80,7 +84,10 @@ class FilterBar extends StatelessWidget {
                 flex: 2,
                 child: _Dropdown(
                   value: filtroProduto,
-                  items: {'todos': 'Todos os produtos', for (final p in produtos) p: p},
+                  items: {
+                    'todos': 'Todos os produtos',
+                    for (final p in produtos) p: p,
+                  },
                   onChanged: onProduto,
                 ),
               ),
@@ -94,15 +101,29 @@ class FilterBar extends StatelessWidget {
                   onPressed: onLimpar,
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primary,
-                    textStyle: GoogleFonts.ibmPlexSans(fontSize: 12.5, fontWeight: FontWeight.w500),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    textStyle: GoogleFonts.ibmPlexSans(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
                     minimumSize: Size.zero,
                   ),
                   child: const Text('Limpar filtros'),
                 ),
               const Spacer(),
-              Text(resultText, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-              Container(width: 1, height: 24, color: AppColors.border, margin: const EdgeInsets.symmetric(horizontal: 8)),
+              Text(
+                resultText,
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+              ),
+              Container(
+                width: 1,
+                height: 24,
+                color: AppColors.border,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+              ),
               _ViewToggle(mode: viewMode, onChanged: onViewMode),
             ],
           ),
@@ -134,12 +155,18 @@ class _SearchField extends StatelessWidget {
               onChanged: onChanged,
               decoration: InputDecoration(
                 hintText: 'Buscar OP ou produto...',
-                hintStyle: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.muted),
+                hintStyle: GoogleFonts.ibmPlexSans(
+                  fontSize: 13,
+                  color: AppColors.muted,
+                ),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
               ),
-              style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.text),
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 13,
+                color: AppColors.text,
+              ),
             ),
           ),
         ],
@@ -153,7 +180,11 @@ class _Dropdown extends StatelessWidget {
   final Map<String, String> items;
   final ValueChanged<String> onChanged;
 
-  const _Dropdown({required this.value, required this.items, required this.onChanged});
+  const _Dropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -169,9 +200,17 @@ class _Dropdown extends StatelessWidget {
           isDense: true,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-          style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-          items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-          onChanged: (v) { if (v != null) onChanged(v); },
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
+          ),
+          items: items.entries
+              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
         ),
       ),
     );
@@ -194,12 +233,15 @@ class _ViewToggle extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: ViewMode.values.map((v) {
+        children: const [ViewMode.kanban, ViewMode.tabela, ViewMode.cards].map((
+          v,
+        ) {
           final active = mode == v;
           final label = switch (v) {
             ViewMode.kanban => 'Kanban',
             ViewMode.tabela => 'Tabela',
             ViewMode.cards => 'Cards',
+            ViewMode.armazenadas => 'Armazenadas',
           };
           return Padding(
             padding: const EdgeInsets.only(right: 2),
@@ -211,7 +253,10 @@ class _ViewToggle extends StatelessWidget {
                 borderRadius: BorderRadius.circular(7),
                 onTap: () => onChanged(v),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 7,
+                  ),
                   child: Text(
                     label,
                     style: GoogleFonts.ibmPlexSans(

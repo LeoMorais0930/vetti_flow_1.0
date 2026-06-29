@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
@@ -71,76 +74,91 @@ class SolderingPage extends StatefulWidget {
 }
 
 class _SolderingPageState extends State<SolderingPage> {
-  final _operations = const [
-    SolderingOperation(
-      number: 'OP-00564-348',
-      product: 'CR4 - Controle 4 teclas',
-      quantity: '3000 un',
-      origin: 'Gravacao',
-      receivedAt: '10:32',
-      receivedAgo: 'Recebida ha 8 min',
-      board: 'PCI CR4 v2.1',
-      lot: 'Lote SMD-7712',
-      profile: 'Manual fino',
-    ),
-    SolderingOperation(
-      number: 'OP-00564-349',
-      product: 'Sensor Vetti One',
-      quantity: '900 un',
-      origin: 'Gravacao',
-      receivedAt: '10:44',
-      receivedAgo: 'Recebida agora',
-      board: 'PCI Sensor v4.0',
-      lot: 'Lote SMD-7715',
-      profile: 'SMD complementar',
-    ),
-    SolderingOperation(
-      number: 'OP-00564-350',
-      product: 'Modulo RF Vetti One',
-      quantity: '1200 un',
-      origin: 'Gravacao',
-      receivedAt: '10:51',
-      receivedAgo: 'Recebida agora',
-      board: 'Modulo RF 433 v1.8',
-      lot: 'Lote SMD-7716',
-      profile: 'RF protegido',
-    ),
-  ];
-
   var _selectedIndex = 0;
-  final _statuses = <int, SolderingStatus>{};
 
-  SolderingOperation get _selectedOperation => _operations[_selectedIndex];
-  SolderingStatus _statusOf(int index) =>
-      _statuses[index] ?? SolderingStatus.waiting;
+  List<ProductionOrderFlow> _flowOrders() => context
+      .read<ProductionFlowStore>()
+      .ordersAtStage(ProductionStage.soldering);
+
+  ProductionOrderFlow? _selectedFlowOrder() {
+    final orders = _flowOrders();
+    if (orders.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, orders.length - 1).toInt();
+    return orders[index];
+  }
+
+  SolderingOperation _operationFromFlow(ProductionOrderFlow order) {
+    final catalog = context.read<ProductionFlowStore>().catalogItem(
+      order.productCode,
+    );
+    final timing = order.timings[ProductionStage.soldering];
+    final board = catalog.components.isEmpty
+        ? 'PCI ${order.productCode}'
+        : catalog.components.first.code;
+    final elapsed = order.activeElapsed(DateTime.now());
+    return SolderingOperation(
+      number: order.number,
+      product: order.productLabel,
+      quantity: order.quantityLabel,
+      origin: 'Firmware',
+      receivedAt: _clockLabel(order.updatedAt),
+      receivedAgo: timing?.startedAt == null
+          ? 'Aguardando inicio'
+          : 'Tempo na etapa: ${formatProductionDuration(elapsed)}',
+      board: board,
+      lot: 'OP ${order.number}',
+      profile: order.productCode.contains('SMART')
+          ? 'SMD complementar'
+          : 'Manual fino',
+    );
+  }
+
+  SolderingStatus _statusFromFlow(ProductionOrderFlow order) {
+    return switch (order.status) {
+      ProductionRunStatus.waiting => SolderingStatus.waiting,
+      ProductionRunStatus.active => SolderingStatus.active,
+      ProductionRunStatus.paused => SolderingStatus.paused,
+      ProductionRunStatus.completed => SolderingStatus.completed,
+    };
+  }
 
   void _select(int index) {
     setState(() => _selectedIndex = index);
   }
 
-  void _setStatus(int index, SolderingStatus status) {
-    setState(() => _statuses[index] = status);
+  void _startOperation() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().startStage(
+      order.number,
+      operatorName: 'Carlos',
+    );
   }
 
-  void _startOperation() => _setStatus(_selectedIndex, SolderingStatus.active);
-
-  void _pauseOperation() => _setStatus(_selectedIndex, SolderingStatus.paused);
+  void _pauseOperation() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().pauseStage(order.number);
+  }
 
   Future<void> _sendToNextStep() async {
-    final signed = await showSolderingPinDialog(context, _selectedOperation);
+    final flowOrder = _selectedFlowOrder();
+    if (flowOrder == null) return;
+    final operation = _operationFromFlow(flowOrder);
+    final signed = await showSolderingPinDialog(context, operation);
     if (!mounted || signed != true) return;
 
-    _setStatus(_selectedIndex, SolderingStatus.completed);
+    context.read<ProductionFlowStore>().completeStage(flowOrder.number);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_selectedOperation.number} enviada para teste.'),
-      ),
+      SnackBar(content: Text('${operation.number} enviada para teste.')),
     );
   }
 
   void _showMobileActions(BuildContext context) {
-    final status = _statusOf(_selectedIndex);
-    final operation = _selectedOperation;
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    final status = _statusFromFlow(order);
+    final operation = _operationFromFlow(order);
 
     showModalBottomSheet<void>(
       context: context,
@@ -166,16 +184,32 @@ class _SolderingPageState extends State<SolderingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final flowOrders = context.watch<ProductionFlowStore>().ordersAtStage(
+      ProductionStage.soldering,
+    );
+    if (_selectedIndex >= flowOrders.length) {
+      _selectedIndex = flowOrders.isEmpty ? 0 : flowOrders.length - 1;
+    }
+    final operations = flowOrders.map(_operationFromFlow).toList();
+    final statuses = {
+      for (var i = 0; i < flowOrders.length; i++)
+        i: _statusFromFlow(flowOrders[i]),
+    };
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final formFactor = AppBreakpoints.fromWidth(constraints.maxWidth);
         final isMobile = formFactor != AppFormFactor.expanded;
 
+        if (operations.isEmpty) {
+          return _EmptySolderingStage(compact: isMobile);
+        }
+
         if (isMobile) {
           return _MobileSolderingLayout(
-            operations: _operations,
+            operations: operations,
             selectedIndex: _selectedIndex,
-            statuses: _statuses,
+            statuses: statuses,
             onSelect: (index) {
               _select(index);
               _showMobileActions(context);
@@ -184,15 +218,112 @@ class _SolderingPageState extends State<SolderingPage> {
         }
 
         return _DesktopSolderingLayout(
-          operations: _operations,
+          operations: operations,
           selectedIndex: _selectedIndex,
-          statuses: _statuses,
+          statuses: statuses,
           onSelect: _select,
           onStart: _startOperation,
           onPause: _pauseOperation,
           onSend: _sendToNextStep,
         );
       },
+    );
+  }
+
+  String _clockLabel(DateTime value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+}
+
+class _EmptySolderingStage extends StatelessWidget {
+  const _EmptySolderingStage({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: compact
+          ? const Color(0xFF101820)
+          : AppColors.pageBackground,
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            width: double.infinity,
+            constraints: BoxConstraints(
+              maxWidth: compact ? 430 : double.infinity,
+            ),
+            margin: compact ? const EdgeInsets.all(10) : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: AppColors.pageBackground,
+              borderRadius: BorderRadius.circular(compact ? 22 : 0),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: const Column(
+              children: [
+                VettiTopBar(
+                  title: 'Soldagem',
+                  operatorName: 'Carlos',
+                  operatorRole: 'Soldagem',
+                ),
+                Expanded(
+                  child: _EmptyStageMessage(
+                    icon: Icons.memory_rounded,
+                    title: 'Nenhuma OP em soldagem',
+                    text:
+                        'As OPs aparecem aqui assim que o firmware for concluido.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyStageMessage extends StatelessWidget {
+  const _EmptyStageMessage({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 44, color: AppColors.primary),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

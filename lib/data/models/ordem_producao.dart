@@ -101,7 +101,8 @@ class OrdemProducao {
 
   String get percentLabel => '$progresso%';
 
-  bool get showBar => status == StatusOP.emAndamento || status == StatusOP.finalizada;
+  bool get showBar =>
+      status == StatusOP.emAndamento || status == StatusOP.finalizada;
 
   OrdemProducao copyWith({
     String? numero,
@@ -128,4 +129,30 @@ class OrdemProducao {
       atrasada: atrasada ?? this.atrasada,
     );
   }
+}
+
+class OrdemArmazenada {
+  final String numero;
+  final String produto;
+  final int quantidadeOriginal;
+  final int quantidadeArmazenada;
+  final String responsavel;
+  final String data;
+
+  const OrdemArmazenada({
+    required this.numero,
+    required this.produto,
+    required this.quantidadeOriginal,
+    required this.quantidadeArmazenada,
+    required this.responsavel,
+    required this.data,
+  });
+
+  String get qtdOriginalLabel => '$quantidadeOriginal un';
+
+  String get qtdArmazenadaLabel => '$quantidadeArmazenada un';
+
+  String get tipoLabel => quantidadeArmazenada >= quantidadeOriginal
+      ? 'Armazenada total'
+      : 'Armazenada parcial';
 }

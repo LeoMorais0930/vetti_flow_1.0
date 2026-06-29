@@ -33,19 +33,27 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
   void initState() {
     super.initState();
     _produto = widget.produtos.isNotEmpty ? widget.produtos.first : '';
-    _responsavel = widget.responsaveis.isNotEmpty ? widget.responsaveis.first : '';
+    _responsavel = widget.responsaveis.isNotEmpty
+        ? widget.responsaveis.first
+        : '';
   }
 
-  bool get _isValid => _produto.isNotEmpty && _responsavel.isNotEmpty && _qtd > 0 && _prazo.trim().isNotEmpty;
+  bool get _isValid =>
+      _produto.isNotEmpty &&
+      _responsavel.isNotEmpty &&
+      _qtd > 0 &&
+      _prazo.trim().isNotEmpty;
 
   void _submit() {
     if (!_isValid) return;
-    widget.onCreate(NovaOrdemDTO(
-      produto: _produto,
-      qtd: _qtd,
-      responsavel: _responsavel,
-      prazo: _prazo.trim(),
-    ));
+    widget.onCreate(
+      NovaOrdemDTO(
+        produto: _produto,
+        qtd: _qtd,
+        responsavel: _responsavel,
+        prazo: _prazo.trim(),
+      ),
+    );
   }
 
   @override
@@ -67,7 +75,11 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                   children: [
                     Text(
                       'Nova Ordem de Produção',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 17, fontWeight: FontWeight.w600, color: AppColors.text),
+                      style: GoogleFonts.ibmPlexSans(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -93,8 +105,12 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                   initialValue: _produto.isNotEmpty ? _produto : null,
                   decoration: _inputDecoration(),
                   style: _inputStyle(),
-                  items: widget.produtos.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                  onChanged: (v) { if (v != null) setState(() => _produto = v); },
+                  items: widget.produtos
+                      .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _produto = v);
+                  },
                 ),
               ),
               const SizedBox(height: 15),
@@ -108,7 +124,8 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                         keyboardType: TextInputType.number,
                         decoration: _inputDecoration(),
                         style: _inputStyle(),
-                        onChanged: (v) => setState(() => _qtd = int.tryParse(v) ?? 0),
+                        onChanged: (v) =>
+                            setState(() => _qtd = int.tryParse(v) ?? 0),
                       ),
                     ),
                   ),
@@ -132,8 +149,12 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                   initialValue: _responsavel.isNotEmpty ? _responsavel : null,
                   decoration: _inputDecoration(),
                   style: _inputStyle(),
-                  items: widget.responsaveis.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                  onChanged: (v) { if (v != null) setState(() => _responsavel = v); },
+                  items: widget.responsaveis
+                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _responsavel = v);
+                  },
                 ),
               ),
             ],
@@ -157,12 +178,23 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),
+                    disabledBackgroundColor: AppColors.primary.withValues(
+                      alpha: 0.45,
+                    ),
                     disabledForegroundColor: Colors.white,
                     elevation: 0,
-                    padding: EdgeInsets.symmetric(vertical: widget.isDesktop ? 11 : 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11)),
-                    textStyle: GoogleFonts.ibmPlexSans(fontSize: widget.isDesktop ? 13.5 : 14, fontWeight: FontWeight.w600),
+                    padding: EdgeInsets.symmetric(
+                      vertical: widget.isDesktop ? 11 : 13,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        widget.isDesktop ? 9 : 11,
+                      ),
+                    ),
+                    textStyle: GoogleFonts.ibmPlexSans(
+                      fontSize: widget.isDesktop ? 13.5 : 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   child: const Text('Criar OP'),
                 ),
@@ -178,8 +210,15 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                     horizontal: 18,
                     vertical: widget.isDesktop ? 11 : 13,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11)),
-                  textStyle: GoogleFonts.ibmPlexSans(fontSize: widget.isDesktop ? 13.5 : 14, fontWeight: FontWeight.w600),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      widget.isDesktop ? 9 : 11,
+                    ),
+                  ),
+                  textStyle: GoogleFonts.ibmPlexSans(
+                    fontSize: widget.isDesktop ? 13.5 : 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 child: const Text('Cancelar'),
               ),
@@ -202,7 +241,13 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: const [BoxShadow(color: Color(0x520F172A), blurRadius: 64, offset: Offset(0, 24))],
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x520F172A),
+                    blurRadius: 64,
+                    offset: Offset(0, 24),
+                  ),
+                ],
               ),
               child: content,
             ),
@@ -221,7 +266,9 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
           onTap: () {},
           child: Container(
             width: double.infinity,
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.9,
+            ),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -236,15 +283,28 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
   InputDecoration _inputDecoration({String? hint}) => InputDecoration(
     hintText: hint,
     hintStyle: GoogleFonts.ibmPlexSans(fontSize: 13.5, color: AppColors.muted),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11), borderSide: const BorderSide(color: Color(0xFFDFE3E9))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11), borderSide: const BorderSide(color: Color(0xFFDFE3E9))),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11), borderSide: const BorderSide(color: AppColors.primary)),
-    contentPadding: EdgeInsets.symmetric(horizontal: 11, vertical: widget.isDesktop ? 10 : 13),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11),
+      borderSide: const BorderSide(color: Color(0xFFDFE3E9)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11),
+      borderSide: const BorderSide(color: Color(0xFFDFE3E9)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(widget.isDesktop ? 9 : 11),
+      borderSide: const BorderSide(color: AppColors.primary),
+    ),
+    contentPadding: EdgeInsets.symmetric(
+      horizontal: 11,
+      vertical: widget.isDesktop ? 10 : 13,
+    ),
     filled: true,
     fillColor: AppColors.surface,
   );
 
-  TextStyle _inputStyle() => GoogleFonts.ibmPlexSans(fontSize: 13.5, color: AppColors.textStrong);
+  TextStyle _inputStyle() =>
+      GoogleFonts.ibmPlexSans(fontSize: 13.5, color: AppColors.textStrong);
 }
 
 class _FormField extends StatelessWidget {
@@ -258,7 +318,14 @@ class _FormField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textCode)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textCode,
+          ),
+        ),
         const SizedBox(height: 6),
         child,
       ],
@@ -280,8 +347,14 @@ class _CloseButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: const SizedBox(
-          width: 30, height: 30,
-          child: Center(child: Text('×', style: TextStyle(fontSize: 18, color: AppColors.textMuted))),
+          width: 30,
+          height: 30,
+          child: Center(
+            child: Text(
+              '×',
+              style: TextStyle(fontSize: 18, color: AppColors.textMuted),
+            ),
+          ),
         ),
       ),
     );

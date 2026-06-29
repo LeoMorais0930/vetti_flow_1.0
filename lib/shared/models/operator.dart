@@ -6,7 +6,8 @@ enum WorkStage {
   testing('Teste', '/teste'),
   expedition('Expedicao', '/expedicao'),
   warehouse('Almoxarifado', '/almoxarifado'),
-  support('Suporte', '/suporte');
+  support('Suporte', '/suporte'),
+  tv('VettiFlow TV', '/tv');
 
   const WorkStage(this.label, this.route);
 
@@ -78,6 +79,13 @@ class Operator {
       password: '1111',
       pin: '1111',
       stage: WorkStage.support,
+    ),
+    Operator(
+      name: 'VettiFlow TV',
+      username: 'tv',
+      password: '2026',
+      pin: '2026',
+      stage: WorkStage.tv,
     ),
   ];
 

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/firmware_completion_dialogs.dart';
@@ -16,75 +19,93 @@ class FirmwarePage extends StatefulWidget {
 }
 
 class _FirmwarePageState extends State<FirmwarePage> {
-  final _operations = const [
-    FirmwareOperation(
-      number: 'OP-00564-345',
-      product: 'CR4 - Controle 4 teclas',
-      quantity: '3000 un',
-      origin: 'SMD',
-      receivedAt: '09:42',
-      receivedAgo: 'Recebida ha 12 min',
-    ),
-    FirmwareOperation(
-      number: 'OP-00564-346',
-      product: '105-141 - Central Vetti Smart',
-      quantity: '500 un',
-      origin: 'SMD',
-      receivedAt: '09:55',
-      receivedAgo: 'Recebida ha 4 min',
-    ),
-    FirmwareOperation(
-      number: 'OP-00564-347',
-      product: 'TX-433 - Transmissor RF',
-      quantity: '1200 un',
-      origin: 'SMD',
-      receivedAt: '10:08',
-      receivedAgo: 'Recebida agora',
-    ),
-  ];
-
   var _selectedIndex = 0;
-  final _statuses = <int, FirmwareStatus>{};
 
-  FirmwareOperation get _selectedOperation => _operations[_selectedIndex];
-  FirmwareStatus _statusOf(int index) =>
-      _statuses[index] ?? FirmwareStatus.waiting;
+  List<ProductionOrderFlow> _flowOrders() => context
+      .read<ProductionFlowStore>()
+      .ordersAtStage(ProductionStage.firmware);
+
+  ProductionOrderFlow? _selectedFlowOrder() {
+    final orders = _flowOrders();
+    if (orders.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, orders.length - 1).toInt();
+    return orders[index];
+  }
+
+  FirmwareOperation _operationFromFlow(ProductionOrderFlow order) {
+    final elapsed = order.activeElapsed(DateTime.now());
+    return FirmwareOperation(
+      number: order.number,
+      product: order.productLabel,
+      quantity: order.quantityLabel,
+      origin: 'Almoxarifado',
+      receivedAt: _timeLabel(order.updatedAt),
+      receivedAgo: order.timings[ProductionStage.firmware]?.startedAt == null
+          ? 'Aguardando inicio'
+          : 'Tempo na etapa: ${formatProductionDuration(elapsed)}',
+    );
+  }
+
+  FirmwareStatus _statusFromFlow(ProductionRunStatus status) {
+    return switch (status) {
+      ProductionRunStatus.waiting => FirmwareStatus.waiting,
+      ProductionRunStatus.active => FirmwareStatus.recording,
+      ProductionRunStatus.paused => FirmwareStatus.paused,
+      ProductionRunStatus.completed => FirmwareStatus.completed,
+    };
+  }
 
   void _select(int index) {
     setState(() => _selectedIndex = index);
   }
 
-  void _setStatus(int index, FirmwareStatus status) {
-    setState(() => _statuses[index] = status);
+  void _startRecording() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().startStage(
+      order.number,
+      operatorName: 'Fernando',
+    );
   }
 
-  void _startRecording() =>
-      _setStatus(_selectedIndex, FirmwareStatus.recording);
+  void _pauseOperation() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().pauseStage(order.number);
+  }
 
-  void _pauseOperation() => _setStatus(_selectedIndex, FirmwareStatus.paused);
-
-  void _resetOperation() => _setStatus(_selectedIndex, FirmwareStatus.waiting);
+  void _resetOperation() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().resetStage(order.number);
+  }
 
   Future<void> _completeOperation() async {
+    final flowOrder = _selectedFlowOrder();
+    if (flowOrder == null) return;
+    final selectedOperation = _operationFromFlow(flowOrder);
     final defects = await showFirmwareDefectsDialog(context);
     if (!mounted || defects == null) return;
 
     final signed = await showFirmwarePinDialog(
       context,
-      _selectedOperation,
+      selectedOperation,
       defects: defects,
     );
     if (!mounted || signed != true) return;
 
-    _setStatus(_selectedIndex, FirmwareStatus.completed);
+    context.read<ProductionFlowStore>().completeStage(flowOrder.number);
+    setState(() => _selectedIndex = 0);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_selectedOperation.number} concluida.')),
+      SnackBar(content: Text('${flowOrder.number} liberada para Soldagem.')),
     );
   }
 
   void _showMobileActions(BuildContext context) {
-    final status = _statusOf(_selectedIndex);
-    final op = _selectedOperation;
+    final flowOrder = _selectedFlowOrder();
+    if (flowOrder == null) return;
+    final status = _statusFromFlow(flowOrder.status);
+    final op = _operationFromFlow(flowOrder);
 
     showModalBottomSheet(
       context: context,
@@ -114,6 +135,18 @@ class _FirmwarePageState extends State<FirmwarePage> {
 
   @override
   Widget build(BuildContext context) {
+    final flowOrders = context.watch<ProductionFlowStore>().ordersAtStage(
+      ProductionStage.firmware,
+    );
+    if (_selectedIndex >= flowOrders.length && flowOrders.isNotEmpty) {
+      _selectedIndex = flowOrders.length - 1;
+    }
+    final operations = flowOrders.map(_operationFromFlow).toList();
+    final statuses = {
+      for (var i = 0; i < flowOrders.length; i++)
+        i: _statusFromFlow(flowOrders[i].status),
+    };
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final formFactor = constraints.maxWidth >= 1180
@@ -122,10 +155,13 @@ class _FirmwarePageState extends State<FirmwarePage> {
         final isMobile = formFactor != AppFormFactor.expanded;
 
         if (isMobile) {
+          if (operations.isEmpty) {
+            return const _EmptyFirmwareStage(compact: true);
+          }
           return _MobileFirmwareLayout(
-            operations: _operations,
+            operations: operations,
             selectedIndex: _selectedIndex,
-            statuses: _statuses,
+            statuses: statuses,
             onSelect: (i) {
               _select(i);
               _showMobileActions(context);
@@ -133,10 +169,13 @@ class _FirmwarePageState extends State<FirmwarePage> {
           );
         }
 
+        if (operations.isEmpty) {
+          return const _EmptyFirmwareStage();
+        }
         return _DesktopFirmwareLayout(
-          operations: _operations,
+          operations: operations,
           selectedIndex: _selectedIndex,
-          statuses: _statuses,
+          statuses: statuses,
           onSelect: _select,
           onStart: _startRecording,
           onPause: _pauseOperation,
@@ -245,6 +284,93 @@ class _MobileActionSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+class _EmptyFirmwareStage extends StatelessWidget {
+  const _EmptyFirmwareStage({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF101820),
+        body: SafeArea(
+          child: Center(
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxWidth: 430),
+              margin: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.pageBackground,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: const Column(
+                children: [
+                  VettiTopBar(
+                    title: 'Gravacao de Firmware',
+                    operatorName: 'Fernando',
+                    compact: true,
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: _EmptyStageMessage(
+                        text: 'Nenhuma OP aguardando firmware.',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const Scaffold(
+      backgroundColor: AppColors.pageBackground,
+      body: Column(
+        children: [
+          VettiTopBar(
+            title: 'Gravacao de Firmware',
+            operatorName: 'Fernando',
+            operatorRole: 'Firmware',
+          ),
+          Expanded(
+            child: Center(
+              child: _EmptyStageMessage(
+                text: 'Nenhuma OP aguardando firmware.',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyStageMessage extends StatelessWidget {
+  const _EmptyStageMessage({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.muted,
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+String _timeLabel(DateTime date) {
+  return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 }
 
 // ────────────────────────────────────────────────────────────────────

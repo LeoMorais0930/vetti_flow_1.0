@@ -24,17 +24,28 @@ class CardsView extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 10, height: 10,
-                    decoration: BoxDecoration(color: status.dot, shape: BoxShape.circle),
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: status.dot,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 9),
                   Text(
                     status.shortLabel,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textStrong),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textStrong,
+                    ),
                   ),
                   const SizedBox(width: 9),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       border: Border.all(color: AppColors.border),
@@ -42,30 +53,46 @@ class CardsView extends StatelessWidget {
                     ),
                     child: Text(
                       '${items.length}',
-                      style: GoogleFonts.ibmPlexMono(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted),
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.muted,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 11),
               if (items.isEmpty)
-                Text('Nenhuma OP neste status.', style: TextStyle(fontSize: 12.5, color: AppColors.textWeak))
+                Text(
+                  'Nenhuma OP neste status.',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textWeak),
+                )
               else
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final crossAxisCount = (constraints.maxWidth / 278).floor().clamp(1, 4);
+                    final crossAxisCount = (constraints.maxWidth / 278)
+                        .floor()
+                        .clamp(1, 4);
                     return Wrap(
                       spacing: 13,
                       runSpacing: 13,
-                      children: items.map((op) => SizedBox(
-                        width: (constraints.maxWidth - 13 * (crossAxisCount - 1)) / crossAxisCount,
-                        child: OpCard(
-                          op: op,
-                          accentColor: status.dot,
-                          onTap: () => onOpenOP(op.numero),
-                          showResponsavelName: true,
-                        ),
-                      )).toList(),
+                      children: items
+                          .map(
+                            (op) => SizedBox(
+                              width:
+                                  (constraints.maxWidth -
+                                      13 * (crossAxisCount - 1)) /
+                                  crossAxisCount,
+                              child: OpCard(
+                                op: op,
+                                accentColor: status.dot,
+                                onTap: () => onOpenOP(op.numero),
+                                showResponsavelName: true,
+                              ),
+                            ),
+                          )
+                          .toList(),
                     );
                   },
                 ),

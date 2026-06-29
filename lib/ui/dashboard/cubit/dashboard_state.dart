@@ -1,10 +1,11 @@
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 
-enum ViewMode { kanban, tabela, cards }
+enum ViewMode { kanban, tabela, cards, armazenadas }
 
 class DashboardState {
   final List<OrdemProducao> ordens;
+  final List<OrdemArmazenada> armazenadas;
   final List<Responsavel> responsaveis;
   final List<String> produtos;
   final ViewMode viewMode;
@@ -20,6 +21,7 @@ class DashboardState {
 
   const DashboardState({
     this.ordens = const [],
+    this.armazenadas = const [],
     this.responsaveis = const [],
     this.produtos = const [],
     this.viewMode = ViewMode.kanban,
@@ -110,8 +112,12 @@ class DashboardState {
 
   String get resultText => '${ordensFiltradas.length} de ${ordens.length} OPs';
 
+  String get armazenadasResultText =>
+      '${armazenadas.length} OP${armazenadas.length == 1 ? '' : 's'} armazenada${armazenadas.length == 1 ? '' : 's'}';
+
   DashboardState copyWith({
     List<OrdemProducao>? ordens,
+    List<OrdemArmazenada>? armazenadas,
     List<Responsavel>? responsaveis,
     List<String>? produtos,
     ViewMode? viewMode,
@@ -127,6 +133,7 @@ class DashboardState {
   }) {
     return DashboardState(
       ordens: ordens ?? this.ordens,
+      armazenadas: armazenadas ?? this.armazenadas,
       responsaveis: responsaveis ?? this.responsaveis,
       produtos: produtos ?? this.produtos,
       viewMode: viewMode ?? this.viewMode,

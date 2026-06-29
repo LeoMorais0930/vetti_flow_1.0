@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
@@ -31,6 +34,78 @@ class ExpeditionOrder {
   final String channel;
   final String carrier;
   final List<String> packaging;
+
+  int get quantityValue {
+    final digits = quantity.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits) ?? 0;
+  }
+}
+
+class ExpeditionStoredOrder {
+  const ExpeditionStoredOrder({
+    required this.number,
+    required this.product,
+    required this.quantity,
+    required this.originalQuantity,
+    required this.orderCode,
+    required this.storedAt,
+  });
+
+  final String number;
+  final String product;
+  final int quantity;
+  final int originalQuantity;
+  final String orderCode;
+  final String storedAt;
+
+  String get quantityLabel => '$quantity un';
+
+  String get typeLabel =>
+      quantity >= originalQuantity ? 'Armazenada total' : 'Armazenada parcial';
+
+  ExpeditionStoredOrder copyWith({int? quantity}) {
+    return ExpeditionStoredOrder(
+      number: number,
+      product: product,
+      quantity: quantity ?? this.quantity,
+      originalQuantity: originalQuantity,
+      orderCode: orderCode,
+      storedAt: storedAt,
+    );
+  }
+}
+
+class ExpeditionDispatchedOrder {
+  const ExpeditionDispatchedOrder({
+    required this.number,
+    required this.product,
+    required this.quantity,
+    required this.orderCode,
+    required this.dispatchedAt,
+    required this.origin,
+  });
+
+  final String number;
+  final String product;
+  final int quantity;
+  final String orderCode;
+  final String dispatchedAt;
+  final String origin;
+
+  String get quantityLabel => '$quantity un';
+}
+
+class ExpeditionDispatchSummary {
+  const ExpeditionDispatchSummary({
+    required this.dispatchedQuantity,
+    required this.storedQuantity,
+  });
+
+  final int dispatchedQuantity;
+  final int storedQuantity;
+
+  String get dispatchedLabel => '$dispatchedQuantity un';
+  String get storedLabel => '$storedQuantity un';
 }
 
 enum ExpeditionStatus {
@@ -75,94 +150,195 @@ class ExpeditionPage extends StatefulWidget {
 }
 
 class _ExpeditionPageState extends State<ExpeditionPage> {
-  final _orders = const [
-    ExpeditionOrder(
-      number: 'OP-00564-348',
-      product: 'CR4 - Controle 4 teclas',
-      quantity: '2968 un',
+  var _selectedIndex = 0;
+  var _showStored = false;
+  final _dispatchSummaries = <String, ExpeditionDispatchSummary>{};
+  final _dispatchedOrders = <ExpeditionDispatchedOrder>[
+    const ExpeditionDispatchedOrder(
+      number: 'OP-00563-984',
+      product: 'Controle Vetti Slim',
+      quantity: 320,
+      orderCode: 'PED-77372',
+      dispatchedAt: '11:42',
+      origin: 'Despacho direto',
+    ),
+  ];
+
+  List<ProductionOrderFlow> _readyFlowOrders() => context
+      .read<ProductionFlowStore>()
+      .ordersAtStage(ProductionStage.expedition);
+
+  ProductionOrderFlow? _selectedFlowOrder() {
+    final orders = _readyFlowOrders();
+    if (orders.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, orders.length - 1).toInt();
+    return orders[index];
+  }
+
+  ExpeditionOrder _orderFromFlow(ProductionOrderFlow order) {
+    final elapsed = order.activeElapsed(DateTime.now());
+    return ExpeditionOrder(
+      number: order.number,
+      product: order.productLabel,
+      quantity: order.quantityLabel,
       origin: 'Teste aprovado',
-      readyAt: '12:18',
-      readyAgo: 'Liberada ha 18 min',
-      orderCode: 'PED-77421',
+      readyAt: _clockLabel(order.updatedAt),
+      readyAgo: order.timings[ProductionStage.expedition]?.startedAt == null
+          ? 'Aguardando conferencia'
+          : 'Tempo na etapa: ${formatProductionDuration(elapsed)}',
+      orderCode:
+          'PED-${order.number.replaceAll(RegExp(r'[^0-9]'), '').padLeft(5, '0')}',
       customer: 'Estoque acabado',
       channel: 'Reposicao interna',
       carrier: 'Movimentacao interna',
       packaging: [
         'Conferir etiqueta da OP e quantidade final.',
-        'Separar em caixas padrao CR4 com lacre azul.',
-        'Registrar volume e local de destino.',
+        'Separar volumes de ${order.productCode}.',
+        'Registrar quantidade expedida ou armazenada.',
       ],
-    ),
-    ExpeditionOrder(
-      number: 'OP-00565-112',
-      product: 'Central Vetti Smart',
-      quantity: '495 un',
-      origin: 'Suporte tecnico',
-      readyAt: '12:34',
-      readyAgo: 'Liberada ha 7 min',
-      orderCode: 'PED-77435',
-      customer: 'Distribuidor Sul',
-      channel: 'Pedido comercial',
-      carrier: 'Retirada agendada',
-      packaging: [
-        'Embalar centrais com fonte e manual revisados.',
-        'Aplicar etiqueta de revisao do suporte.',
-        'Separar volumes por lote comercial.',
-      ],
-    ),
-    ExpeditionOrder(
-      number: 'OP-00566-078',
-      product: 'Modulo RF Vetti One',
-      quantity: '1187 un',
-      origin: 'Teste aprovado',
-      readyAt: '12:51',
-      readyAgo: 'Liberada agora',
-      orderCode: 'PED-77448',
-      customer: 'Separacao comercial',
-      channel: 'Venda direta',
-      carrier: 'Transportadora parceira',
-      packaging: [
-        'Conferir protecao antiestatica por pacote.',
-        'Separar volumes de ate 100 unidades.',
-        'Anexar romaneio ao volume principal.',
-      ],
-    ),
-  ];
+    );
+  }
 
-  var _selectedIndex = 0;
-  final _statuses = <int, ExpeditionStatus>{};
+  ExpeditionStoredOrder _storedFromFlow(ProductionOrderFlow order) {
+    return ExpeditionStoredOrder(
+      number: order.number,
+      product: order.productLabel,
+      quantity: order.storedQuantity,
+      originalQuantity: order.quantity,
+      orderCode:
+          'PED-${order.number.replaceAll(RegExp(r'[^0-9]'), '').padLeft(5, '0')}',
+      storedAt: _clockLabel(order.updatedAt),
+    );
+  }
 
-  ExpeditionOrder get _selectedOrder => _orders[_selectedIndex];
-  ExpeditionStatus _statusOf(int index) =>
-      _statuses[index] ?? ExpeditionStatus.waiting;
+  ExpeditionStatus _statusFromFlow(ProductionOrderFlow order) {
+    return switch (order.status) {
+      ProductionRunStatus.waiting => ExpeditionStatus.waiting,
+      ProductionRunStatus.active => ExpeditionStatus.active,
+      ProductionRunStatus.paused => ExpeditionStatus.paused,
+      ProductionRunStatus.completed => ExpeditionStatus.completed,
+    };
+  }
 
   void _select(int index) {
     setState(() => _selectedIndex = index);
   }
 
-  void _setStatus(int index, ExpeditionStatus status) {
-    setState(() => _statuses[index] = status);
+  void _startExpedition() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().startStage(
+      order.number,
+      operatorName: 'Expedicao',
+    );
   }
 
-  void _startExpedition() =>
-      _setStatus(_selectedIndex, ExpeditionStatus.active);
-
-  void _pauseExpedition() =>
-      _setStatus(_selectedIndex, ExpeditionStatus.paused);
+  void _pauseExpedition() {
+    final order = _selectedFlowOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().pauseStage(order.number);
+  }
 
   Future<void> _finishExpedition() async {
-    final signed = await showExpeditionPinDialog(context, _selectedOrder);
-    if (!mounted || signed != true) return;
+    final flowOrder = _selectedFlowOrder();
+    if (flowOrder == null) return;
+    final order = _orderFromFlow(flowOrder);
+    final storedQuantity = await showExpeditionPinDialog(context, order);
+    if (!mounted || storedQuantity == null) return;
 
-    _setStatus(_selectedIndex, ExpeditionStatus.completed);
+    final dispatchedQuantity = order.quantityValue - storedQuantity;
+    context.read<ProductionFlowStore>().completeExpedition(
+      flowOrder.number,
+      storedQuantity: storedQuantity,
+    );
+    setState(() {
+      _dispatchSummaries[order.number] = ExpeditionDispatchSummary(
+        dispatchedQuantity: dispatchedQuantity,
+        storedQuantity: storedQuantity,
+      );
+      if (dispatchedQuantity > 0) {
+        _recordDispatched(
+          number: order.number,
+          product: order.product,
+          quantity: dispatchedQuantity,
+          orderCode: order.orderCode,
+          dispatchedAt: order.readyAt,
+          origin: storedQuantity > 0 ? 'Parcial da OP' : 'Despacho direto',
+        );
+      }
+    });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_selectedOrder.number} despachada.')),
+      SnackBar(
+        content: Text(
+          storedQuantity > 0
+              ? '${order.number} finalizada com $storedQuantity un armazenadas.'
+              : '${order.number} despachada.',
+        ),
+      ),
+    );
+  }
+
+  void _setTab(bool stored) {
+    setState(() => _showStored = stored);
+  }
+
+  void _recordDispatched({
+    required String number,
+    required String product,
+    required int quantity,
+    required String orderCode,
+    required String dispatchedAt,
+    required String origin,
+  }) {
+    _dispatchedOrders.insert(
+      0,
+      ExpeditionDispatchedOrder(
+        number: number,
+        product: product,
+        quantity: quantity,
+        orderCode: orderCode,
+        dispatchedAt: dispatchedAt,
+        origin: origin,
+      ),
+    );
+  }
+
+  Future<void> _dispatchStoredOrder(ExpeditionStoredOrder storedOrder) async {
+    final quantityToDispatch = await showStoredDispatchDialog(
+      context,
+      storedOrder,
+    );
+    if (!mounted || quantityToDispatch == null) return;
+
+    context.read<ProductionFlowStore>().dispatchStored(
+      storedOrder.number,
+      quantity: quantityToDispatch,
+    );
+    setState(() {
+      _recordDispatched(
+        number: storedOrder.number,
+        product: storedOrder.product,
+        quantity: quantityToDispatch,
+        orderCode: storedOrder.orderCode,
+        dispatchedAt: 'Agora',
+        origin: 'Armazenamento',
+      );
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$quantityToDispatch un de ${storedOrder.number} expedidas do armazenamento.',
+        ),
+      ),
     );
   }
 
   void _showMobileActions(BuildContext context) {
-    final status = _statusOf(_selectedIndex);
-    final order = _selectedOrder;
+    final flowOrder = _selectedFlowOrder();
+    if (flowOrder == null) return;
+    final status = _statusFromFlow(flowOrder);
+    final order = _orderFromFlow(flowOrder);
 
     showModalBottomSheet<void>(
       context: context,
@@ -189,6 +365,22 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final store = context.watch<ProductionFlowStore>();
+    final flowOrders = store.ordersAtStage(ProductionStage.expedition);
+    final storageOrders = store.ordersAtStage(ProductionStage.storage);
+    if (_selectedIndex >= flowOrders.length) {
+      _selectedIndex = flowOrders.isEmpty ? 0 : flowOrders.length - 1;
+    }
+    final orders = flowOrders.map(_orderFromFlow).toList();
+    final storedOrders = storageOrders
+        .where((order) => order.storedQuantity > 0)
+        .map(_storedFromFlow)
+        .toList();
+    final statuses = {
+      for (var i = 0; i < flowOrders.length; i++)
+        i: _statusFromFlow(flowOrders[i]),
+    };
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final formFactor = AppBreakpoints.fromWidth(constraints.maxWidth);
@@ -196,9 +388,15 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
 
         if (isMobile) {
           return _MobileExpeditionLayout(
-            orders: _orders,
+            orders: orders,
+            storedOrders: storedOrders,
+            dispatchedOrders: _dispatchedOrders,
+            dispatchSummaries: _dispatchSummaries,
+            showStored: _showStored,
             selectedIndex: _selectedIndex,
-            statuses: _statuses,
+            statuses: statuses,
+            onTabChanged: _setTab,
+            onDispatchStored: _dispatchStoredOrder,
             onSelect: (index) {
               _select(index);
               _showMobileActions(context);
@@ -207,9 +405,15 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
         }
 
         return _DesktopExpeditionLayout(
-          orders: _orders,
+          orders: orders,
+          storedOrders: storedOrders,
+          dispatchedOrders: _dispatchedOrders,
+          dispatchSummaries: _dispatchSummaries,
+          showStored: _showStored,
           selectedIndex: _selectedIndex,
-          statuses: _statuses,
+          statuses: statuses,
+          onTabChanged: _setTab,
+          onDispatchStored: _dispatchStoredOrder,
           onSelect: _select,
           onStart: _startExpedition,
           onPause: _pauseExpedition,
@@ -217,6 +421,12 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
         );
       },
     );
+  }
+
+  String _clockLabel(DateTime value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 }
 
@@ -324,14 +534,26 @@ class _MobileExpeditionActionSheet extends StatelessWidget {
 class _MobileExpeditionLayout extends StatelessWidget {
   const _MobileExpeditionLayout({
     required this.orders,
+    required this.storedOrders,
+    required this.dispatchedOrders,
+    required this.dispatchSummaries,
+    required this.showStored,
     required this.selectedIndex,
     required this.statuses,
+    required this.onTabChanged,
+    required this.onDispatchStored,
     required this.onSelect,
   });
 
   final List<ExpeditionOrder> orders;
+  final List<ExpeditionStoredOrder> storedOrders;
+  final List<ExpeditionDispatchedOrder> dispatchedOrders;
+  final Map<String, ExpeditionDispatchSummary> dispatchSummaries;
+  final bool showStored;
   final int selectedIndex;
   final Map<int, ExpeditionStatus> statuses;
+  final ValueChanged<bool> onTabChanged;
+  final ValueChanged<ExpeditionStoredOrder> onDispatchStored;
   final ValueChanged<int> onSelect;
 
   @override
@@ -362,8 +584,14 @@ class _MobileExpeditionLayout extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'OPs prontas',
+                        _ExpeditionTabs(
+                          showStored: showStored,
+                          onChanged: onTabChanged,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          showStored ? 'OPs armazenadas' : 'OPs prontas',
                           style: TextStyle(
                             color: AppColors.text,
                             fontSize: 20,
@@ -371,24 +599,37 @@ class _MobileExpeditionLayout extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Toque na OP para conferir destino e embalagem.',
-                          style: TextStyle(
+                        Text(
+                          showStored
+                              ? 'Quantidades separadas para armazenamento.'
+                              : 'Toque na OP para conferir destino e embalagem.',
+                          style: const TextStyle(
                             color: AppColors.muted,
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 16),
-                        for (var i = 0; i < orders.length; i++) ...[
-                          _ExpeditionCard(
-                            order: orders[i],
-                            selected: i == selectedIndex,
-                            status: statuses[i] ?? ExpeditionStatus.waiting,
+                        if (showStored)
+                          _StoredOverview(
+                            storedOrders: storedOrders,
+                            dispatchedOrders: dispatchedOrders,
+                            onDispatch: onDispatchStored,
                             compact: true,
-                            onTap: () => onSelect(i),
-                          ),
-                          if (i < orders.length - 1) const SizedBox(height: 10),
-                        ],
+                          )
+                        else
+                          for (var i = 0; i < orders.length; i++) ...[
+                            _ExpeditionCard(
+                              order: orders[i],
+                              selected: i == selectedIndex,
+                              status: statuses[i] ?? ExpeditionStatus.waiting,
+                              dispatchSummary:
+                                  dispatchSummaries[orders[i].number],
+                              compact: true,
+                              onTap: () => onSelect(i),
+                            ),
+                            if (i < orders.length - 1)
+                              const SizedBox(height: 10),
+                          ],
                       ],
                     ),
                   ),
@@ -405,8 +646,14 @@ class _MobileExpeditionLayout extends StatelessWidget {
 class _DesktopExpeditionLayout extends StatelessWidget {
   const _DesktopExpeditionLayout({
     required this.orders,
+    required this.storedOrders,
+    required this.dispatchedOrders,
+    required this.dispatchSummaries,
+    required this.showStored,
     required this.selectedIndex,
     required this.statuses,
+    required this.onTabChanged,
+    required this.onDispatchStored,
     required this.onSelect,
     required this.onStart,
     required this.onPause,
@@ -414,14 +661,21 @@ class _DesktopExpeditionLayout extends StatelessWidget {
   });
 
   final List<ExpeditionOrder> orders;
+  final List<ExpeditionStoredOrder> storedOrders;
+  final List<ExpeditionDispatchedOrder> dispatchedOrders;
+  final Map<String, ExpeditionDispatchSummary> dispatchSummaries;
+  final bool showStored;
   final int selectedIndex;
   final Map<int, ExpeditionStatus> statuses;
+  final ValueChanged<bool> onTabChanged;
+  final ValueChanged<ExpeditionStoredOrder> onDispatchStored;
   final ValueChanged<int> onSelect;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onFinish;
 
-  ExpeditionOrder get selectedOrder => orders[selectedIndex];
+  ExpeditionOrder? get selectedOrder =>
+      orders.isEmpty ? null : orders[selectedIndex];
   ExpeditionStatus get status =>
       statuses[selectedIndex] ?? ExpeditionStatus.waiting;
 
@@ -449,20 +703,35 @@ class _DesktopExpeditionLayout extends StatelessWidget {
                         width: 340,
                         child: _DesktopExpeditionQueue(
                           orders: orders,
+                          storedOrders: storedOrders,
+                          dispatchSummaries: dispatchSummaries,
+                          showStored: showStored,
                           selectedIndex: selectedIndex,
                           statuses: statuses,
+                          onTabChanged: onTabChanged,
+                          onDispatchStored: onDispatchStored,
                           onSelect: onSelect,
                         ),
                       ),
                       const SizedBox(width: 36),
                       Expanded(
-                        child: _DesktopExpeditionDetail(
-                          order: selectedOrder,
-                          status: status,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onFinish: onFinish,
-                        ),
+                        child: showStored
+                            ? _StoredOrdersPanel(
+                                storedOrders: storedOrders,
+                                dispatchedOrders: dispatchedOrders,
+                                onDispatch: onDispatchStored,
+                              )
+                            : selectedOrder == null
+                            ? const _EmptyExpeditionDetail()
+                            : _DesktopExpeditionDetail(
+                                order: selectedOrder!,
+                                status: status,
+                                dispatchSummary:
+                                    dispatchSummaries[selectedOrder!.number],
+                                onStart: onStart,
+                                onPause: onPause,
+                                onFinish: onFinish,
+                              ),
                       ),
                     ],
                   ),
@@ -476,17 +745,69 @@ class _DesktopExpeditionLayout extends StatelessWidget {
   }
 }
 
+class _EmptyExpeditionDetail extends StatelessWidget {
+  const _EmptyExpeditionDetail();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      padding: const EdgeInsets.all(28),
+      child: const SizedBox(
+        height: 360,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.local_shipping_rounded,
+                size: 44,
+                color: AppColors.primary,
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Nenhuma OP pronta',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'As OPs aparecem aqui quando o teste for concluido.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.muted, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DesktopExpeditionQueue extends StatelessWidget {
   const _DesktopExpeditionQueue({
     required this.orders,
+    required this.storedOrders,
+    required this.dispatchSummaries,
+    required this.showStored,
     required this.selectedIndex,
     required this.statuses,
+    required this.onTabChanged,
+    required this.onDispatchStored,
     required this.onSelect,
   });
 
   final List<ExpeditionOrder> orders;
+  final List<ExpeditionStoredOrder> storedOrders;
+  final Map<String, ExpeditionDispatchSummary> dispatchSummaries;
+  final bool showStored;
   final int selectedIndex;
   final Map<int, ExpeditionStatus> statuses;
+  final ValueChanged<bool> onTabChanged;
+  final ValueChanged<ExpeditionStoredOrder> onDispatchStored;
   final ValueChanged<int> onSelect;
 
   @override
@@ -496,6 +817,8 @@ class _DesktopExpeditionQueue extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _ExpeditionTabs(showStored: showStored, onChanged: onTabChanged),
+          const SizedBox(height: 18),
           Row(
             children: [
               const Icon(
@@ -504,12 +827,12 @@ class _DesktopExpeditionQueue extends StatelessWidget {
                 color: AppColors.primary,
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'OPs prontas',
+                  showStored ? 'Armazenadas' : 'OPs prontas',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.text,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -517,24 +840,36 @@ class _DesktopExpeditionQueue extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              _CountBadge(value: '${orders.length}'),
+              _CountBadge(
+                value: '${showStored ? storedOrders.length : orders.length}',
+              ),
             ],
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Aprovadas no teste para conferencia e despacho.',
-            style: TextStyle(color: AppColors.muted, fontSize: 12),
+          Text(
+            showStored
+                ? 'Separadas para armazenamento pela expedicao.'
+                : 'Aprovadas no teste para conferencia e despacho.',
+            style: const TextStyle(color: AppColors.muted, fontSize: 12),
           ),
           const SizedBox(height: 18),
-          for (var i = 0; i < orders.length; i++) ...[
-            _ExpeditionCard(
-              order: orders[i],
-              selected: i == selectedIndex,
-              status: statuses[i] ?? ExpeditionStatus.waiting,
-              onTap: () => onSelect(i),
-            ),
-            if (i < orders.length - 1) const SizedBox(height: 10),
-          ],
+          if (showStored)
+            _StoredOrdersList(
+              storedOrders: storedOrders,
+              onDispatch: onDispatchStored,
+              showDispatchAction: false,
+            )
+          else
+            for (var i = 0; i < orders.length; i++) ...[
+              _ExpeditionCard(
+                order: orders[i],
+                selected: i == selectedIndex,
+                status: statuses[i] ?? ExpeditionStatus.waiting,
+                dispatchSummary: dispatchSummaries[orders[i].number],
+                onTap: () => onSelect(i),
+              ),
+              if (i < orders.length - 1) const SizedBox(height: 10),
+            ],
         ],
       ),
     );
@@ -545,6 +880,7 @@ class _DesktopExpeditionDetail extends StatelessWidget {
   const _DesktopExpeditionDetail({
     required this.order,
     required this.status,
+    required this.dispatchSummary,
     required this.onStart,
     required this.onPause,
     required this.onFinish,
@@ -552,6 +888,7 @@ class _DesktopExpeditionDetail extends StatelessWidget {
 
   final ExpeditionOrder order;
   final ExpeditionStatus status;
+  final ExpeditionDispatchSummary? dispatchSummary;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onFinish;
@@ -605,6 +942,11 @@ class _DesktopExpeditionDetail extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _ExpeditionMetrics(order: order),
+          if (status == ExpeditionStatus.completed &&
+              dispatchSummary != null) ...[
+            const SizedBox(height: 14),
+            _DispatchSummaryPanel(summary: dispatchSummary!),
+          ],
           const SizedBox(height: 24),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -655,11 +997,503 @@ class _DesktopExpeditionDetail extends StatelessWidget {
   }
 }
 
+class _ExpeditionTabs extends StatelessWidget {
+  const _ExpeditionTabs({
+    required this.showStored,
+    required this.onChanged,
+    this.compact = false,
+  });
+
+  final bool showStored;
+  final ValueChanged<bool> onChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ExpeditionTabButton(
+              label: 'Prontas',
+              active: !showStored,
+              onTap: () => onChanged(false),
+              compact: compact,
+            ),
+          ),
+          Expanded(
+            child: _ExpeditionTabButton(
+              label: 'Armazenadas',
+              active: showStored,
+              onTap: () => onChanged(true),
+              compact: compact,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpeditionTabButton extends StatelessWidget {
+  const _ExpeditionTabButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    required this.compact,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: compact ? 9 : 8),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: active ? AppColors.primary : AppColors.textMuted,
+              fontSize: compact ? 13 : 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoredOverview extends StatelessWidget {
+  const _StoredOverview({
+    required this.storedOrders,
+    required this.dispatchedOrders,
+    required this.onDispatch,
+    this.compact = false,
+  });
+
+  final List<ExpeditionStoredOrder> storedOrders;
+  final List<ExpeditionDispatchedOrder> dispatchedOrders;
+  final ValueChanged<ExpeditionStoredOrder> onDispatch;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          title: 'Ainda armazenadas',
+          subtitle: 'Saldo que continua separado para armazenamento.',
+          compact: compact,
+        ),
+        const SizedBox(height: 12),
+        _StoredOrdersList(
+          storedOrders: storedOrders,
+          onDispatch: onDispatch,
+          compact: compact,
+        ),
+        const SizedBox(height: 24),
+        _SectionHeader(
+          title: 'Expedidas',
+          subtitle: 'Quantidades que ja sairam da expedicao.',
+          compact: compact,
+        ),
+        const SizedBox(height: 12),
+        _DispatchedOrdersList(
+          dispatchedOrders: dispatchedOrders,
+          compact: compact,
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.subtitle,
+    required this.compact,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: AppColors.text,
+            fontSize: compact ? 15 : 17,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: TextStyle(color: AppColors.muted, fontSize: compact ? 11 : 12),
+        ),
+      ],
+    );
+  }
+}
+
+class _StoredOrdersList extends StatelessWidget {
+  const _StoredOrdersList({
+    required this.storedOrders,
+    required this.onDispatch,
+    this.showDispatchAction = true,
+    this.compact = false,
+  });
+
+  final List<ExpeditionStoredOrder> storedOrders;
+  final ValueChanged<ExpeditionStoredOrder> onDispatch;
+  final bool showDispatchAction;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (storedOrders.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(compact ? 16 : 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Text(
+          'Nenhuma OP armazenada.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (var i = 0; i < storedOrders.length; i++) ...[
+          _StoredOrderCard(
+            order: storedOrders[i],
+            onDispatch: () => onDispatch(storedOrders[i]),
+            showDispatchAction: showDispatchAction,
+            compact: compact,
+          ),
+          if (i < storedOrders.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _DispatchedOrdersList extends StatelessWidget {
+  const _DispatchedOrdersList({
+    required this.dispatchedOrders,
+    this.compact = false,
+  });
+
+  final List<ExpeditionDispatchedOrder> dispatchedOrders;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (dispatchedOrders.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(compact ? 16 : 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Text(
+          'Nenhuma OP expedida.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (var i = 0; i < dispatchedOrders.length; i++) ...[
+          _DispatchedOrderCard(order: dispatchedOrders[i], compact: compact),
+          if (i < dispatchedOrders.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _DispatchedOrderCard extends StatelessWidget {
+  const _DispatchedOrderCard({required this.order, this.compact = false});
+
+  final ExpeditionDispatchedOrder order;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 14 : 15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDDE8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF7FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.local_shipping_rounded,
+              color: AppColors.primary,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.number,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.text,
+                          fontSize: compact ? 14 : 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      order.quantityLabel,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  order.product,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  '${order.origin} · ${order.orderCode} · ${order.dispatchedAt}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.smallText,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StoredOrderCard extends StatelessWidget {
+  const _StoredOrderCard({
+    required this.order,
+    required this.onDispatch,
+    required this.showDispatchAction,
+    this.compact = false,
+  });
+
+  final ExpeditionStoredOrder order;
+  final VoidCallback onDispatch;
+  final bool showDispatchAction;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 14 : 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.green),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  order.number,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: compact ? 15 : 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7F6EC),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  order.typeLabel,
+                  style: const TextStyle(
+                    color: AppColors.green,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            order.product,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${order.quantityLabel} · ${order.orderCode} · ${order.storedAt}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.smallText, fontSize: 11),
+          ),
+          if (showDispatchAction) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: compact ? 42 : 44,
+              child: OutlinedButton.icon(
+                onPressed: onDispatch,
+                icon: const Icon(Icons.local_shipping_rounded, size: 18),
+                label: const Text(
+                  'Expedir',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StoredOrdersPanel extends StatelessWidget {
+  const _StoredOrdersPanel({
+    required this.storedOrders,
+    required this.dispatchedOrders,
+    required this.onDispatch,
+  });
+
+  final List<ExpeditionStoredOrder> storedOrders;
+  final List<ExpeditionDispatchedOrder> dispatchedOrders;
+  final ValueChanged<ExpeditionStoredOrder> onDispatch;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'OPs armazenadas',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Quantidades que foram separadas para armazenamento pela expedicao.',
+            style: TextStyle(color: AppColors.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 22),
+          _StoredOverview(
+            storedOrders: storedOrders,
+            dispatchedOrders: dispatchedOrders,
+            onDispatch: onDispatch,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ExpeditionCard extends StatelessWidget {
   const _ExpeditionCard({
     required this.order,
     required this.selected,
     required this.status,
+    required this.dispatchSummary,
     required this.onTap,
     this.compact = false,
   });
@@ -667,6 +1501,7 @@ class _ExpeditionCard extends StatelessWidget {
   final ExpeditionOrder order;
   final bool selected;
   final ExpeditionStatus status;
+  final ExpeditionDispatchSummary? dispatchSummary;
   final VoidCallback onTap;
   final bool compact;
 
@@ -763,6 +1598,14 @@ class _ExpeditionCard extends StatelessWidget {
                           fontSize: 11,
                         ),
                       ),
+                      if (status == ExpeditionStatus.completed &&
+                          dispatchSummary != null) ...[
+                        const SizedBox(height: 8),
+                        _DispatchSummaryLine(
+                          summary: dispatchSummary!,
+                          compact: compact,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -811,6 +1654,117 @@ class _ExpeditionStatusChip extends StatelessWidget {
               color: status.color,
               fontSize: compact ? 10 : 12,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DispatchSummaryLine extends StatelessWidget {
+  const _DispatchSummaryLine({required this.summary, required this.compact});
+
+  final ExpeditionDispatchSummary summary;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 7,
+      runSpacing: 6,
+      children: [
+        _MiniQuantityPill(
+          label: 'Expedida',
+          value: summary.dispatchedLabel,
+          color: AppColors.primary,
+          compact: compact,
+        ),
+        if (summary.storedQuantity > 0)
+          _MiniQuantityPill(
+            label: 'Armazenada',
+            value: summary.storedLabel,
+            color: AppColors.green,
+            compact: compact,
+          ),
+      ],
+    );
+  }
+}
+
+class _MiniQuantityPill extends StatelessWidget {
+  const _MiniQuantityPill({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.compact,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 9,
+        vertical: compact ? 4 : 5,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label $value',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: compact ? 10 : 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _DispatchSummaryPanel extends StatelessWidget {
+  const _DispatchSummaryPanel({required this.summary});
+
+  final ExpeditionDispatchSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDE8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _MetricItem(
+              label: 'Expedida',
+              value: summary.dispatchedLabel,
+              compact: false,
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 42,
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            color: const Color(0xFFE9F0F5),
+          ),
+          Expanded(
+            child: _MetricItem(
+              label: 'Armazenada',
+              value: summary.storedLabel,
+              compact: false,
             ),
           ),
         ],
@@ -1264,14 +2218,311 @@ class _DividerLine extends StatelessWidget {
   }
 }
 
-Future<bool?> showExpeditionPinDialog(
+class _QuantityFlowPreview extends StatelessWidget {
+  const _QuantityFlowPreview({
+    required this.available,
+    required this.middleLabel,
+    required this.middleValue,
+    required this.resultLabel,
+    required this.resultValue,
+  });
+
+  final int available;
+  final String middleLabel;
+  final int middleValue;
+  final String resultLabel;
+  final int resultValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDE8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _QuantityFlowItem(
+              label: 'Disponivel',
+              value: available,
+              color: AppColors.text,
+            ),
+          ),
+          Expanded(
+            child: _QuantityFlowItem(
+              label: middleLabel,
+              value: middleValue,
+              color: AppColors.green,
+            ),
+          ),
+          Expanded(
+            child: _QuantityFlowItem(
+              label: resultLabel,
+              value: resultValue,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuantityFlowItem extends StatelessWidget {
+  const _QuantityFlowItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.label,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          '$value un',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<int?> showStoredDispatchDialog(
+  BuildContext context,
+  ExpeditionStoredOrder order,
+) {
+  final compact = MediaQuery.sizeOf(context).width < 720;
+
+  if (compact) {
+    return showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _StoredDispatchSheet(order: order, compact: true),
+    );
+  }
+
+  return showDialog<int>(
+    context: context,
+    builder: (context) => Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
+      backgroundColor: Colors.transparent,
+      child: _StoredDispatchSheet(order: order),
+    ),
+  );
+}
+
+class _StoredDispatchSheet extends StatefulWidget {
+  const _StoredDispatchSheet({required this.order, this.compact = false});
+
+  final ExpeditionStoredOrder order;
+  final bool compact;
+
+  @override
+  State<_StoredDispatchSheet> createState() => _StoredDispatchSheetState();
+}
+
+class _StoredDispatchSheetState extends State<_StoredDispatchSheet> {
+  late final TextEditingController _quantityController;
+  String? _quantityError;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityController = TextEditingController(
+      text: '${widget.order.quantity}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxQuantity = widget.order.quantity;
+    final requestedQuantity = int.tryParse(_quantityController.text) ?? 0;
+    final previewQuantity = requestedQuantity.clamp(0, maxQuantity).toInt();
+    final remainingQuantity = maxQuantity - previewQuantity;
+
+    return _ModalSurface(
+      compact: widget.compact,
+      maxWidth: 440,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.compact) const _SheetHandle(),
+          const Text(
+            'Expedir armazenada',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${widget.order.number} possui $maxQuantity un armazenadas.',
+            style: const TextStyle(color: AppColors.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF7FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFB8DFF2)),
+            ),
+            child: Text(
+              '${widget.order.orderCode} · ${widget.order.product}',
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Quantidade para expedir',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _quantityController,
+            onChanged: (_) {
+              setState(() => _quantityError = null);
+            },
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              hintText: '1 a $maxQuantity',
+              errorText: _quantityError,
+              filled: true,
+              fillColor: const Color(0xFFF8FBFD),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              border: _dialogFieldBorder(AppColors.border),
+              enabledBorder: _dialogFieldBorder(AppColors.border),
+              focusedBorder: _dialogFieldBorder(AppColors.primary, width: 1.5),
+            ),
+            style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _QuantityFlowPreview(
+            available: maxQuantity,
+            middleLabel: 'Sera expedido',
+            middleValue: previewQuantity,
+            resultLabel: 'Restara',
+            resultValue: remainingQuantity,
+          ),
+          const SizedBox(height: 10),
+          _SmallChoiceButton(
+            label: 'Expedir tudo',
+            onTap: () {
+              setState(() {
+                _quantityController.text = '$maxQuantity';
+                _quantityError = null;
+              });
+            },
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _DialogButton(
+                  label: 'Cancelar',
+                  onPressed: () => Navigator.of(context).pop(null),
+                  fillColor: const Color(0xFFF6F9FB),
+                  foregroundColor: AppColors.muted,
+                  borderColor: AppColors.border,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _DialogButton(
+                  label: 'Expedir',
+                  onPressed: _dispatch,
+                  fillColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  OutlineInputBorder _dialogFieldBorder(Color color, {double width = 1}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
+
+  void _dispatch() {
+    final quantity = int.tryParse(_quantityController.text.trim()) ?? -1;
+    final maxQuantity = widget.order.quantity;
+    if (quantity <= 0 || quantity > maxQuantity) {
+      setState(() {
+        _quantityError = 'Use uma quantidade entre 1 e $maxQuantity.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(quantity);
+  }
+}
+
+Future<int?> showExpeditionPinDialog(
   BuildContext context,
   ExpeditionOrder order,
 ) {
   final compact = MediaQuery.sizeOf(context).width < 720;
 
   if (compact) {
-    return showModalBottomSheet<bool>(
+    return showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1279,7 +2530,7 @@ Future<bool?> showExpeditionPinDialog(
     );
   }
 
-  return showDialog<bool>(
+  return showDialog<int>(
     context: context,
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
@@ -1301,13 +2552,22 @@ class _ExpeditionPinSheet extends StatefulWidget {
 
 class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
   final _pinController = TextEditingController();
+  late final TextEditingController _storageController;
   Operator? _operator;
   bool _invalidPin = false;
   bool _wrongStage = false;
+  String? _storageError;
+
+  @override
+  void initState() {
+    super.initState();
+    _storageController = TextEditingController(text: '0');
+  }
 
   @override
   void dispose() {
     _pinController.dispose();
+    _storageController.dispose();
     super.dispose();
   }
 
@@ -1332,6 +2592,12 @@ class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
   @override
   Widget build(BuildContext context) {
     final valid = _operator != null && !_wrongStage;
+    final maxQuantity = widget.order.quantityValue;
+    final storageQuantity = int.tryParse(_storageController.text) ?? 0;
+    final previewStorageQuantity = storageQuantity
+        .clamp(0, maxQuantity)
+        .toInt();
+    final previewDispatchQuantity = maxQuantity - previewStorageQuantity;
 
     return _ModalSurface(
       compact: widget.compact,
@@ -1371,6 +2637,78 @@ class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
                 fontWeight: FontWeight.w800,
               ),
             ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Quantidade para armazenamento',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _storageController,
+            onChanged: (_) {
+              setState(() => _storageError = null);
+            },
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              hintText: '0 a $maxQuantity',
+              errorText: _storageError,
+              filled: true,
+              fillColor: const Color(0xFFF8FBFD),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              border: _pinBorder(AppColors.border),
+              enabledBorder: _pinBorder(AppColors.border),
+              focusedBorder: _pinBorder(AppColors.primary, width: 1.5),
+            ),
+            style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _SmallChoiceButton(
+                  label: 'Sem armazenar',
+                  onTap: () {
+                    setState(() {
+                      _storageController.text = '0';
+                      _storageError = null;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SmallChoiceButton(
+                  label: 'Armazenar tudo',
+                  onTap: () {
+                    setState(() {
+                      _storageController.text = '$maxQuantity';
+                      _storageError = null;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _QuantityFlowPreview(
+            available: maxQuantity,
+            middleLabel: 'Vai armazenar',
+            middleValue: previewStorageQuantity,
+            resultLabel: 'Sera expedido',
+            resultValue: previewDispatchQuantity,
           ),
           const SizedBox(height: 24),
           const Text(
@@ -1455,7 +2793,7 @@ class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
               Expanded(
                 child: _DialogButton(
                   label: 'Cancelar',
-                  onPressed: () => Navigator.of(context).pop(false),
+                  onPressed: () => Navigator.of(context).pop(null),
                   fillColor: const Color(0xFFF6F9FB),
                   foregroundColor: AppColors.muted,
                   borderColor: AppColors.border,
@@ -1465,9 +2803,7 @@ class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
               Expanded(
                 child: _DialogButton(
                   label: 'Finalizar',
-                  onPressed: valid
-                      ? () => Navigator.of(context).pop(true)
-                      : null,
+                  onPressed: valid ? _finish : null,
                   fillColor: valid ? AppColors.green : const Color(0xFFE4EDF4),
                   foregroundColor: valid ? Colors.white : AppColors.muted,
                 ),
@@ -1483,6 +2819,39 @@ class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: width),
+    );
+  }
+
+  void _finish() {
+    final quantity = int.tryParse(_storageController.text.trim()) ?? -1;
+    final maxQuantity = widget.order.quantityValue;
+    if (quantity < 0 || quantity > maxQuantity) {
+      setState(() {
+        _storageError = 'Use uma quantidade entre 0 e $maxQuantity.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(quantity);
+  }
+}
+
+class _SmallChoiceButton extends StatelessWidget {
+  const _SmallChoiceButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primary,
+        side: const BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+      ),
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
 }

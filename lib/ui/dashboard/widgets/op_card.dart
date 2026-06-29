@@ -39,75 +39,109 @@ class OpCard extends StatelessWidget {
               ),
             ),
             padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      op.numero,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textCode,
-                        letterSpacing: 0.3,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (op.atrasada)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.dangerBg,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: const Text(
-                        'Atrasada',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.danger),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        op.numero,
+                        style: GoogleFonts.ibmPlexMono(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textCode,
+                          letterSpacing: 0.3,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                op.produto,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.textStrong),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (showResponsavelName && resp != null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _Avatar(resp: resp),
-                        const SizedBox(width: 7),
-                        Text(op.responsavel, style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                      ],
-                    )
-                  else
-                    Text(op.qtdLabel, style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                  if (!showResponsavelName && resp != null)
-                    _Avatar(resp: resp),
-                  if (showResponsavelName)
-                    Text(op.qtdLabel, style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
-                ],
-              ),
-              if (op.showBar) ...[
+                    if (op.atrasada)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerBg,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: const Text(
+                          'Atrasada',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 8),
-                _ProgressBar(progress: op.progresso / 100, color: op.status.barColor, label: op.percentLabel),
+                Text(
+                  op.produto,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textStrong,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (showResponsavelName && resp != null)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _Avatar(resp: resp),
+                          const SizedBox(width: 7),
+                          Text(
+                            op.responsavel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        op.qtdLabel,
+                        style: TextStyle(fontSize: 12, color: AppColors.muted),
+                      ),
+                    if (!showResponsavelName && resp != null)
+                      _Avatar(resp: resp),
+                    if (showResponsavelName)
+                      Text(
+                        op.qtdLabel,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                  ],
+                ),
+                if (op.showBar) ...[
+                  const SizedBox(height: 8),
+                  _ProgressBar(
+                    progress: op.progresso / 100,
+                    color: op.status.barColor,
+                    label: op.percentLabel,
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  op.prazoLabel,
+                  style: TextStyle(fontSize: 11.5, color: AppColors.textWeak),
+                ),
               ],
-              const SizedBox(height: 8),
-              Text(op.prazoLabel, style: TextStyle(fontSize: 11.5, color: AppColors.textWeak)),
-            ],
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -125,7 +159,11 @@ class _Avatar extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         resp.iniciais,
-        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -136,7 +174,11 @@ class _ProgressBar extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _ProgressBar({required this.progress, required this.color, required this.label});
+  const _ProgressBar({
+    required this.progress,
+    required this.color,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +206,11 @@ class _ProgressBar extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: GoogleFonts.ibmPlexMono(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+          style: GoogleFonts.ibmPlexMono(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textMuted,
+          ),
         ),
       ],
     );

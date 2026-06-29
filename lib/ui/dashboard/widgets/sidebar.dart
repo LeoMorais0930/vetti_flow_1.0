@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
 
 class Sidebar extends StatelessWidget {
-  const Sidebar({super.key});
+  const Sidebar({super.key, required this.viewMode, required this.onViewMode});
+
+  final ViewMode viewMode;
+  final ValueChanged<ViewMode> onViewMode;
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +46,23 @@ class Sidebar extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            _NavItem(icon: _panelIcon, label: 'Painel', active: true),
-            _NavItem(icon: _listIcon, label: 'Ordens de Produção'),
-            _NavItem(icon: _boxIcon, label: 'Produtos'),
+            _NavItem(
+              icon: _panelIcon,
+              label: 'Painel',
+              active: viewMode != ViewMode.armazenadas,
+              onTap: () => onViewMode(ViewMode.kanban),
+            ),
+            _NavItem(
+              icon: _listIcon,
+              label: 'Ordens de Produção',
+              onTap: () => onViewMode(ViewMode.cards),
+            ),
+            _NavItem(
+              icon: _boxIcon,
+              label: 'Armazenadas',
+              active: viewMode == ViewMode.armazenadas,
+              onTap: () => onViewMode(ViewMode.armazenadas),
+            ),
             _NavItem(icon: _userIcon, label: 'Responsáveis'),
             _NavItem(icon: _chartIcon, label: 'Relatórios'),
             const Spacer(),
@@ -63,15 +81,35 @@ class Sidebar extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Text('AR', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'AR',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Ana Ribeiro', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
-                        Text('Gestora de Produção', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                        const Text(
+                          'Ana Ribeiro',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        Text(
+                          'Gestora de Produção',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.muted,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -89,8 +127,14 @@ class _NavItem extends StatelessWidget {
   final Widget icon;
   final String label;
   final bool active;
+  final VoidCallback? onTap;
 
-  const _NavItem({required this.icon, required this.label, this.active = false});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    this.active = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +145,7 @@ class _NavItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
         child: InkWell(
           borderRadius: BorderRadius.circular(9),
-          onTap: () {},
+          onTap: onTap,
           hoverColor: AppColors.bgHover,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
@@ -115,12 +159,16 @@ class _NavItem extends StatelessWidget {
                   child: icon,
                 ),
                 const SizedBox(width: 11),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                    color: active ? AppColors.primary : AppColors.textMuted,
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                      color: active ? AppColors.primary : AppColors.textMuted,
+                    ),
                   ),
                 ),
               ],

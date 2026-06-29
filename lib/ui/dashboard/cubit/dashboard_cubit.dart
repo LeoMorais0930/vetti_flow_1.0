@@ -10,13 +10,17 @@ class DashboardCubit extends Cubit<DashboardState> {
 
   Future<void> loadOrdens() async {
     final ordens = await _repository.fetchOrdens();
+    final armazenadas = await _repository.fetchOrdensArmazenadas();
     final responsaveis = await _repository.fetchResponsaveis();
     final produtos = await _repository.fetchProdutos();
-    emit(state.copyWith(
-      ordens: ordens,
-      responsaveis: responsaveis,
-      produtos: produtos,
-    ));
+    emit(
+      state.copyWith(
+        ordens: ordens,
+        armazenadas: armazenadas,
+        responsaveis: responsaveis,
+        produtos: produtos,
+      ),
+    );
   }
 
   void setViewMode(ViewMode mode) {
@@ -24,9 +28,11 @@ class DashboardCubit extends Cubit<DashboardState> {
   }
 
   void toggleStatusFilter(StatusOP status) {
-    emit(state.copyWith(
-      filtroStatus: () => state.filtroStatus == status ? null : status,
-    ));
+    emit(
+      state.copyWith(
+        filtroStatus: () => state.filtroStatus == status ? null : status,
+      ),
+    );
   }
 
   void setFiltroPeriodo(String value) {
@@ -46,36 +52,42 @@ class DashboardCubit extends Cubit<DashboardState> {
   }
 
   void limparFiltros() {
-    emit(state.copyWith(
-      filtroPeriodo: 'todos',
-      filtroResponsavel: 'todos',
-      filtroProduto: 'todos',
-      filtroStatus: () => null,
-      busca: '',
-    ));
+    emit(
+      state.copyWith(
+        filtroPeriodo: 'todos',
+        filtroResponsavel: 'todos',
+        filtroProduto: 'todos',
+        filtroStatus: () => null,
+        busca: '',
+      ),
+    );
   }
 
   void openOP(String numero) {
-    emit(state.copyWith(
-      selectedOP: () => numero,
-      confirmCancel: false,
-    ));
+    emit(state.copyWith(selectedOP: () => numero, confirmCancel: false));
   }
 
   void closeOP() {
-    emit(state.copyWith(
-      selectedOP: () => null,
-      confirmCancel: false,
-    ));
+    emit(state.copyWith(selectedOP: () => null, confirmCancel: false));
   }
 
-  Future<void> advanceOP() async {
+  Future<void> advanceOP({int quantidadeArmazenada = 0}) async {
     final op = state.selectedOP;
     if (op == null) return;
-    await _repository.avancarStatus(op);
+    await _repository.avancarStatus(
+      op,
+      quantidadeArmazenada: quantidadeArmazenada,
+    );
     final ordens = await _repository.fetchOrdens();
+    final armazenadas = await _repository.fetchOrdensArmazenadas();
     final produtos = await _repository.fetchProdutos();
-    emit(state.copyWith(ordens: ordens, produtos: produtos));
+    emit(
+      state.copyWith(
+        ordens: ordens,
+        armazenadas: armazenadas,
+        produtos: produtos,
+      ),
+    );
   }
 
   Future<void> regressOP() async {
@@ -83,8 +95,15 @@ class DashboardCubit extends Cubit<DashboardState> {
     if (op == null) return;
     await _repository.voltarStatus(op);
     final ordens = await _repository.fetchOrdens();
+    final armazenadas = await _repository.fetchOrdensArmazenadas();
     final produtos = await _repository.fetchProdutos();
-    emit(state.copyWith(ordens: ordens, produtos: produtos));
+    emit(
+      state.copyWith(
+        ordens: ordens,
+        armazenadas: armazenadas,
+        produtos: produtos,
+      ),
+    );
   }
 
   void askCancel() {
@@ -100,13 +119,17 @@ class DashboardCubit extends Cubit<DashboardState> {
     if (op == null) return;
     await _repository.cancelarOrdem(op);
     final ordens = await _repository.fetchOrdens();
+    final armazenadas = await _repository.fetchOrdensArmazenadas();
     final produtos = await _repository.fetchProdutos();
-    emit(state.copyWith(
-      ordens: ordens,
-      produtos: produtos,
-      selectedOP: () => null,
-      confirmCancel: false,
-    ));
+    emit(
+      state.copyWith(
+        ordens: ordens,
+        armazenadas: armazenadas,
+        produtos: produtos,
+        selectedOP: () => null,
+        confirmCancel: false,
+      ),
+    );
   }
 
   void openNovaOP() {
@@ -120,12 +143,16 @@ class DashboardCubit extends Cubit<DashboardState> {
   Future<void> createOP(NovaOrdemDTO dto) async {
     await _repository.criarOrdem(dto);
     final ordens = await _repository.fetchOrdens();
+    final armazenadas = await _repository.fetchOrdensArmazenadas();
     final produtos = await _repository.fetchProdutos();
-    emit(state.copyWith(
-      ordens: ordens,
-      produtos: produtos,
-      novaOPOpen: false,
-    ));
+    emit(
+      state.copyWith(
+        ordens: ordens,
+        armazenadas: armazenadas,
+        produtos: produtos,
+        novaOPOpen: false,
+      ),
+    );
   }
 
   void openFiltros() {

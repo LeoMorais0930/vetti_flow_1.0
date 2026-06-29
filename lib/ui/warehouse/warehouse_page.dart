@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
@@ -47,96 +50,104 @@ class WarehousePage extends StatefulWidget {
 }
 
 class _WarehousePageState extends State<WarehousePage> {
-  final _requests = const [
-    WarehouseRequest(
-      number: 'REQ-00091',
-      operation: 'OP-00564-345',
-      product: 'CR4 - Controle 4 teclas',
-      requestedBy: 'Lucas - Suporte',
-      priority: 'Alta',
-      createdAt: '11:14',
-      status: 'Aguardando separacao',
-      items: [
-        WarehouseItem(
-          code: 'CN-004V',
-          description: 'Conector barra 4 vias',
-          quantity: '12 un',
-          stock: '86 un',
-        ),
-        WarehouseItem(
-          code: 'RS-10K',
-          description: 'Resistor 10K 0603',
-          quantity: '40 un',
-          stock: '420 un',
-        ),
-      ],
-    ),
-    WarehouseRequest(
-      number: 'REQ-00092',
-      operation: 'OP-00565-112',
-      product: 'Central Vetti Smart',
-      requestedBy: 'Marina - Suporte',
-      priority: 'Media',
-      createdAt: '11:26',
-      status: 'Em separacao',
-      items: [
-        WarehouseItem(
-          code: 'MCU-ESP32',
-          description: 'Microcontrolador ESP32-WROOM',
-          quantity: '3 un',
-          stock: '18 un',
-        ),
-      ],
-    ),
-    WarehouseRequest(
-      number: 'REQ-00093',
-      operation: 'OP-00566-078',
-      product: 'Modulo RF Vetti One',
-      requestedBy: 'Lucas - Suporte',
-      priority: 'Baixa',
-      createdAt: '11:41',
-      status: 'Aguardando separacao',
-      items: [
-        WarehouseItem(
-          code: 'RF-433',
-          description: 'Modulo RF 433 MHz',
-          quantity: '5 un',
-          stock: '31 un',
-        ),
-        WarehouseItem(
-          code: 'CAP-100N',
-          description: 'Capacitor 100nF 0603',
-          quantity: '20 un',
-          stock: '980 un',
-        ),
-      ],
-    ),
-  ];
-
   var _selectedIndex = 0;
-  var _status = 'Aguardando separacao';
+  var _showCreate = false;
 
-  WarehouseRequest get _selectedRequest => _requests[_selectedIndex];
+  WarehouseRequest _requestFromOrder(ProductionOrderFlow order) {
+    final catalog = context.read<ProductionFlowStore>().catalogItem(
+      order.productCode,
+    );
+    return WarehouseRequest(
+      number: 'REQ-${order.number.substring(order.number.length - 5)}',
+      operation: order.number,
+      product: order.productLabel,
+      requestedBy: order.operatorName ?? 'Almoxarifado',
+      priority: order.priority,
+      createdAt: _timeLabel(order.createdAt),
+      status: _statusLabel(order),
+      items: [
+        for (final component in catalog.components)
+          WarehouseItem(
+            code: component.code,
+            description: component.description,
+            quantity: '${component.quantity * order.quantity} un',
+            stock: component.stockLabel,
+          ),
+      ],
+    );
+  }
 
   void _startPicking() {
-    setState(() => _status = 'Em separacao');
+    final order = _selectedOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().startStage(
+      order.number,
+      operatorName: 'Renata',
+    );
   }
 
   void _pausePicking() {
-    setState(() => _status = 'Pausada');
+    final order = _selectedOrder();
+    if (order == null) return;
+    context.read<ProductionFlowStore>().pauseStage(order.number);
   }
 
   Future<void> _deliverItems() async {
+    final order = _selectedOrder();
+    if (order == null) return;
     final confirmed = await showWarehouseDeliveryDialog(
       context,
-      request: _selectedRequest,
+      request: _requestFromOrder(order),
     );
     if (!mounted || confirmed != true) return;
-    setState(() => _status = 'Entregue ao suporte');
+    context.read<ProductionFlowStore>().completeStage(order.number);
+    setState(() {
+      _selectedIndex = 0;
+      _showCreate = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${order.number} liberada para Firmware.')),
+    );
+  }
+
+  void _createOrder({
+    required String productCode,
+    required int quantity,
+    required String priority,
+  }) {
+    final order = context.read<ProductionFlowStore>().createOrder(
+      productCode: productCode,
+      quantity: quantity,
+      priority: priority,
+      operatorName: 'Renata',
+    );
+    setState(() {
+      _showCreate = false;
+      _selectedIndex = 0;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${order.number} criada no Almoxarifado.')),
+    );
+  }
+
+  ProductionOrderFlow? _selectedOrder() {
+    final orders = context.read<ProductionFlowStore>().ordersAtStage(
+      ProductionStage.warehouse,
+    );
+    if (orders.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, orders.length - 1).toInt();
+    return orders[index];
   }
 
   @override
   Widget build(BuildContext context) {
+    final store = context.watch<ProductionFlowStore>();
+    final stageOrders = store.ordersAtStage(ProductionStage.warehouse);
+    final requests = stageOrders.map(_requestFromOrder).toList();
+    if (_selectedIndex >= requests.length && requests.isNotEmpty) {
+      _selectedIndex = requests.length - 1;
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final formFactor = constraints.maxWidth >= 1180
@@ -146,12 +157,18 @@ class _WarehousePageState extends State<WarehousePage> {
 
         if (isMobile) {
           return _MobileWarehouseLayout(
-            requests: _requests,
+            requests: requests,
+            showCreate: _showCreate,
             selectedIndex: _selectedIndex,
-            status: _status,
+            status: requests.isEmpty
+                ? 'Sem OPs'
+                : requests[_selectedIndex].status,
+            onShowQueue: () => setState(() => _showCreate = false),
+            onShowCreate: () => setState(() => _showCreate = true),
+            onCreate: _createOrder,
             onSelect: (index) => setState(() {
               _selectedIndex = index;
-              _status = _requests[index].status;
+              _showCreate = false;
             }),
             onStart: _startPicking,
             onPause: _pausePicking,
@@ -160,12 +177,18 @@ class _WarehousePageState extends State<WarehousePage> {
         }
 
         return _DesktopWarehouseLayout(
-          requests: _requests,
+          requests: requests,
+          showCreate: _showCreate,
           selectedIndex: _selectedIndex,
-          status: _status,
+          status: requests.isEmpty
+              ? 'Sem OPs'
+              : requests[_selectedIndex].status,
+          onShowQueue: () => setState(() => _showCreate = false),
+          onShowCreate: () => setState(() => _showCreate = true),
+          onCreate: _createOrder,
           onSelect: (index) => setState(() {
             _selectedIndex = index;
-            _status = _requests[index].status;
+            _showCreate = false;
           }),
           onStart: _startPicking,
           onPause: _pausePicking,
@@ -176,11 +199,32 @@ class _WarehousePageState extends State<WarehousePage> {
   }
 }
 
+String _statusLabel(ProductionOrderFlow order) {
+  final base = switch (order.status) {
+    ProductionRunStatus.waiting => 'Aguardando separacao',
+    ProductionRunStatus.active => 'Em separacao',
+    ProductionRunStatus.paused => 'Pausada',
+    ProductionRunStatus.completed => 'Entregue',
+  };
+  final timing = order.timings[ProductionStage.warehouse];
+  if (timing?.startedAt == null) return base;
+  final elapsed = formatProductionDuration(order.activeElapsed(DateTime.now()));
+  return '$base · $elapsed';
+}
+
+String _timeLabel(DateTime date) {
+  return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+}
+
 class _DesktopWarehouseLayout extends StatelessWidget {
   const _DesktopWarehouseLayout({
     required this.requests,
+    required this.showCreate,
     required this.selectedIndex,
     required this.status,
+    required this.onShowQueue,
+    required this.onShowCreate,
+    required this.onCreate,
     required this.onSelect,
     required this.onStart,
     required this.onPause,
@@ -188,14 +232,24 @@ class _DesktopWarehouseLayout extends StatelessWidget {
   });
 
   final List<WarehouseRequest> requests;
+  final bool showCreate;
   final int selectedIndex;
   final String status;
+  final VoidCallback onShowQueue;
+  final VoidCallback onShowCreate;
+  final void Function({
+    required String productCode,
+    required int quantity,
+    required String priority,
+  })
+  onCreate;
   final ValueChanged<int> onSelect;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onDeliver;
 
-  WarehouseRequest get selectedRequest => requests[selectedIndex];
+  WarehouseRequest? get selectedRequest =>
+      requests.isEmpty ? null : requests[selectedIndex];
 
   @override
   Widget build(BuildContext context) {
@@ -224,19 +278,26 @@ class _DesktopWarehouseLayout extends StatelessWidget {
                         width: 390,
                         child: _WarehouseQueue(
                           requests: requests,
+                          showCreate: showCreate,
                           selectedIndex: selectedIndex,
+                          onShowQueue: onShowQueue,
+                          onShowCreate: onShowCreate,
                           onSelect: onSelect,
                         ),
                       ),
                       const SizedBox(width: 72),
                       Expanded(
-                        child: _WarehouseDetails(
-                          request: selectedRequest,
-                          status: status,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onDeliver: onDeliver,
-                        ),
+                        child: showCreate
+                            ? _WarehouseCreateForm(onCreate: onCreate)
+                            : selectedRequest == null
+                            ? const _EmptyWarehouseState()
+                            : _WarehouseDetails(
+                                request: selectedRequest!,
+                                status: status,
+                                onStart: onStart,
+                                onPause: onPause,
+                                onDeliver: onDeliver,
+                              ),
                       ),
                     ],
                   ),
@@ -253,8 +314,12 @@ class _DesktopWarehouseLayout extends StatelessWidget {
 class _MobileWarehouseLayout extends StatelessWidget {
   const _MobileWarehouseLayout({
     required this.requests,
+    required this.showCreate,
     required this.selectedIndex,
     required this.status,
+    required this.onShowQueue,
+    required this.onShowCreate,
+    required this.onCreate,
     required this.onSelect,
     required this.onStart,
     required this.onPause,
@@ -262,14 +327,24 @@ class _MobileWarehouseLayout extends StatelessWidget {
   });
 
   final List<WarehouseRequest> requests;
+  final bool showCreate;
   final int selectedIndex;
   final String status;
+  final VoidCallback onShowQueue;
+  final VoidCallback onShowCreate;
+  final void Function({
+    required String productCode,
+    required int quantity,
+    required String priority,
+  })
+  onCreate;
   final ValueChanged<int> onSelect;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onDeliver;
 
-  WarehouseRequest get selectedRequest => requests[selectedIndex];
+  WarehouseRequest? get selectedRequest =>
+      requests.isEmpty ? null : requests[selectedIndex];
 
   @override
   Widget build(BuildContext context) {
@@ -303,31 +378,47 @@ class _MobileWarehouseLayout extends StatelessWidget {
                           padding: EdgeInsets.symmetric(horizontal: 4),
                           child: _WarehouseHeader(compact: true),
                         ),
-                        const SizedBox(height: 18),
-                        for (var i = 0; i < requests.length; i++) ...[
-                          _WarehouseRequestCard(
-                            request: requests[i],
-                            selected: i == selectedIndex,
-                            compact: true,
-                            onTap: () => onSelect(i),
-                          ),
-                          if (i < requests.length - 1)
-                            const SizedBox(height: 12),
-                        ],
-                        const SizedBox(height: 24),
-                        _MobileWarehouseSummary(
-                          request: selectedRequest,
-                          status: status,
-                        ),
-                        const SizedBox(height: 16),
-                        _WarehouseItemsPanel(request: selectedRequest),
-                        const SizedBox(height: 18),
-                        _WarehouseActions(
+                        const SizedBox(height: 14),
+                        _WarehouseTabs(
+                          showCreate: showCreate,
+                          onShowQueue: onShowQueue,
+                          onShowCreate: onShowCreate,
                           compact: true,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onDeliver: onDeliver,
                         ),
+                        const SizedBox(height: 18),
+                        if (showCreate)
+                          _WarehouseCreateForm(
+                            onCreate: onCreate,
+                            compact: true,
+                          )
+                        else if (selectedRequest == null)
+                          const _EmptyWarehouseState(compact: true)
+                        else ...[
+                          for (var i = 0; i < requests.length; i++) ...[
+                            _WarehouseRequestCard(
+                              request: requests[i],
+                              selected: i == selectedIndex,
+                              compact: true,
+                              onTap: () => onSelect(i),
+                            ),
+                            if (i < requests.length - 1)
+                              const SizedBox(height: 12),
+                          ],
+                          const SizedBox(height: 24),
+                          _MobileWarehouseSummary(
+                            request: selectedRequest!,
+                            status: status,
+                          ),
+                          const SizedBox(height: 16),
+                          _WarehouseItemsPanel(request: selectedRequest!),
+                          const SizedBox(height: 18),
+                          _WarehouseActions(
+                            compact: true,
+                            onStart: onStart,
+                            onPause: onPause,
+                            onDeliver: onDeliver,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -344,12 +435,18 @@ class _MobileWarehouseLayout extends StatelessWidget {
 class _WarehouseQueue extends StatelessWidget {
   const _WarehouseQueue({
     required this.requests,
+    required this.showCreate,
     required this.selectedIndex,
+    required this.onShowQueue,
+    required this.onShowCreate,
     required this.onSelect,
   });
 
   final List<WarehouseRequest> requests;
+  final bool showCreate;
   final int selectedIndex;
+  final VoidCallback onShowQueue;
+  final VoidCallback onShowCreate;
   final ValueChanged<int> onSelect;
 
   @override
@@ -358,16 +455,108 @@ class _WarehouseQueue extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _WarehouseHeader(),
+        const SizedBox(height: 18),
+        _WarehouseTabs(
+          showCreate: showCreate,
+          onShowQueue: onShowQueue,
+          onShowCreate: onShowCreate,
+        ),
         const SizedBox(height: 38),
-        for (var i = 0; i < requests.length; i++) ...[
-          _WarehouseRequestCard(
-            request: requests[i],
-            selected: i == selectedIndex,
-            onTap: () => onSelect(i),
-          ),
-          if (i < requests.length - 1) const SizedBox(height: 23),
-        ],
+        if (requests.isEmpty)
+          const _EmptyWarehouseState(compact: true)
+        else
+          for (var i = 0; i < requests.length; i++) ...[
+            _WarehouseRequestCard(
+              request: requests[i],
+              selected: !showCreate && i == selectedIndex,
+              onTap: () => onSelect(i),
+            ),
+            if (i < requests.length - 1) const SizedBox(height: 23),
+          ],
       ],
+    );
+  }
+}
+
+class _WarehouseTabs extends StatelessWidget {
+  const _WarehouseTabs({
+    required this.showCreate,
+    required this.onShowQueue,
+    required this.onShowCreate,
+    this.compact = false,
+  });
+
+  final bool showCreate;
+  final VoidCallback onShowQueue;
+  final VoidCallback onShowCreate;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _WarehouseTabButton(
+              label: 'Separacao',
+              active: !showCreate,
+              onTap: onShowQueue,
+              compact: compact,
+            ),
+          ),
+          Expanded(
+            child: _WarehouseTabButton(
+              label: 'Criar OP',
+              active: showCreate,
+              onTap: onShowCreate,
+              compact: compact,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WarehouseTabButton extends StatelessWidget {
+  const _WarehouseTabButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    required this.compact,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: compact ? 9 : 10),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: active ? AppColors.primary : AppColors.textMuted,
+              fontSize: compact ? 13 : 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -863,6 +1052,240 @@ class _WarehouseActions extends StatelessWidget {
           width: 300,
         ),
       ],
+    );
+  }
+}
+
+class _WarehouseCreateForm extends StatefulWidget {
+  const _WarehouseCreateForm({required this.onCreate, this.compact = false});
+
+  final void Function({
+    required String productCode,
+    required int quantity,
+    required String priority,
+  })
+  onCreate;
+  final bool compact;
+
+  @override
+  State<_WarehouseCreateForm> createState() => _WarehouseCreateFormState();
+}
+
+class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
+  late String _productCode;
+  var _priority = 'Media';
+  late final TextEditingController _quantityController;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _productCode = ProductionFlowStore.catalog.first.code;
+    _quantityController = TextEditingController(
+      text: '${ProductionFlowStore.catalog.first.defaultQuantity}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = ProductionFlowStore.catalog.firstWhere(
+      (item) => item.code == _productCode,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(widget.compact ? 16 : 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Criar OP',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: widget.compact ? 22 : 32,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Crie uma OP local para testar o fluxo completo antes da integracao com o Protheus.',
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: widget.compact ? 13 : 16,
+            ),
+          ),
+          SizedBox(height: widget.compact ? 18 : 28),
+          DropdownButtonFormField<String>(
+            initialValue: _productCode,
+            decoration: const InputDecoration(labelText: 'Produto'),
+            items: [
+              for (final item in ProductionFlowStore.catalog)
+                DropdownMenuItem(value: item.code, child: Text(item.label)),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              final item = ProductionFlowStore.catalog.firstWhere(
+                (product) => product.code == value,
+              );
+              setState(() {
+                _productCode = value;
+                _quantityController.text = '${item.defaultQuantity}';
+              });
+            },
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _quantityController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Quantidade',
+              errorText: _error,
+            ),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String>(
+            initialValue: _priority,
+            decoration: const InputDecoration(labelText: 'Prioridade'),
+            items: const [
+              DropdownMenuItem(value: 'Baixa', child: Text('Baixa')),
+              DropdownMenuItem(value: 'Media', child: Text('Media')),
+              DropdownMenuItem(value: 'Alta', child: Text('Alta')),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _priority = value);
+            },
+          ),
+          const SizedBox(height: 22),
+          _WarehouseItemsPreview(item: selected),
+          SizedBox(height: widget.compact ? 22 : 32),
+          _ActionButton(
+            label: 'Criar OP no almoxarifado',
+            icon: Icons.add_rounded,
+            onPressed: _submit,
+            fillColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            width: widget.compact ? double.infinity : 320,
+            height: widget.compact ? 54 : 64,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submit() {
+    final quantity = int.tryParse(_quantityController.text.trim());
+    if (quantity == null || quantity <= 0) {
+      setState(() => _error = 'Informe uma quantidade valida.');
+      return;
+    }
+    widget.onCreate(
+      productCode: _productCode,
+      quantity: quantity,
+      priority: _priority,
+    );
+  }
+}
+
+class _WarehouseItemsPreview extends StatelessWidget {
+  const _WarehouseItemsPreview({required this.item});
+
+  final ProductionCatalogItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE4EDF4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Componentes previstos',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < item.components.length; i++) ...[
+            _WarehouseItemRow(
+              item: WarehouseItem(
+                code: item.components[i].code,
+                description: item.components[i].description,
+                quantity: item.components[i].quantityLabel,
+                stock: item.components[i].stockLabel,
+              ),
+            ),
+            if (i < item.components.length - 1)
+              const Divider(height: 22, color: AppColors.border),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyWarehouseState extends StatelessWidget {
+  const _EmptyWarehouseState({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 18 : 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.inventory_2_outlined,
+            color: AppColors.iconMuted,
+            size: compact ? 34 : 48,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Nenhuma OP no almoxarifado.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: compact ? 14 : 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Use a aba Criar OP para iniciar um fluxo local.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: compact ? 12 : 14,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

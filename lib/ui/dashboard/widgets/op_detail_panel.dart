@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
@@ -14,20 +15,57 @@ const _stages = [
 ];
 
 const _materials = <String, List<List<Object>>>{
-  'Sirene': [['Placa de circuito SMD', 1], ['Alto-falante piezo 30W', 1], ['Transformador de áudio', 1], ['Gabinete ABS', 1], ['Kit parafusos + vedação', 1]],
-  'Central': [['Placa controladora', 1], ['Display LCD 16x2', 1], ['Bateria selada 12V 7Ah', 1], ['Fonte chaveada 14V', 1], ['Caixa metálica', 1]],
-  'Controle': [['Placa RF 433MHz', 1], ['Encoder HT12E', 1], ['Bateria A23 12V', 1], ['Carcaça + botões', 1]],
-  'Sensor': [['Sensor PIR', 1], ['Lente fresnel', 1], ['Placa de processamento', 1], ['Suporte articulado', 1]],
-  'Módulo': [['Modem GSM quad-band', 1], ['Antena GSM', 1], ['Placa de interface', 1], ['Slot SIM', 1]],
-  'Teclado': [['Membrana 12 teclas', 1], ['Placa de varredura', 1], ['Cabo flat', 1], ['Frente policarbonato', 1]],
-  'Discadora': [['Placa de discagem', 1], ['Relé de linha', 1], ['Memória de voz', 1], ['Gabinete compacto', 1]],
+  'Sirene': [
+    ['Placa de circuito SMD', 1],
+    ['Alto-falante piezo 30W', 1],
+    ['Transformador de áudio', 1],
+    ['Gabinete ABS', 1],
+    ['Kit parafusos + vedação', 1],
+  ],
+  'Central': [
+    ['Placa controladora', 1],
+    ['Display LCD 16x2', 1],
+    ['Bateria selada 12V 7Ah', 1],
+    ['Fonte chaveada 14V', 1],
+    ['Caixa metálica', 1],
+  ],
+  'Controle': [
+    ['Placa RF 433MHz', 1],
+    ['Encoder HT12E', 1],
+    ['Bateria A23 12V', 1],
+    ['Carcaça + botões', 1],
+  ],
+  'Sensor': [
+    ['Sensor PIR', 1],
+    ['Lente fresnel', 1],
+    ['Placa de processamento', 1],
+    ['Suporte articulado', 1],
+  ],
+  'Módulo': [
+    ['Modem GSM quad-band', 1],
+    ['Antena GSM', 1],
+    ['Placa de interface', 1],
+    ['Slot SIM', 1],
+  ],
+  'Teclado': [
+    ['Membrana 12 teclas', 1],
+    ['Placa de varredura', 1],
+    ['Cabo flat', 1],
+    ['Frente policarbonato', 1],
+  ],
+  'Discadora': [
+    ['Placa de discagem', 1],
+    ['Relé de linha', 1],
+    ['Memória de voz', 1],
+    ['Gabinete compacto', 1],
+  ],
 };
 
 class OpDetailPanel extends StatelessWidget {
   final OrdemProducao op;
   final bool confirmCancel;
   final VoidCallback onClose;
-  final VoidCallback onAdvance;
+  final void Function({int quantidadeArmazenada}) onAdvance;
   final VoidCallback onRegress;
   final VoidCallback onAskCancel;
   final VoidCallback onConfirmCancel;
@@ -74,7 +112,13 @@ class _DesktopDrawer extends StatelessWidget {
               height: double.infinity,
               decoration: const BoxDecoration(
                 color: AppColors.surface,
-                boxShadow: [BoxShadow(color: Color(0x330F172A), blurRadius: 36, offset: Offset(-10, 0))],
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x330F172A),
+                    blurRadius: 36,
+                    offset: Offset(-10, 0),
+                  ),
+                ],
               ),
               child: _DetailContent(panel: panel, showBackArrow: false),
             ),
@@ -137,7 +181,12 @@ class _DetailContent extends StatelessWidget {
                   ],
                   Text(
                     op.numero,
-                    style: GoogleFonts.ibmPlexMono(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textMuted, letterSpacing: 0.4),
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMuted,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                   const Spacer(),
                   if (!showBackArrow)
@@ -147,7 +196,14 @@ class _DetailContent extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 11),
-              Text(op.produto, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600, color: AppColors.text)),
+              Text(
+                op.produto,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
               const SizedBox(height: 11),
               if (!showBackArrow)
                 Row(
@@ -156,9 +212,22 @@ class _DetailContent extends StatelessWidget {
                     if (op.atrasada) ...[
                       const SizedBox(width: 9),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(color: AppColors.dangerBg, borderRadius: BorderRadius.circular(99)),
-                        child: const Text('Atrasada', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.danger)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerBg,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: const Text(
+                          'Atrasada',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.danger,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -167,9 +236,22 @@ class _DetailContent extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 9),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.dangerBg, borderRadius: BorderRadius.circular(99)),
-                    child: const Text('Atrasada', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.danger)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.dangerBg,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: const Text(
+                      'Atrasada',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.danger,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -196,18 +278,25 @@ class _DetailContent extends StatelessWidget {
 
         // Actions
         Container(
-          padding: EdgeInsets.symmetric(horizontal: showBackArrow ? 16 : 22, vertical: showBackArrow ? 13 : 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: showBackArrow ? 16 : 22,
+            vertical: showBackArrow ? 13 : 14,
+          ),
           decoration: const BoxDecoration(
             color: AppColors.surface,
             border: Border(top: BorderSide(color: AppColors.borderLight)),
           ),
           child: panel.confirmCancel
-              ? _CancelConfirm(onConfirm: panel.onConfirmCancel, onBack: panel.onCancelNo)
+              ? _CancelConfirm(
+                  onConfirm: panel.onConfirmCancel,
+                  onBack: panel.onCancelNo,
+                )
               : _ActionButtons(
                   canAdvance: canAdvance,
                   isDone: isDone,
                   canRegress: canRegress,
                   actionLabel: op.status.actionLabel,
+                  op: op,
                   onAdvance: panel.onAdvance,
                   onRegress: panel.onRegress,
                   onAskCancel: panel.onAskCancel,
@@ -239,34 +328,69 @@ class _InfoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: _InfoField(label: 'RESPONSÁVEL', child: Row(
-                children: [
-                  if (resp != null) ...[
-                    Container(
-                      width: 24, height: 24,
-                      decoration: BoxDecoration(color: resp!.cor, shape: BoxShape.circle),
-                      alignment: Alignment.center,
-                      child: Text(resp!.iniciais, style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w600)),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(op.responsavel, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.textStrong)),
-                ],
-              ))),
-              Expanded(child: _InfoField(label: 'QUANTIDADE', text: op.qtdLabel)),
+              Expanded(
+                child: _InfoField(
+                  label: 'RESPONSÁVEL',
+                  child: Row(
+                    children: [
+                      if (resp != null) ...[
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: resp!.cor,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            resp!.iniciais,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        op.responsavel,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textStrong,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _InfoField(label: 'QUANTIDADE', text: op.qtdLabel),
+              ),
             ],
           ),
           const SizedBox(height: 17),
           Row(
             children: [
-              Expanded(child: _InfoField(label: 'ABERTURA', text: op.dataAbertura)),
-              Expanded(child: _InfoField(label: 'PRAZO', child: Text(
-                op.prazo,
-                style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w500,
-                  color: op.atrasada ? AppColors.danger : AppColors.textStrong,
+              Expanded(
+                child: _InfoField(label: 'ABERTURA', text: op.dataAbertura),
+              ),
+              Expanded(
+                child: _InfoField(
+                  label: 'PRAZO',
+                  child: Text(
+                    op.prazo,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: op.atrasada
+                          ? AppColors.danger
+                          : AppColors.textStrong,
+                    ),
+                  ),
                 ),
-              ))),
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -274,7 +398,14 @@ class _InfoCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const _SectionLabel('PROGRESSO'),
-              Text(op.percentLabel, style: GoogleFonts.ibmPlexMono(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textCode)),
+              Text(
+                op.percentLabel,
+                style: GoogleFonts.ibmPlexMono(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textCode,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 7),
@@ -303,8 +434,8 @@ class _StagesCard extends StatelessWidget {
     final doneCount = op.status == StatusOP.finalizada
         ? _stages.length
         : op.status == StatusOP.emAndamento
-            ? (op.progresso / 100 * _stages.length).floor()
-            : 0;
+        ? (op.progresso / 100 * _stages.length).floor()
+        : 0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -320,7 +451,8 @@ class _StagesCard extends StatelessWidget {
           const SizedBox(height: 6),
           ...List.generate(_stages.length, (i) {
             final isOk = op.status == StatusOP.finalizada || i < doneCount;
-            final isRunning = op.status == StatusOP.emAndamento && i == doneCount;
+            final isRunning =
+                op.status == StatusOP.emAndamento && i == doneCount;
 
             final Color bg, color, textColor;
             final String mark, statusLabel;
@@ -353,14 +485,41 @@ class _StagesCard extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 23, height: 23,
-                    decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                    width: 23,
+                    height: 23,
+                    decoration: BoxDecoration(
+                      color: bg,
+                      shape: BoxShape.circle,
+                    ),
                     alignment: Alignment.center,
-                    child: Text(mark, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+                    child: Text(
+                      mark,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(_stages[i], style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: textColor))),
-                  Text(statusLabel, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: color)),
+                  Expanded(
+                    child: Text(
+                      _stages[i],
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    statusLabel,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -379,7 +538,11 @@ class _MaterialsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final key = op.produto.split(' ').first;
-    final mats = _materials[key] ?? [['Componentes diversos', 1]];
+    final mats =
+        _materials[key] ??
+        [
+          ['Componentes diversos', 1],
+        ];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -404,8 +567,21 @@ class _MaterialsCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(nome, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                  Text('${qtdPer * op.qtd} un', style: GoogleFonts.ibmPlexMono(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.muted)),
+                  Text(
+                    nome,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    '${qtdPer * op.qtd} un',
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.muted,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -423,20 +599,56 @@ class _ApontamentosCard extends StatelessWidget {
 
   List<_Apontamento> _buildApontamentos() {
     final list = <_Apontamento>[];
-    list.add(_Apontamento('OP criada e adicionada à fila', '${op.dataAbertura} · 08:12', op.responsavel));
+    list.add(
+      _Apontamento(
+        'OP criada e adicionada à fila',
+        '${op.dataAbertura} · 08:12',
+        op.responsavel,
+      ),
+    );
     if (op.status.index >= StatusOP.naoIniciada.index) {
-      list.add(_Apontamento('Materiais separados e conferidos', '${op.dataAbertura} · 14:30', 'Almoxarifado'));
+      list.add(
+        _Apontamento(
+          'Materiais separados e conferidos',
+          '${op.dataAbertura} · 14:30',
+          'Almoxarifado',
+        ),
+      );
     }
     if (op.status.index >= StatusOP.emAndamento.index) {
-      list.add(_Apontamento('Produção iniciada na linha 02', 'em produção', op.responsavel));
+      list.add(
+        _Apontamento(
+          'Produção iniciada na linha 02',
+          'em produção',
+          op.responsavel,
+        ),
+      );
     }
     if (op.status == StatusOP.emAndamento) {
       final produced = (op.progresso / 100 * op.qtd).round();
-      list.add(_Apontamento('Apontamento parcial: $produced un produzidas', 'hoje · 10:45', op.responsavel));
+      list.add(
+        _Apontamento(
+          'Apontamento parcial: $produced un produzidas',
+          'hoje · 10:45',
+          op.responsavel,
+        ),
+      );
     }
     if (op.status == StatusOP.finalizada) {
-      list.add(_Apontamento('Produção concluída — ${op.qtd} un', '${op.prazo} · 16:20', op.responsavel));
-      list.add(_Apontamento('Inspeção de qualidade aprovada · liberado p/ expedição', '${op.prazo} · 17:05', 'Qualidade'));
+      list.add(
+        _Apontamento(
+          'Produção concluída — ${op.qtd} un',
+          '${op.prazo} · 16:20',
+          op.responsavel,
+        ),
+      );
+      list.add(
+        _Apontamento(
+          'Inspeção de qualidade aprovada · liberado p/ expedição',
+          '${op.prazo} · 17:05',
+          'Qualidade',
+        ),
+      );
     }
     return list.reversed.toList();
   }
@@ -467,7 +679,8 @@ class _ApontamentosCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 5),
                     child: Container(
-                      width: 9, height: 9,
+                      width: 9,
+                      height: 9,
                       decoration: BoxDecoration(
                         color: isFirst ? AppColors.primary : AppColors.barGray,
                         shape: BoxShape.circle,
@@ -481,9 +694,22 @@ class _ApontamentosCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(a.texto, style: const TextStyle(fontSize: 13, color: AppColors.textStrong, height: 1.4)),
+                          Text(
+                            a.texto,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textStrong,
+                              height: 1.4,
+                            ),
+                          ),
                           const SizedBox(height: 3),
-                          Text('${a.tempo} · ${a.usuario}', style: TextStyle(fontSize: 11.5, color: AppColors.muted)),
+                          Text(
+                            '${a.tempo} · ${a.usuario}',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.muted,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -519,7 +745,11 @@ class _CancelConfirm extends StatelessWidget {
       children: [
         const Text(
           'Cancelar esta OP? Ela será removida do painel de produção.',
-          style: TextStyle(fontSize: 12.5, color: AppColors.textCode, height: 1.4),
+          style: TextStyle(
+            fontSize: 12.5,
+            color: AppColors.textCode,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 11),
         Row(
@@ -532,8 +762,13 @@ class _CancelConfirm extends StatelessWidget {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 11),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-                  textStyle: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w600),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  textStyle: GoogleFonts.ibmPlexSans(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 child: const Text('Sim, cancelar OP'),
               ),
@@ -545,9 +780,17 @@ class _CancelConfirm extends StatelessWidget {
                 backgroundColor: AppColors.bgButton,
                 foregroundColor: AppColors.textCode,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-                textStyle: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w600),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 11,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                textStyle: GoogleFonts.ibmPlexSans(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               child: const Text('Voltar'),
             ),
@@ -563,7 +806,8 @@ class _ActionButtons extends StatelessWidget {
   final bool isDone;
   final bool canRegress;
   final String actionLabel;
-  final VoidCallback onAdvance;
+  final OrdemProducao op;
+  final void Function({int quantidadeArmazenada}) onAdvance;
   final VoidCallback onRegress;
   final VoidCallback onAskCancel;
   final VoidCallback onClose;
@@ -574,6 +818,7 @@ class _ActionButtons extends StatelessWidget {
     required this.isDone,
     required this.canRegress,
     required this.actionLabel,
+    required this.op,
     required this.onAdvance,
     required this.onRegress,
     required this.onAskCancel,
@@ -583,20 +828,39 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Future<void> handleAdvance() async {
+      if (op.status != StatusOP.emAndamento) {
+        onAdvance();
+        return;
+      }
+
+      final quantidade = await showDialog<int>(
+        context: context,
+        builder: (context) => _StorageDecisionDialog(op: op),
+      );
+      if (quantidade == null) return;
+      onAdvance(quantidadeArmazenada: quantidade);
+    }
+
     return Column(
       children: [
         if (canAdvance)
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onAdvance,
+              onPressed: handleAdvance,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(isDesktop ? 9 : 11)),
-                textStyle: GoogleFonts.ibmPlexSans(fontSize: isDesktop ? 13.5 : 14.5, fontWeight: FontWeight.w600),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(isDesktop ? 9 : 11),
+                ),
+                textStyle: GoogleFonts.ibmPlexSans(
+                  fontSize: isDesktop ? 13.5 : 14.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               child: Text(actionLabel),
             ),
@@ -612,7 +876,11 @@ class _ActionButtons extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               'OP finalizada ✓',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.statusFinalizada),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.statusFinalizada,
+              ),
             ),
           ),
         const SizedBox(height: 11),
@@ -627,8 +895,13 @@ class _ActionButtons extends StatelessWidget {
                     foregroundColor: AppColors.textCode,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(isDesktop ? 9 : 11)),
-                    textStyle: GoogleFonts.ibmPlexSans(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(isDesktop ? 9 : 11),
+                    ),
+                    textStyle: GoogleFonts.ibmPlexSans(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   child: const Text('Voltar etapa'),
                 ),
@@ -640,7 +913,10 @@ class _ActionButtons extends StatelessWidget {
                 onPressed: onAskCancel,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.danger,
-                  textStyle: GoogleFonts.ibmPlexSans(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  textStyle: GoogleFonts.ibmPlexSans(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 child: const Text('Cancelar OP'),
               )
@@ -652,8 +928,13 @@ class _ActionButtons extends StatelessWidget {
                     foregroundColor: AppColors.danger,
                     side: const BorderSide(color: Color(0xFFF3D4D4)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                    textStyle: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    textStyle: GoogleFonts.ibmPlexSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   child: const Text('Cancelar OP'),
                 ),
@@ -665,9 +946,17 @@ class _ActionButtons extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textCode,
                   side: const BorderSide(color: AppColors.borderField),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-                  textStyle: GoogleFonts.ibmPlexSans(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  textStyle: GoogleFonts.ibmPlexSans(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 child: const Text('Fechar'),
               ),
@@ -675,6 +964,198 @@ class _ActionButtons extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _StorageDecisionDialog extends StatefulWidget {
+  final OrdemProducao op;
+
+  const _StorageDecisionDialog({required this.op});
+
+  @override
+  State<_StorageDecisionDialog> createState() => _StorageDecisionDialogState();
+}
+
+class _StorageDecisionDialogState extends State<_StorageDecisionDialog> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '0');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  int? _parseQuantity() {
+    final value = int.tryParse(_controller.text.trim());
+    if (value == null || value < 0 || value > widget.op.qtd) {
+      setState(() {
+        _error = 'Informe uma quantidade entre 0 e ${widget.op.qtd}.';
+      });
+      return null;
+    }
+    return value;
+  }
+
+  void _submitTypedQuantity() {
+    final quantity = _parseQuantity();
+    if (quantity == null) return;
+    Navigator.of(context).pop(quantity);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 440,
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x26000000),
+              blurRadius: 24,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Concluir OP',
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 21,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${widget.op.numero} · ${widget.op.qtdLabel}',
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: AppColors.bgHeader,
+                border: Border.all(color: AppColors.borderLight),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Text(
+                'Separe a quantidade que deve ir apenas para armazenamento. Use 0 para concluir sem armazenar.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.35,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const _SectionLabel('QUANTIDADE PARA ARMAZENAMENTO', small: true),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                hintText: '0 a ${widget.op.qtd}',
+                errorText: _error,
+                filled: true,
+                fillColor: AppColors.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                  borderSide: const BorderSide(color: AppColors.borderField),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                  borderSide: const BorderSide(color: AppColors.borderField),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                  borderSide: const BorderSide(
+                    color: AppColors.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              style: GoogleFonts.ibmPlexMono(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textCode,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(0),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textCode,
+                      side: const BorderSide(color: AppColors.borderField),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Sem armazenar'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(widget.op.qtd),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Armazenar tudo'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _submitTypedQuantity,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  textStyle: GoogleFonts.ibmPlexSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: const Text('Concluir com quantidade informada'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -694,7 +1175,8 @@ class _IconButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: SizedBox(
-          width: 30, height: 30,
+          width: 30,
+          height: 30,
           child: Icon(icon, size: 18, color: AppColors.textMuted),
         ),
       ),
@@ -711,13 +1193,30 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-      decoration: BoxDecoration(color: status.bgColor, borderRadius: BorderRadius.circular(99)),
+      decoration: BoxDecoration(
+        color: status.bgColor,
+        borderRadius: BorderRadius.circular(99),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 7, height: 7, decoration: BoxDecoration(color: status.dot, shape: BoxShape.circle)),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: status.dot,
+              shape: BoxShape.circle,
+            ),
+          ),
           const SizedBox(width: 6),
-          Text(status.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: status.textColor)),
+          Text(
+            status.label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: status.textColor,
+            ),
+          ),
         ],
       ),
     );
@@ -738,7 +1237,15 @@ class _InfoField extends StatelessWidget {
       children: [
         _SectionLabel(label, small: true),
         const SizedBox(height: 6),
-        child ?? Text(text!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textStrong)),
+        child ??
+            Text(
+              text!,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textStrong,
+              ),
+            ),
       ],
     );
   }
