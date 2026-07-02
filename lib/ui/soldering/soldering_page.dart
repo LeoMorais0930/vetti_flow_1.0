@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
@@ -131,7 +133,7 @@ class _SolderingPageState extends State<SolderingPage> {
     if (order == null) return;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Carlos',
+      operatorName: 'Bryan',
     );
   }
 
@@ -265,7 +267,7 @@ class _EmptySolderingStage extends StatelessWidget {
               children: [
                 VettiTopBar(
                   title: 'Soldagem',
-                  operatorName: 'Carlos',
+                  operatorName: 'Bryan',
                   operatorRole: 'Soldagem',
                 ),
                 Expanded(
@@ -452,7 +454,7 @@ class _MobileSolderingLayout extends StatelessWidget {
               children: [
                 const VettiTopBar(
                   title: 'Soldagem',
-                  operatorName: 'Carlos',
+                  operatorName: 'Bryan',
                   compact: true,
                 ),
                 Expanded(
@@ -533,7 +535,7 @@ class _DesktopSolderingLayout extends StatelessWidget {
         children: [
           const VettiTopBar(
             title: 'Soldagem',
-            operatorName: 'Carlos',
+            operatorName: 'Bryan',
             operatorRole: 'Soldagem',
           ),
           Expanded(
@@ -1328,7 +1330,7 @@ class _SolderingPinSheetState extends State<_SolderingPinSheet> {
       return;
     }
 
-    final operator = Operator.findByPin(value);
+    final operator = context.read<OperatorAssignmentStore>().findByPin(value);
     setState(() {
       _operator = operator;
       _invalidPin = operator == null;

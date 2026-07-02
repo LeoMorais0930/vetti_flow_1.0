@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
@@ -168,7 +170,7 @@ class _TestingPageState extends State<TestingPage> {
     if (order == null) return;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Ana',
+      operatorName: 'Sabrina',
     );
   }
 
@@ -313,7 +315,7 @@ class _EmptyTestingStage extends StatelessWidget {
               children: [
                 VettiTopBar(
                   title: 'Teste de Producao',
-                  operatorName: 'Ana',
+                  operatorName: 'Sabrina',
                   operatorRole: 'Teste',
                 ),
                 Expanded(
@@ -509,7 +511,7 @@ class _MobileTestingLayout extends StatelessWidget {
               children: [
                 const VettiTopBar(
                   title: 'Teste de Producao',
-                  operatorName: 'Ana',
+                  operatorName: 'Sabrina',
                   compact: true,
                 ),
                 Expanded(
@@ -589,7 +591,7 @@ class _DesktopTestingLayout extends StatelessWidget {
         children: [
           const VettiTopBar(
             title: 'Teste de Producao',
-            operatorName: 'Ana',
+            operatorName: 'Sabrina',
             operatorRole: 'Teste',
           ),
           Expanded(
@@ -1680,7 +1682,7 @@ class _TestPinSheetState extends State<_TestPinSheet> {
       return;
     }
 
-    final operator = Operator.findByPin(value);
+    final operator = context.read<OperatorAssignmentStore>().findByPin(value);
     setState(() {
       _operator = operator;
       _invalidPin = operator == null;

@@ -12,9 +12,9 @@ class Responsavel {
   });
 
   static const todos = [
-    Responsavel(nome: 'Ana Ribeiro', iniciais: 'AR', cor: Color(0xFF7C3AED)),
-    Responsavel(nome: 'Carlos Mendes', iniciais: 'CM', cor: Color(0xFF0891B2)),
-    Responsavel(nome: 'Juliana Costa', iniciais: 'JC', cor: Color(0xFFDB2777)),
+    Responsavel(nome: 'Tatiane', iniciais: 'TA', cor: Color(0xFF7C3AED)),
+    Responsavel(nome: 'Bryan', iniciais: 'BR', cor: Color(0xFF0891B2)),
+    Responsavel(nome: 'Juliana', iniciais: 'JU', cor: Color(0xFFDB2777)),
     Responsavel(nome: 'Marcos Silva', iniciais: 'MS', cor: Color(0xFFEA580C)),
     Responsavel(nome: 'Patrícia Lima', iniciais: 'PL', cor: Color(0xFF0D9488)),
   ];

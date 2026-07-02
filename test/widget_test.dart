@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/repositories/mock_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
@@ -17,7 +18,7 @@ import 'package:vetti_flow_1_0/ui/tv/vetti_flow_tv_page.dart';
 
 void main() {
   test('dashboard operator routes to dashboard', () {
-    final operator = Operator.authenticate('marina', '0000');
+    final operator = Operator.authenticate('tatiane', '1001');
 
     expect(operator, isNotNull);
     expect(operator!.stage, WorkStage.dashboard);
@@ -30,6 +31,66 @@ void main() {
     expect(operator, isNotNull);
     expect(operator!.stage, WorkStage.tv);
     expect(operator.stage.route, '/tv');
+  });
+
+  test('coordinators and production users have real credentials', () {
+    final assignments = OperatorAssignmentStore();
+
+    final tatianeDashboard = assignments.authenticate('tatiane', '1001');
+    final tatianeProduction = assignments.authenticate('tatiane', '2001');
+    final sabrina = assignments.authenticate('sabrina', '3002');
+
+    expect(tatianeDashboard, isNotNull);
+    expect(tatianeDashboard!.stage, WorkStage.dashboard);
+    expect(tatianeProduction, isNotNull);
+    expect(tatianeProduction!.canManageAssignments, isTrue);
+    expect(sabrina, isNotNull);
+
+    assignments.assignStage('sabrina', WorkStage.firmware);
+    expect(
+      assignments.authenticate('sabrina', '3002')!.stage,
+      WorkStage.firmware,
+    );
+    expect(assignments.findByPin('3002')!.stage, WorkStage.firmware);
+  });
+
+  test('assignment managers only see their own sector', () {
+    final assignments = OperatorAssignmentStore();
+
+    assignments.authenticate('tatiane', '1001');
+    expect(assignments.currentManagedArea, WorkArea.production);
+    expect(
+      assignments.visibleAssignableOperators.every(
+        (operator) => operator.area == WorkArea.production,
+      ),
+      isTrue,
+    );
+    assignments.assignStage('rose', WorkStage.firmware);
+    expect(
+      assignments.authenticate('rose', '4005')!.stage,
+      WorkStage.warehouse,
+    );
+
+    assignments.authenticate('bruno', '1004');
+    expect(assignments.currentManagedArea, WorkArea.support);
+    expect(
+      assignments.visibleAssignableOperators.map((operator) => operator.name),
+      containsAll(['Bruno', 'Douglas', 'David', 'Vinicius', 'Matheus']),
+    );
+
+    assignments.authenticate('paula', '1003');
+    expect(assignments.currentManagedArea, WorkArea.smd);
+    expect(
+      assignments.visibleAssignableOperators.map((operator) => operator.name),
+      containsAll(['Paula', 'Leandro']),
+    );
+
+    assignments.authenticate('vera', '1005');
+    expect(assignments.currentManagedArea, WorkArea.warehouse);
+    expect(
+      assignments.visibleAssignableOperators.map((operator) => operator.name),
+      containsAll(['Vera', 'Luis', 'Rose']),
+    );
   });
 
   test('stores a partial quantity when finishing an OP', () async {
@@ -54,8 +115,8 @@ void main() {
   testWidgets('navigates from login to firmware screen', (tester) async {
     await tester.pumpWidget(_testApp());
 
-    await tester.enterText(find.byType(TextFormField).first, 'fernando');
-    await tester.enterText(find.byType(TextFormField).last, '5643');
+    await tester.enterText(find.byType(TextFormField).first, 'juliana');
+    await tester.enterText(find.byType(TextFormField).last, '3001');
     await tester.ensureVisible(find.text('Entrar'));
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
@@ -135,8 +196,16 @@ void main() {
 
     final repository = MockOpRepository();
     await tester.pumpWidget(
-      RepositoryProvider<OpRepository>.value(
-        value: repository,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ProductionFlowStore>(
+            create: (_) => ProductionFlowStore(),
+          ),
+          ChangeNotifierProvider<OperatorAssignmentStore>(
+            create: (_) => OperatorAssignmentStore(),
+          ),
+          RepositoryProvider<OpRepository>.value(value: repository),
+        ],
         child: MaterialApp(
           theme: AppTheme.light,
           home: BlocProvider(
@@ -223,7 +292,7 @@ void main() {
     expect(find.text('100 un'), findsOneWidget);
     expect(find.text('200 un'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).last, '4321');
+    await tester.enterText(find.byType(TextField).last, '3006');
     await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.widgetWithText(OutlinedButton, 'Finalizar'),
@@ -280,6 +349,9 @@ Widget _testApp({String initialRoute = '/login'}) {
     providers: [
       ChangeNotifierProvider<ProductionFlowStore>(
         create: (_) => ProductionFlowStore(),
+      ),
+      ChangeNotifierProvider<OperatorAssignmentStore>(
+        create: (_) => OperatorAssignmentStore(),
       ),
     ],
     child: MaterialApp(

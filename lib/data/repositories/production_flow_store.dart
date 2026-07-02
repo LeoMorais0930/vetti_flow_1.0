@@ -303,7 +303,7 @@ class ProductionFlowStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void completeStage(String number) {
+  void completeStage(String number, {String? observation}) {
     _mutate(number, (order, now) {
       final timings = Map<ProductionStage, ProductionStageTiming>.from(
         order.timings,
@@ -318,6 +318,10 @@ class ProductionFlowStore extends ChangeNotifier {
         currentStage: _nextStage(order.currentStage),
         status: ProductionRunStatus.waiting,
         updatedAt: now,
+        lastObservation: () {
+          final note = observation?.trim();
+          return note == null || note.isEmpty ? null : note;
+        },
         timings: timings,
       );
     });
@@ -442,6 +446,7 @@ class ProductionFlowStore extends ChangeNotifier {
       'responsavel': order.responsavel,
       'prazo': order.prazo,
       'closedQuantity': order.closedQuantity,
+      'lastObservation': order.lastObservation,
       'storedQuantity': order.storedQuantity,
       'dispatchedQuantity': order.dispatchedQuantity,
       'timings': {
@@ -466,6 +471,7 @@ class ProductionFlowStore extends ChangeNotifier {
       responsavel: json['responsavel'] as String?,
       prazo: json['prazo'] as String?,
       closedQuantity: (json['closedQuantity'] as num?)?.toInt() ?? 0,
+      lastObservation: json['lastObservation'] as String?,
       storedQuantity: (json['storedQuantity'] as num?)?.toInt() ?? 0,
       dispatchedQuantity: (json['dispatchedQuantity'] as num?)?.toInt() ?? 0,
       timings: _timingsFromJson(json['timings'] as Map<String, dynamic>?),
@@ -536,7 +542,9 @@ class ProductionFlowStore extends ChangeNotifier {
   ProductionStage _previousStage(ProductionStage stage) {
     final flow = ProductionStage.productionFlow;
     final index = flow.indexOf(stage);
-    if (index == -1) return flow.last; // storage/completed -> volta p/ expedicao
+    if (index == -1) {
+      return flow.last; // storage/completed -> volta p/ expedicao
+    }
     if (index == 0) return flow.first;
     return flow[index - 1];
   }
@@ -594,6 +602,17 @@ class ProductionFlowStore extends ChangeNotifier {
             pausedAt: now.subtract(const Duration(minutes: 4)),
           ),
         },
+      ),
+      ProductionOrderFlow(
+        number: 'OP-00564-351',
+        productCode: 'SMART-TECLADO',
+        productName: 'Teclado inteligente',
+        quantity: 450,
+        currentStage: ProductionStage.closing,
+        status: ProductionRunStatus.waiting,
+        priority: 'Media',
+        createdAt: now.subtract(const Duration(hours: 5)),
+        updatedAt: now.subtract(const Duration(minutes: 6)),
       ),
       ProductionOrderFlow(
         number: 'OP-00564-352',

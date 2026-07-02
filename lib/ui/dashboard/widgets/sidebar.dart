@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
 
@@ -10,6 +12,12 @@ class Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentOperator = context
+        .watch<OperatorAssignmentStore>()
+        .currentOperator;
+    final managerName = currentOperator?.name ?? 'Tatiane';
+    final managerRole = currentOperator?.role ?? 'Coordenadora da producao';
+
     return Container(
       width: 230,
       decoration: const BoxDecoration(
@@ -49,7 +57,9 @@ class Sidebar extends StatelessWidget {
             _NavItem(
               icon: _panelIcon,
               label: 'Painel',
-              active: viewMode != ViewMode.armazenadas,
+              active:
+                  viewMode != ViewMode.armazenadas &&
+                  viewMode != ViewMode.responsaveis,
               onTap: () => onViewMode(ViewMode.kanban),
             ),
             _NavItem(
@@ -63,7 +73,12 @@ class Sidebar extends StatelessWidget {
               active: viewMode == ViewMode.armazenadas,
               onTap: () => onViewMode(ViewMode.armazenadas),
             ),
-            _NavItem(icon: _userIcon, label: 'Responsáveis'),
+            _NavItem(
+              icon: _userIcon,
+              label: 'Equipe',
+              active: viewMode == ViewMode.responsaveis,
+              onTap: () => onViewMode(ViewMode.responsaveis),
+            ),
             _NavItem(icon: _chartIcon, label: 'Relatórios'),
             const Spacer(),
             Container(
@@ -81,8 +96,8 @@ class Sidebar extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
-                      'AR',
+                    child: Text(
+                      _initials(managerName),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -95,8 +110,8 @@ class Sidebar extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Ana Ribeiro',
+                        Text(
+                          managerName,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -104,7 +119,7 @@ class Sidebar extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Gestora de Produção',
+                          managerRole,
                           style: TextStyle(
                             fontSize: 11,
                             color: AppColors.muted,
@@ -121,6 +136,14 @@ class Sidebar extends StatelessWidget {
       ),
     );
   }
+}
+
+String _initials(String value) {
+  final parts = value.trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty || parts.first.isEmpty) return 'VF';
+  if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+  return '${parts.first.characters.first}${parts.last.characters.first}'
+      .toUpperCase();
 }
 
 class _NavItem extends StatelessWidget {

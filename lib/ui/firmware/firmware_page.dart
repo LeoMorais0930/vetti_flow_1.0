@@ -9,6 +9,7 @@ import 'package:vetti_flow_1_0/ui/firmware/widgets/firmware_models.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/operation_actions.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/operation_card.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/operation_metrics.dart';
+import 'package:vetti_flow_1_0/ui/shared/widgets/collaborator_stage_view.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 
 class FirmwarePage extends StatefulWidget {
@@ -64,7 +65,7 @@ class _FirmwarePageState extends State<FirmwarePage> {
     if (order == null) return;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Fernando',
+      operatorName: 'Juliana',
     );
   }
 
@@ -311,7 +312,7 @@ class _EmptyFirmwareStage extends StatelessWidget {
                 children: [
                   VettiTopBar(
                     title: 'Gravacao de Firmware',
-                    operatorName: 'Fernando',
+                    operatorName: 'Juliana',
                     compact: true,
                   ),
                   Expanded(
@@ -335,7 +336,7 @@ class _EmptyFirmwareStage extends StatelessWidget {
         children: [
           VettiTopBar(
             title: 'Gravacao de Firmware',
-            operatorName: 'Fernando',
+            operatorName: 'Juliana',
             operatorRole: 'Firmware',
           ),
           Expanded(
@@ -409,7 +410,7 @@ class _MobileFirmwareLayout extends StatelessWidget {
               children: [
                 const VettiTopBar(
                   title: 'Gravacao de Firmware',
-                  operatorName: 'Fernando',
+                  operatorName: 'Juliana',
                   compact: true,
                 ),
                 Expanded(
@@ -487,6 +488,41 @@ class _DesktopFirmwareLayout extends StatelessWidget {
   FirmwareOperation get selectedOperation => operations[selectedIndex];
   FirmwareStatus get status =>
       statuses[selectedIndex] ?? FirmwareStatus.waiting;
+  List<CollaboratorStageMetric> get metrics {
+    final recording = statuses.values
+        .where((status) => status == FirmwareStatus.recording)
+        .length;
+    final paused = statuses.values
+        .where((status) => status == FirmwareStatus.paused)
+        .length;
+
+    return [
+      CollaboratorStageMetric(
+        label: 'OPs na etapa',
+        value: '${operations.length}',
+        icon: Icons.memory_rounded,
+        accent: AppColors.primary,
+      ),
+      CollaboratorStageMetric(
+        label: 'Em gravacao',
+        value: '$recording',
+        icon: Icons.play_circle_rounded,
+        accent: AppColors.green,
+      ),
+      CollaboratorStageMetric(
+        label: 'Pausadas',
+        value: '$paused',
+        icon: Icons.pause_circle_rounded,
+        accent: AppColors.orange,
+      ),
+      const CollaboratorStageMetric(
+        label: 'Proxima etapa',
+        value: 'Soldagem',
+        icon: Icons.precision_manufacturing,
+        accent: Color(0xFF7458D8),
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -496,39 +532,33 @@ class _DesktopFirmwareLayout extends StatelessWidget {
         children: [
           const VettiTopBar(
             title: 'Gravacao de Firmware',
-            operatorName: 'Fernando',
+            operatorName: 'Juliana',
             operatorRole: 'Gravacao',
           ),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(40, 32, 40, 36),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1180),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 340,
-                        child: _DesktopOperationsPanel(
-                          operations: operations,
-                          selectedIndex: selectedIndex,
-                          statuses: statuses,
-                          onSelect: onSelect,
-                        ),
-                      ),
-                      const SizedBox(width: 36),
-                      Expanded(
-                        child: _DesktopDetailPanel(
-                          operation: selectedOperation,
-                          status: status,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onComplete: onComplete,
-                          onReset: onReset,
-                        ),
-                      ),
-                    ],
+            child: CollaboratorStageBody(
+              child: CollaboratorStageContent(
+                metrics: metrics,
+                queue: CollaboratorPanel(
+                  padding: const EdgeInsets.all(20),
+                  accent: AppColors.primary,
+                  child: _DesktopOperationsPanel(
+                    operations: operations,
+                    selectedIndex: selectedIndex,
+                    statuses: statuses,
+                    onSelect: onSelect,
+                  ),
+                ),
+                detail: CollaboratorPanel(
+                  padding: const EdgeInsets.all(28),
+                  accent: status.color,
+                  child: _DesktopDetailPanel(
+                    operation: selectedOperation,
+                    status: status,
+                    onStart: onStart,
+                    onPause: onPause,
+                    onComplete: onComplete,
+                    onReset: onReset,
                   ),
                 ),
               ),
@@ -555,81 +585,26 @@ class _DesktopOperationsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE4EDF4)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CollaboratorQueueHeading(
+          icon: Icons.memory_rounded,
+          title: 'OPs disponiveis',
+          subtitle: 'Liberadas pela SMD para gravacao.',
+          count: '${operations.length}',
+        ),
+        const SizedBox(height: 18),
+        for (var i = 0; i < operations.length; i++) ...[
+          OperationCard(
+            operation: operations[i],
+            selected: i == selectedIndex,
+            status: statuses[i] ?? FirmwareStatus.waiting,
+            onTap: () => onSelect(i),
           ),
+          if (i < operations.length - 1) const SizedBox(height: 10),
         ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.assignment_rounded,
-                size: 20,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'OPs disponiveis',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF7FF),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${operations.length}',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Liberadas pela SMD para gravacao.',
-            style: TextStyle(color: AppColors.muted, fontSize: 12),
-          ),
-          const SizedBox(height: 18),
-          for (var i = 0; i < operations.length; i++) ...[
-            OperationCard(
-              operation: operations[i],
-              selected: i == selectedIndex,
-              status: statuses[i] ?? FirmwareStatus.waiting,
-              onTap: () => onSelect(i),
-            ),
-            if (i < operations.length - 1) const SizedBox(height: 10),
-          ],
-        ],
-      ),
+      ],
     );
   }
 }
@@ -653,95 +628,80 @@ class _DesktopDetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE4EDF4)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      operation.number,
-                      style: const TextStyle(
-                        color: AppColors.text,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    operation.number,
+                    style: const TextStyle(
+                      color: AppColors.text,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      operation.product,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    operation.product,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      operation.receivedAgo,
-                      style: const TextStyle(
-                        color: AppColors.smallText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    operation.receivedAgo,
+                    style: const TextStyle(
+                      color: AppColors.smallText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              OperationStatusChip(status: status),
-            ],
-          ),
-          const SizedBox(height: 24),
-          OperationMetrics(operation: operation),
-          const SizedBox(height: 32),
-          Container(
-            width: double.infinity,
-            height: 1,
-            color: const Color(0xFFEEF3F7),
-          ),
-          const SizedBox(height: 28),
-          const Text(
-            'Acoes da OP',
-            style: TextStyle(
-              color: AppColors.text,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
             ),
+            const SizedBox(width: 14),
+            OperationStatusChip(status: status),
+          ],
+        ),
+        const SizedBox(height: 24),
+        OperationMetrics(operation: operation),
+        const SizedBox(height: 32),
+        Container(
+          width: double.infinity,
+          height: 1,
+          color: const Color(0xFFEEF3F7),
+        ),
+        const SizedBox(height: 28),
+        const Text(
+          'Acoes da OP',
+          style: TextStyle(
+            color: AppColors.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
           ),
-          const SizedBox(height: 6),
-          Text(
-            _actionHint(status),
-            style: const TextStyle(color: AppColors.muted, fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-          OperationActions(
-            status: status,
-            onStart: onStart,
-            onPause: onPause,
-            onComplete: onComplete,
-            onReset: onReset,
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _actionHint(status),
+          style: const TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 20),
+        OperationActions(
+          status: status,
+          onStart: onStart,
+          onPause: onPause,
+          onComplete: onComplete,
+          onReset: onReset,
+        ),
+      ],
     );
   }
 

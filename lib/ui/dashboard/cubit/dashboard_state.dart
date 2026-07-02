@@ -1,7 +1,7 @@
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 
-enum ViewMode { kanban, tabela, cards, armazenadas }
+enum ViewMode { kanban, tabela, cards, armazenadas, responsaveis }
 
 class DashboardState {
   final List<OrdemProducao> ordens;

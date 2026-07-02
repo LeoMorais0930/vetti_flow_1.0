@@ -127,7 +127,7 @@ class _CompletedBanner extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xFFE7F6EC),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFBFE5CC)),
           ),
           child: Row(
@@ -188,12 +188,14 @@ class _ActionButton extends StatelessWidget {
           backgroundColor: fillColor ?? Colors.white,
           foregroundColor: foregroundColor,
           side: BorderSide(
-            color: borderColor ?? fillColor ?? Colors.white,
+            color: borderColor ?? fillColor ?? const Color(0xFFD8E6EE),
             width: 1.4,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
+          elevation: fillColor == null ? 0 : 2,
+          shadowColor: fillColor?.withValues(alpha: 0.26),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
         ),
         child: Row(

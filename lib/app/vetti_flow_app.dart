@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
 import 'package:vetti_flow_1_0/ui/auth/login_page.dart';
@@ -27,6 +28,9 @@ class VettiFlowApp extends StatelessWidget {
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (_) => ProductionFlowStore(),
         ),
+        ChangeNotifierProvider<OperatorAssignmentStore>(
+          create: (_) => OperatorAssignmentStore(),
+        ),
         RepositoryProvider<OpRepository>(
           create: (context) =>
               FlowOpRepository(context.read<ProductionFlowStore>()),
@@ -36,7 +40,7 @@ class VettiFlowApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'VettiFlow 1.0',
         theme: AppTheme.light,
-        initialRoute: '/tv',
+        initialRoute: '/login',
         routes: {
           '/login': (context) => const LoginPage(),
           '/dashboard': (context) => BlocProvider(

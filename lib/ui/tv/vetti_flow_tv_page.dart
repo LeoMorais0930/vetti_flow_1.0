@@ -27,7 +27,7 @@ class _VettiFlowTvPageState extends State<VettiFlowTvPage> {
   static const _slideDuration = Duration(seconds: 12);
   static const _slideTitles = [
     'Producao em andamento',
-    'Onde estao as OPs',
+    'Fluxo por etapa',
     'Saida e prioridades',
   ];
 
@@ -77,7 +77,10 @@ class _VettiFlowTvPageState extends State<VettiFlowTvPage> {
         .toList();
     final highPriority = active.where((order) => order.isHighPriority).toList();
     final activePieces = active.fold<int>(0, (sum, o) => sum + o.quantity);
-    final storedPieces = stored.fold<int>(0, (sum, o) => sum + o.storedQuantity);
+    final storedPieces = stored.fold<int>(
+      0,
+      (sum, o) => sum + o.storedQuantity,
+    );
     final dispatchedPieces = completed.fold<int>(
       0,
       (sum, o) => sum + o.dispatchedQuantity,
@@ -87,10 +90,11 @@ class _VettiFlowTvPageState extends State<VettiFlowTvPage> {
       backgroundColor: const Color(0xFFEDF2F7),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // Exagerado de proposito para leitura facil a distancia em TVs grandes.
+          // Escala por largura e altura para TVs grandes sem estourar em desktop compacto.
           final widthScale = constraints.maxWidth / 1920;
           final heightScale = constraints.maxHeight / 1080;
-          final scale = math.min(widthScale, heightScale).clamp(0.52, 1.25) * 1.08;
+          final baseScale = widthScale < heightScale ? widthScale : heightScale;
+          final scale = (baseScale * 1.08).clamp(0.42, 1.12);
 
           return Column(
             children: [
@@ -185,7 +189,7 @@ class _TvHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'VETTIFLOW',
+                'VETTIFLOW TV',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 38 * scale,
@@ -405,9 +409,7 @@ class _ExecutiveSlide extends StatelessWidget {
                     scale: scale,
                     label: 'Pausadas',
                     value: '$pausedCount',
-                    helper: pausedCount > 0
-                        ? 'Requer atencao'
-                        : 'Tudo rodando',
+                    helper: pausedCount > 0 ? 'Requer atencao' : 'Tudo rodando',
                     icon: Icons.pause_circle_outline_rounded,
                     color: pausedCount > 0
                         ? AppColors.orangeText
@@ -448,7 +450,7 @@ class _FlowSlide extends StatelessWidget {
     return _SlideShell(
       scale: scale,
       index: 1,
-      title: 'Onde estao as OPs',
+      title: 'Fluxo por etapa',
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -457,9 +459,7 @@ class _FlowSlide extends StatelessWidget {
               child: _StageCard(
                 scale: scale,
                 stage: stage,
-                orders: active
-                    .where((o) => o.currentStage == stage)
-                    .toList(),
+                orders: active.where((o) => o.currentStage == stage).toList(),
               ),
             ),
             if (stage != ProductionStage.productionFlow.last)
@@ -709,12 +709,8 @@ class _StageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = _stageAccent(stage);
     final pieces = orders.fold<int>(0, (sum, o) => sum + o.quantity);
-    final running = orders.any(
-      (o) => o.status == ProductionRunStatus.active,
-    );
-    final paused = orders.any(
-      (o) => o.status == ProductionRunStatus.paused,
-    );
+    final running = orders.any((o) => o.status == ProductionRunStatus.active);
+    final paused = orders.any((o) => o.status == ProductionRunStatus.paused);
     final statusColor = paused
         ? AppColors.orangeText
         : running
@@ -762,7 +758,12 @@ class _StageCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: 16 * scale),
-          _Pill(label: statusLabel, color: statusColor, scale: scale, big: true),
+          _Pill(
+            label: statusLabel,
+            color: statusColor,
+            scale: scale,
+            big: true,
+          ),
           SizedBox(height: 14 * scale),
           Text(
             '$pieces pecas',
@@ -1020,7 +1021,7 @@ class _SlideFooter extends StatelessWidget {
             ),
           SizedBox(width: 20 * scale),
           Text(
-            titles[currentSlide],
+            'Painel atual: ${titles[currentSlide]}',
             style: TextStyle(
               color: AppColors.muted,
               fontSize: 26 * scale,
@@ -1046,7 +1047,9 @@ BoxDecoration _cardDecoration(
   return BoxDecoration(
     color: fill,
     borderRadius: BorderRadius.circular(22 * scale),
-    border: Border(top: BorderSide(color: accent, width: 5 * scale)),
+    border: Border(
+      top: BorderSide(color: accent, width: 5 * scale),
+    ),
     boxShadow: [
       BoxShadow(
         color: const Color(0xFF083047).withValues(alpha: 0.06),
@@ -1063,7 +1066,7 @@ Color _stageAccent(ProductionStage stage) {
     ProductionStage.firmware => const Color(0xFF6D5BD0),
     ProductionStage.soldering => const Color(0xFFD97706),
     ProductionStage.testing => const Color(0xFF0E9C8A),
-    ProductionStage.closing => const Color(0xFFC2410C),
+    ProductionStage.closing => const Color(0xFF7458D8),
     ProductionStage.expedition => const Color(0xFF209F58),
     ProductionStage.storage => AppColors.primaryDark,
     ProductionStage.completed => AppColors.green,
@@ -1076,7 +1079,7 @@ IconData _stageIcon(ProductionStage stage) {
     ProductionStage.firmware => Icons.memory_rounded,
     ProductionStage.soldering => Icons.construction_rounded,
     ProductionStage.testing => Icons.fact_check_rounded,
-    ProductionStage.closing => Icons.inventory_rounded,
+    ProductionStage.closing => Icons.inventory_2_rounded,
     ProductionStage.expedition => Icons.local_shipping_rounded,
     ProductionStage.storage => Icons.inventory_2_rounded,
     ProductionStage.completed => Icons.check_circle_rounded,

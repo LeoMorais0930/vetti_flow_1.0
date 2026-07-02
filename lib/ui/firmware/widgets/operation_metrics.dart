@@ -25,13 +25,13 @@ class OperationMetrics extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 16 : 22,
-        vertical: compact ? 14 : 18,
+        horizontal: compact ? 16 : 20,
+        vertical: compact ? 14 : 17,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE4EDF4)),
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE1EBF2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -48,7 +48,7 @@ class OperationMetrics extends StatelessWidget {
               Container(
                 width: 1,
                 height: compact ? 34 : 40,
-                color: const Color(0xFFE9F0F5),
+                color: const Color(0xFFDDE9F1),
               ),
           ],
         ],
@@ -79,7 +79,7 @@ class _MetricItem extends StatelessWidget {
           style: TextStyle(
             color: AppColors.label,
             fontSize: compact ? 11 : 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w900,
           ),
         ),
         SizedBox(height: compact ? 5 : 7),
@@ -90,8 +90,8 @@ class _MetricItem extends StatelessWidget {
             value,
             style: TextStyle(
               color: AppColors.text,
-              fontSize: compact ? 16 : 19,
-              fontWeight: FontWeight.w800,
+              fontSize: compact ? 16 : 20,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
@@ -121,6 +121,7 @@ class OperationStatusChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: status.surface,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: status.color.withValues(alpha: 0.24)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

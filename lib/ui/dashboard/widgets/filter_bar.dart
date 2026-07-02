@@ -242,6 +242,7 @@ class _ViewToggle extends StatelessWidget {
             ViewMode.tabela => 'Tabela',
             ViewMode.cards => 'Cards',
             ViewMode.armazenadas => 'Armazenadas',
+            ViewMode.responsaveis => 'Equipe',
           };
           return Padding(
             padding: const EdgeInsets.only(right: 2),

@@ -152,7 +152,7 @@ class _DesktopSupportLayout extends StatelessWidget {
         children: [
           const VettiTopBar(
             title: 'Suporte Tecnico',
-            operatorName: 'Lucas',
+            operatorName: 'Bruno',
             operatorRole: 'Suporte',
           ),
           Expanded(
@@ -240,7 +240,7 @@ class _MobileSupportLayout extends StatelessWidget {
               children: [
                 const VettiTopBar(
                   title: 'Suporte Tecnico',
-                  operatorName: 'Lucas',
+                  operatorName: 'Bruno',
                   compact: true,
                 ),
                 Expanded(

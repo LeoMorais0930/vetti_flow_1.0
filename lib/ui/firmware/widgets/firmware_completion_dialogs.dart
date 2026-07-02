@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/firmware_models.dart';
@@ -300,7 +302,7 @@ class _PinSheetState extends State<_PinSheet> {
       return;
     }
 
-    final op = Operator.findByPin(value);
+    final op = context.read<OperatorAssignmentStore>().findByPin(value);
     setState(() {
       _resolvedOperator = op;
       _invalidPin = op == null;

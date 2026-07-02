@@ -57,7 +57,7 @@ class _LoginFormPanelState extends State<LoginFormPanel> {
               ),
               const SizedBox(height: 36),
               _LoginFieldLabel(
-                label: 'Usuario',
+                label: 'Usuário',
                 child: TextFormField(
                   controller: widget.userController,
                   autofillHints: const [
@@ -72,12 +72,12 @@ class _LoginFormPanelState extends State<LoginFormPanel> {
                     fontWeight: FontWeight.w600,
                   ),
                   decoration: _fieldDecoration(
-                    hintText: 'nome.sobrenome',
+                    hintText: 'usuário',
                     icon: Icons.person_outline_rounded,
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Informe seu usuario.';
+                      return 'Informe seu usuário.';
                     }
                     return null;
                   },

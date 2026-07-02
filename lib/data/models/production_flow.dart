@@ -12,7 +12,7 @@ enum ProductionStage {
     warehouse => 'Almoxarifado',
     firmware => 'Gravacao',
     soldering => 'Soldagem',
-    testing => 'Testes',
+    testing => 'Teste',
     closing => 'Fechamento',
     expedition => 'Expedicao',
     storage => 'Armazenada',
@@ -134,6 +134,7 @@ class ProductionOrderFlow {
     this.responsavel,
     this.prazo,
     this.closedQuantity = 0,
+    this.lastObservation,
     this.storedQuantity = 0,
     this.dispatchedQuantity = 0,
     this.timings = const {},
@@ -152,6 +153,7 @@ class ProductionOrderFlow {
   final String? responsavel;
   final String? prazo;
   final int closedQuantity;
+  final String? lastObservation;
   final int storedQuantity;
   final int dispatchedQuantity;
   final Map<ProductionStage, ProductionStageTiming> timings;
@@ -186,6 +188,7 @@ class ProductionOrderFlow {
     String? responsavel,
     String? prazo,
     int? closedQuantity,
+    String? Function()? lastObservation,
     int? storedQuantity,
     int? dispatchedQuantity,
     Map<ProductionStage, ProductionStageTiming>? timings,
@@ -204,6 +207,9 @@ class ProductionOrderFlow {
       responsavel: responsavel ?? this.responsavel,
       prazo: prazo ?? this.prazo,
       closedQuantity: closedQuantity ?? this.closedQuantity,
+      lastObservation: lastObservation != null
+          ? lastObservation()
+          : this.lastObservation,
       storedQuantity: storedQuantity ?? this.storedQuantity,
       dispatchedQuantity: dispatchedQuantity ?? this.dispatchedQuantity,
       timings: timings ?? this.timings,

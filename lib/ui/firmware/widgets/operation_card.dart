@@ -21,16 +21,17 @@ class OperationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = status != FirmwareStatus.waiting;
-    final radius = BorderRadius.circular(14);
+    final radius = BorderRadius.circular(15);
+    final accent = selected
+        ? AppColors.primary
+        : isActive
+        ? status.color
+        : AppColors.border;
 
     return SizedBox(
       width: double.infinity,
       child: Material(
-        color: selected
-            ? const Color(0xFFEAF7FF)
-            : isActive
-            ? status.surface
-            : Colors.white,
+        color: Colors.transparent,
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
@@ -38,34 +39,48 @@ class OperationCard extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.fromLTRB(
               compact ? 16 : 20,
-              compact ? 14 : 16,
-              compact ? 14 : 16,
-              compact ? 14 : 16,
+              compact ? 14 : 17,
+              compact ? 14 : 17,
+              compact ? 14 : 17,
             ),
             decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFFEAF7FF)
+                  : isActive
+                  ? status.surface.withValues(alpha: 0.78)
+                  : Colors.white,
               borderRadius: radius,
               border: Border.all(
                 color: selected
                     ? AppColors.primary
-                    : isActive
-                    ? status.color.withValues(alpha: 0.35)
-                    : AppColors.border,
-                width: selected ? 1.5 : 1,
+                    : accent.withValues(alpha: 0.34),
+                width: selected ? 1.6 : 1,
               ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.12),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10),
+                      ),
+                    ]
+                  : null,
             ),
             child: Row(
               children: [
-                if (isActive) ...[
-                  Container(
-                    width: 4,
-                    height: compact ? 44 : 48,
-                    decoration: BoxDecoration(
-                      color: status.color,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                Container(
+                  width: 7,
+                  height: compact ? 52 : 56,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.primary
+                        : isActive
+                        ? status.color
+                        : const Color(0xFFD8E6EE),
+                    borderRadius: BorderRadius.circular(99),
                   ),
-                  SizedBox(width: compact ? 12 : 14),
-                ],
+                ),
+                SizedBox(width: compact ? 12 : 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,7 +96,7 @@ class OperationCard extends StatelessWidget {
                               style: TextStyle(
                                 color: AppColors.text,
                                 fontSize: compact ? 14 : 15,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
@@ -95,9 +110,11 @@ class OperationCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AppColors.primary,
+                          color: selected
+                              ? AppColors.primary
+                              : AppColors.textCode,
                           fontSize: compact ? 12 : 13,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       SizedBox(height: compact ? 7 : 8),
@@ -108,7 +125,7 @@ class OperationCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.smallText,
                           fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -119,7 +136,7 @@ class OperationCard extends StatelessWidget {
                   selected
                       ? Icons.radio_button_checked_rounded
                       : Icons.chevron_right_rounded,
-                  size: 18,
+                  size: selected ? 20 : 19,
                   color: selected ? AppColors.primary : AppColors.iconMuted,
                 ),
               ],

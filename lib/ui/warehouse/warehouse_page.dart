@@ -82,7 +82,7 @@ class _WarehousePageState extends State<WarehousePage> {
     if (order == null) return;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Renata',
+      operatorName: 'Vera',
     );
   }
 
@@ -119,7 +119,7 @@ class _WarehousePageState extends State<WarehousePage> {
       productCode: productCode,
       quantity: quantity,
       priority: priority,
-      operatorName: 'Renata',
+      operatorName: 'Vera',
     );
     setState(() {
       _showCreate = false;
@@ -259,7 +259,7 @@ class _DesktopWarehouseLayout extends StatelessWidget {
         children: [
           const VettiTopBar(
             title: 'Almoxarifado',
-            operatorName: 'Renata',
+            operatorName: 'Vera',
             operatorRole: 'Almoxarifado',
           ),
           Expanded(
@@ -365,7 +365,7 @@ class _MobileWarehouseLayout extends StatelessWidget {
               children: [
                 const VettiTopBar(
                   title: 'Almoxarifado',
-                  operatorName: 'Renata',
+                  operatorName: 'Vera',
                   compact: true,
                 ),
                 Expanded(
@@ -1433,7 +1433,7 @@ Future<bool?> showWarehouseDeliveryDialog(
             ),
             const SizedBox(height: 16),
             const TextField(
-              decoration: InputDecoration(labelText: 'PIN', hintText: '1234'),
+              decoration: InputDecoration(labelText: 'PIN', hintText: '4003'),
             ),
           ],
         ),

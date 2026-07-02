@@ -31,8 +31,7 @@ class MobileBottomNav extends StatelessWidget {
           _Tab(
             icon: Icons.format_list_bulleted_rounded,
             label: 'OPs',
-            active:
-                viewMode == ViewMode.cards || viewMode == ViewMode.tabela,
+            active: viewMode == ViewMode.cards || viewMode == ViewMode.tabela,
             onTap: () => onViewMode(ViewMode.cards),
           ),
           _Tab(
@@ -41,8 +40,13 @@ class MobileBottomNav extends StatelessWidget {
             active: viewMode == ViewMode.armazenadas,
             onTap: () => onViewMode(ViewMode.armazenadas),
           ),
+          _Tab(
+            icon: Icons.groups_2_outlined,
+            label: 'Equipe',
+            active: viewMode == ViewMode.responsaveis,
+            onTap: () => onViewMode(ViewMode.responsaveis),
+          ),
           const _Tab(icon: Icons.bar_chart_rounded, label: 'Relat.'),
-          const _Tab(icon: Icons.person_outline_rounded, label: 'Perfil'),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
-import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/auth/widgets/login_brand_panel.dart';
 import 'package:vetti_flow_1_0/ui/auth/widgets/login_form_panel.dart';
@@ -29,7 +30,7 @@ class _LoginPageState extends State<LoginPage> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
-    final op = Operator.authenticate(
+    final op = context.read<OperatorAssignmentStore>().authenticate(
       _userController.text,
       _passwordController.text,
     );
