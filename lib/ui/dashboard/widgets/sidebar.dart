@@ -58,13 +58,13 @@ class Sidebar extends StatelessWidget {
               icon: _panelIcon,
               label: 'Painel',
               active:
-                  viewMode != ViewMode.armazenadas &&
-                  viewMode != ViewMode.responsaveis,
+                  viewMode == ViewMode.kanban || viewMode == ViewMode.tabela,
               onTap: () => onViewMode(ViewMode.kanban),
             ),
             _NavItem(
               icon: _listIcon,
               label: 'Ordens de Produção',
+              active: viewMode == ViewMode.cards,
               onTap: () => onViewMode(ViewMode.cards),
             ),
             _NavItem(
@@ -75,11 +75,16 @@ class Sidebar extends StatelessWidget {
             ),
             _NavItem(
               icon: _userIcon,
-              label: 'Equipe',
+              label: 'Responsáveis',
               active: viewMode == ViewMode.responsaveis,
               onTap: () => onViewMode(ViewMode.responsaveis),
             ),
-            _NavItem(icon: _chartIcon, label: 'Relatórios'),
+            _NavItem(
+              icon: _chartIcon,
+              label: 'Relatórios',
+              active: viewMode == ViewMode.relatorios,
+              onTap: () => onViewMode(ViewMode.relatorios),
+            ),
             const Spacer(),
             Container(
               decoration: const BoxDecoration(
@@ -96,8 +101,8 @@ class Sidebar extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Text(
-                      _initials(managerName),
+                    child: const Text(
+                      'AR',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -112,7 +117,7 @@ class Sidebar extends StatelessWidget {
                       children: [
                         Text(
                           managerName,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -136,14 +141,6 @@ class Sidebar extends StatelessWidget {
       ),
     );
   }
-}
-
-String _initials(String value) {
-  final parts = value.trim().split(RegExp(r'\s+'));
-  if (parts.isEmpty || parts.first.isEmpty) return 'VF';
-  if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-  return '${parts.first.characters.first}${parts.last.characters.first}'
-      .toUpperCase();
 }
 
 class _NavItem extends StatelessWidget {

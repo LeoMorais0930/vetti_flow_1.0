@@ -15,6 +15,7 @@ class TestOperation {
     required this.number,
     required this.product,
     required this.quantity,
+    required this.quantityValue,
     required this.origin,
     required this.receivedAt,
     required this.receivedAgo,
@@ -26,6 +27,7 @@ class TestOperation {
   final String number;
   final String product;
   final String quantity;
+  final int quantityValue;
   final String origin;
   final String receivedAt;
   final String receivedAgo;
@@ -139,6 +141,7 @@ class _TestingPageState extends State<TestingPage> {
       number: order.number,
       product: order.productLabel,
       quantity: order.quantityLabel,
+      quantityValue: order.quantity,
       origin: 'Soldagem',
       receivedAt: _clockLabel(order.updatedAt),
       receivedAgo: order.timings[ProductionStage.testing]?.startedAt == null
@@ -194,10 +197,14 @@ class _TestingPageState extends State<TestingPage> {
     );
     if (!mounted || signed != true) return;
 
-    context.read<ProductionFlowStore>().completeStage(flowOrder.number);
+    context.read<ProductionFlowStore>().completeTesting(
+      flowOrder.number,
+      defects: defects,
+    );
+    final totalDefects = defects.fold<int>(0, (sum, d) => sum + d.quantity);
     final suffix = defects.isEmpty
         ? 'aprovada para expedicao.'
-        : 'concluida com defeitos registrados.';
+        : 'concluida com $totalDefects dispositivo${totalDefects == 1 ? '' : 's'} em defeito.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('${operation.number} $suffix')));
@@ -1385,14 +1392,14 @@ class _DividerLine extends StatelessWidget {
   }
 }
 
-Future<List<TestDefectOption>?> showTestDefectsDialog(
+Future<List<DefectRecord>?> showTestDefectsDialog(
   BuildContext context,
   TestOperation operation,
 ) {
   final compact = MediaQuery.sizeOf(context).width < 720;
 
   if (compact) {
-    return showModalBottomSheet<List<TestDefectOption>>(
+    return showModalBottomSheet<List<DefectRecord>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1401,7 +1408,7 @@ Future<List<TestDefectOption>?> showTestDefectsDialog(
     );
   }
 
-  return showDialog<List<TestDefectOption>>(
+  return showDialog<List<DefectRecord>>(
     context: context,
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
@@ -1422,23 +1429,54 @@ class _TestDefectsSheet extends StatefulWidget {
 }
 
 class _TestDefectsSheetState extends State<_TestDefectsSheet> {
-  final _selected = <String>{};
+  // code -> quantidade. A presença da chave indica que o defeito está marcado.
+  final _quantities = <String, int>{};
+  final _controllers = <String, TextEditingController>{};
+
+  int get _maxQty =>
+      widget.operation.quantityValue <= 0 ? 1 : widget.operation.quantityValue;
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
 
   void _toggle(String code) {
     setState(() {
-      if (_selected.contains(code)) {
-        _selected.remove(code);
+      if (_quantities.containsKey(code)) {
+        _quantities.remove(code);
       } else {
-        _selected.add(code);
+        _quantities[code] = 1;
+        _controllers
+            .putIfAbsent(code, () => TextEditingController())
+            .text = '1';
       }
     });
   }
 
+  void _setQty(String code, int value) {
+    final clamped = value.clamp(1, _maxQty);
+    setState(() => _quantities[code] = clamped);
+  }
+
+  List<DefectRecord> get _records => TestDefectOption.all
+      .where((defect) => _quantities.containsKey(defect.code))
+      .map(
+        (defect) => DefectRecord(
+          code: defect.code,
+          title: defect.title,
+          quantity: _quantities[defect.code]!,
+        ),
+      )
+      .toList();
+
   @override
   Widget build(BuildContext context) {
-    final selectedDefects = TestDefectOption.all
-        .where((defect) => _selected.contains(defect.code))
-        .toList();
+    final records = _records;
+    final totalDefects = records.fold<int>(0, (sum, d) => sum + d.quantity);
 
     return _ModalSurface(
       compact: widget.compact,
@@ -1458,7 +1496,7 @@ class _TestDefectsSheetState extends State<_TestDefectsSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            '${widget.operation.number} · selecione os defeitos encontrados no teste.',
+            '${widget.operation.number} · marque os defeitos e informe quantos dispositivos foram afetados.',
             style: const TextStyle(color: AppColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 20),
@@ -1471,13 +1509,40 @@ class _TestDefectsSheetState extends State<_TestDefectsSheet> {
               for (final defect in TestDefectOption.all)
                 _DefectChip(
                   defect: defect,
-                  selected: _selected.contains(defect.code),
+                  selected: _quantities.containsKey(defect.code),
                   onTap: () => _toggle(defect.code),
                 ),
             ],
           ),
-          if (selectedDefects.isNotEmpty) ...[
+          if (records.isNotEmpty) ...[
             const SizedBox(height: 20),
+            const Text(
+              'Quantidade por defeito',
+              style: TextStyle(
+                color: AppColors.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final defect in records) ...[
+              _DefectQuantityRow(
+                code: defect.code,
+                title: defect.title,
+                controller: _controllers[defect.code]!,
+                maxQty: _maxQty,
+                onChanged: (value) => _setQty(defect.code, value),
+                onStep: (delta) {
+                  final next = (_quantities[defect.code]! + delta).clamp(
+                    1,
+                    _maxQty,
+                  );
+                  _controllers[defect.code]!.text = '$next';
+                  _setQty(defect.code, next);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -1487,7 +1552,8 @@ class _TestDefectsSheetState extends State<_TestDefectsSheet> {
                 border: Border.all(color: const Color(0xFFEFDFBF)),
               ),
               child: Text(
-                'Defeitos: ${selectedDefects.map((d) => d.code).join(', ')}',
+                'Total: $totalDefects dispositivo${totalDefects == 1 ? '' : 's'} '
+                'em ${records.length} tipo${records.length == 1 ? '' : 's'} de defeito.',
                 style: const TextStyle(
                   color: AppColors.orangeText,
                   fontSize: 13,
@@ -1511,10 +1577,10 @@ class _TestDefectsSheetState extends State<_TestDefectsSheet> {
               const SizedBox(width: 14),
               Expanded(
                 child: _DialogButton(
-                  label: selectedDefects.isEmpty
+                  label: records.isEmpty
                       ? 'Continuar sem defeitos'
-                      : 'Continuar com ${selectedDefects.length}',
-                  onPressed: () => Navigator.of(context).pop(selectedDefects),
+                      : 'Continuar com $totalDefects un',
+                  onPressed: () => Navigator.of(context).pop(records),
                   fillColor: AppColors.green,
                   foregroundColor: Colors.white,
                 ),
@@ -1522,6 +1588,125 @@ class _TestDefectsSheetState extends State<_TestDefectsSheet> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DefectQuantityRow extends StatelessWidget {
+  const _DefectQuantityRow({
+    required this.code,
+    required this.title,
+    required this.controller,
+    required this.maxQty,
+    required this.onChanged,
+    required this.onStep,
+  });
+
+  final String code;
+  final String title;
+  final TextEditingController controller;
+  final int maxQty;
+  final ValueChanged<int> onChanged;
+  final ValueChanged<int> onStep;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFD),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE3EDF4)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.orange,
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Text(
+              code,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _StepButton(icon: Icons.remove_rounded, onTap: () => onStep(-1)),
+          SizedBox(
+            width: 54,
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 8),
+                border: InputBorder.none,
+              ),
+              onChanged: (value) {
+                final parsed = int.tryParse(value.trim());
+                if (parsed != null) onChanged(parsed);
+              },
+            ),
+          ),
+          _StepButton(icon: Icons.add_rounded, onTap: () => onStep(1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFD8E6EE)),
+          ),
+          child: Icon(icon, size: 17, color: AppColors.primary),
+        ),
       ),
     );
   }
@@ -1621,7 +1806,7 @@ class _DefectChip extends StatelessWidget {
 Future<bool?> showTestPinDialog(
   BuildContext context,
   TestOperation operation, {
-  List<TestDefectOption> defects = const [],
+  List<DefectRecord> defects = const [],
 }) {
   final compact = MediaQuery.sizeOf(context).width < 720;
 
@@ -1653,7 +1838,7 @@ class _TestPinSheet extends StatefulWidget {
   });
 
   final TestOperation operation;
-  final List<TestDefectOption> defects;
+  final List<DefectRecord> defects;
   final bool compact;
 
   @override
@@ -1803,7 +1988,7 @@ class _TestPinSheetState extends State<_TestPinSheet> {
                 border: Border.all(color: const Color(0xFFEFDFBF)),
               ),
               child: Text(
-                'Defeitos do teste: ${widget.defects.map((d) => d.code).join(', ')}',
+                'Defeitos do teste: ${widget.defects.map((d) => '${d.code} (${d.quantity})').join(', ')}',
                 style: const TextStyle(
                   color: AppColors.orangeText,
                   fontSize: 12,

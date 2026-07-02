@@ -327,6 +327,29 @@ class ProductionFlowStore extends ChangeNotifier {
     });
   }
 
+  /// Conclui o teste registrando os defeitos encontrados (tipo + quantidade)
+  /// e avança a OP para a etapa seguinte.
+  void completeTesting(String number, {required List<DefectRecord> defects}) {
+    _mutate(number, (order, now) {
+      final timings = Map<ProductionStage, ProductionStageTiming>.from(
+        order.timings,
+      );
+      final current =
+          timings[order.currentStage] ??
+          const ProductionStageTiming(startedAt: null);
+      timings[order.currentStage] = current
+          .start(current.startedAt ?? now)
+          .complete(now);
+      return order.copyWith(
+        currentStage: _nextStage(order.currentStage),
+        status: ProductionRunStatus.waiting,
+        updatedAt: now,
+        testDefects: defects,
+        timings: timings,
+      );
+    });
+  }
+
   void completeClosing(String number, {required int closedQuantity}) {
     _mutate(number, (order, now) {
       final timings = Map<ProductionStage, ProductionStageTiming>.from(
@@ -453,6 +476,7 @@ class ProductionFlowStore extends ChangeNotifier {
         for (final entry in order.timings.entries)
           entry.key.name: _timingToJson(entry.value),
       },
+      'testDefects': order.testDefects.map((d) => d.toJson()).toList(),
     };
   }
 
@@ -475,6 +499,10 @@ class ProductionFlowStore extends ChangeNotifier {
       storedQuantity: (json['storedQuantity'] as num?)?.toInt() ?? 0,
       dispatchedQuantity: (json['dispatchedQuantity'] as num?)?.toInt() ?? 0,
       timings: _timingsFromJson(json['timings'] as Map<String, dynamic>?),
+      testDefects: (json['testDefects'] as List<dynamic>?)
+              ?.map((d) => DefectRecord.fromJson(d as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 

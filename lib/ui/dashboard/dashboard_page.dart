@@ -10,6 +10,7 @@ import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/cards_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/stored_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/kanban_view.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/views/reports_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/operator_assignments_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/table_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/app_header.dart';
@@ -92,9 +93,17 @@ class _DesktopLayout extends StatelessWidget {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(26, 22, 26, 40),
                       children: [
-                        if (state.viewMode == ViewMode.responsaveis) ...[
+                        if (state.viewMode == ViewMode.armazenadas) ...[
+                          _StoredHeader(
+                            resultText: state.armazenadasResultText,
+                          ),
+                          const SizedBox(height: 18),
                           _buildView(state, cubit),
-                        ] else if (state.viewMode != ViewMode.armazenadas) ...[
+                        ] else if (state.viewMode == ViewMode.relatorios) ...[
+                          _buildView(state, cubit),
+                        ] else if (state.viewMode == ViewMode.responsaveis) ...[
+                          _buildView(state, cubit),
+                        ] else ...[
                           KpiCards(
                             counts: state.kpiCounts,
                             atrasadas: state.atrasadasCount,
@@ -120,12 +129,6 @@ class _DesktopLayout extends StatelessWidget {
                             onProduto: cubit.setFiltroProduto,
                             onViewMode: cubit.setViewMode,
                             onLimpar: cubit.limparFiltros,
-                          ),
-                          const SizedBox(height: 18),
-                          _buildView(state, cubit),
-                        ] else ...[
-                          _StoredHeader(
-                            resultText: state.armazenadasResultText,
                           ),
                           const SizedBox(height: 18),
                           _buildView(state, cubit),
@@ -181,6 +184,8 @@ class _DesktopLayout extends StatelessWidget {
         return StoredView(items: state.armazenadas);
       case ViewMode.responsaveis:
         return const OperatorAssignmentsView();
+      case ViewMode.relatorios:
+        return const ReportsView();
     }
   }
 }
@@ -221,7 +226,12 @@ class _MobileLayout extends StatelessWidget {
                     child: Column(
                       children: [
                         const SizedBox(height: 14),
-                        if (state.viewMode == ViewMode.responsaveis) ...[
+                        if (state.viewMode == ViewMode.relatorios) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+                            child: ReportsView(),
+                          ),
+                        ] else if (state.viewMode == ViewMode.responsaveis) ...[
                           const Padding(
                             padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
                             child: OperatorAssignmentsView(),

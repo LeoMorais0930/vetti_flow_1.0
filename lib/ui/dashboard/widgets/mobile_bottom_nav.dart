@@ -46,7 +46,12 @@ class MobileBottomNav extends StatelessWidget {
             active: viewMode == ViewMode.responsaveis,
             onTap: () => onViewMode(ViewMode.responsaveis),
           ),
-          const _Tab(icon: Icons.bar_chart_rounded, label: 'Relat.'),
+          _Tab(
+            icon: Icons.bar_chart_rounded,
+            label: 'Relat.',
+            active: viewMode == ViewMode.relatorios,
+            onTap: () => onViewMode(ViewMode.relatorios),
+          ),
         ],
       ),
     );

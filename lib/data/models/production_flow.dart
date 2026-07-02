@@ -52,6 +52,32 @@ enum ProductionStage {
 
 enum ProductionRunStatus { waiting, active, paused, completed }
 
+/// Um defeito registrado no teste: tipo (código + título) e quantidade de
+/// dispositivos afetados.
+class DefectRecord {
+  const DefectRecord({
+    required this.code,
+    required this.title,
+    required this.quantity,
+  });
+
+  final String code;
+  final String title;
+  final int quantity;
+
+  Map<String, dynamic> toJson() => {
+    'code': code,
+    'title': title,
+    'quantity': quantity,
+  };
+
+  factory DefectRecord.fromJson(Map<String, dynamic> json) => DefectRecord(
+    code: json['code'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+  );
+}
+
 String formatProductionDuration(Duration duration) {
   final normalized = duration.isNegative ? Duration.zero : duration;
   final hours = normalized.inHours;
@@ -138,6 +164,7 @@ class ProductionOrderFlow {
     this.storedQuantity = 0,
     this.dispatchedQuantity = 0,
     this.timings = const {},
+    this.testDefects = const [],
   });
 
   final String number;
@@ -157,6 +184,11 @@ class ProductionOrderFlow {
   final int storedQuantity;
   final int dispatchedQuantity;
   final Map<ProductionStage, ProductionStageTiming> timings;
+  final List<DefectRecord> testDefects;
+
+  /// Total de dispositivos marcados como defeito no teste.
+  int get totalDefects =>
+      testDefects.fold(0, (sum, defect) => sum + defect.quantity);
 
   String get productLabel =>
       productCode.isEmpty ? productName : '$productCode - $productName';
@@ -192,6 +224,7 @@ class ProductionOrderFlow {
     int? storedQuantity,
     int? dispatchedQuantity,
     Map<ProductionStage, ProductionStageTiming>? timings,
+    List<DefectRecord>? testDefects,
   }) {
     return ProductionOrderFlow(
       number: number,
@@ -213,6 +246,7 @@ class ProductionOrderFlow {
       storedQuantity: storedQuantity ?? this.storedQuantity,
       dispatchedQuantity: dispatchedQuantity ?? this.dispatchedQuantity,
       timings: timings ?? this.timings,
+      testDefects: testDefects ?? this.testDefects,
     );
   }
 }
