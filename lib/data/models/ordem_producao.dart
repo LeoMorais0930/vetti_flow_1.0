@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 
 enum StatusOP {
@@ -82,6 +83,12 @@ class OrdemProducao {
   final String mes;
   final bool atrasada;
 
+  /// Etapa real da OP no fluxo de produção (fonte: ProductionFlowStore).
+  final ProductionStage stage;
+
+  /// Materiais (BOM) do produto: (descrição, quantidade por unidade).
+  final List<(String, int)> materiais;
+
   const OrdemProducao({
     required this.numero,
     required this.produto,
@@ -93,6 +100,8 @@ class OrdemProducao {
     required this.progresso,
     required this.mes,
     this.atrasada = false,
+    this.stage = ProductionStage.warehouse,
+    this.materiais = const [],
   });
 
   String get qtdLabel => '$qtd un';
@@ -115,6 +124,8 @@ class OrdemProducao {
     int? progresso,
     String? mes,
     bool? atrasada,
+    ProductionStage? stage,
+    List<(String, int)>? materiais,
   }) {
     return OrdemProducao(
       numero: numero ?? this.numero,
@@ -127,6 +138,8 @@ class OrdemProducao {
       progresso: progresso ?? this.progresso,
       mes: mes ?? this.mes,
       atrasada: atrasada ?? this.atrasada,
+      stage: stage ?? this.stage,
+      materiais: materiais ?? this.materiais,
     );
   }
 }

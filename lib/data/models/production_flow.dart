@@ -3,15 +3,17 @@ enum ProductionStage {
   firmware,
   soldering,
   testing,
+  closing,
   expedition,
   storage,
   completed;
 
   String get label => switch (this) {
     warehouse => 'Almoxarifado',
-    firmware => 'Firmware',
+    firmware => 'Gravacao',
     soldering => 'Soldagem',
-    testing => 'Teste',
+    testing => 'Testes',
+    closing => 'Fechamento',
     expedition => 'Expedicao',
     storage => 'Armazenada',
     completed => 'Finalizada',
@@ -22,6 +24,7 @@ enum ProductionStage {
     firmware => '/firmware',
     soldering => '/soldagem',
     testing => '/teste',
+    closing => '/fechamento',
     expedition => '/expedicao',
     storage => '/expedicao',
     completed => '/dashboard',
@@ -32,8 +35,9 @@ enum ProductionStage {
     firmware => 1,
     soldering => 2,
     testing => 3,
-    expedition => 4,
-    storage || completed => 5,
+    closing => 4,
+    expedition => 5,
+    storage || completed => 6,
   };
 
   static const productionFlow = [
@@ -41,6 +45,7 @@ enum ProductionStage {
     firmware,
     soldering,
     testing,
+    closing,
     expedition,
   ];
 }
@@ -126,6 +131,9 @@ class ProductionOrderFlow {
     required this.createdAt,
     required this.updatedAt,
     this.operatorName,
+    this.responsavel,
+    this.prazo,
+    this.closedQuantity = 0,
     this.storedQuantity = 0,
     this.dispatchedQuantity = 0,
     this.timings = const {},
@@ -141,6 +149,9 @@ class ProductionOrderFlow {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? operatorName;
+  final String? responsavel;
+  final String? prazo;
+  final int closedQuantity;
   final int storedQuantity;
   final int dispatchedQuantity;
   final Map<ProductionStage, ProductionStageTiming> timings;
@@ -172,6 +183,9 @@ class ProductionOrderFlow {
     String? priority,
     DateTime? updatedAt,
     String? Function()? operatorName,
+    String? responsavel,
+    String? prazo,
+    int? closedQuantity,
     int? storedQuantity,
     int? dispatchedQuantity,
     Map<ProductionStage, ProductionStageTiming>? timings,
@@ -187,6 +201,9 @@ class ProductionOrderFlow {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       operatorName: operatorName != null ? operatorName() : this.operatorName,
+      responsavel: responsavel ?? this.responsavel,
+      prazo: prazo ?? this.prazo,
+      closedQuantity: closedQuantity ?? this.closedQuantity,
       storedQuantity: storedQuantity ?? this.storedQuantity,
       dispatchedQuantity: dispatchedQuantity ?? this.dispatchedQuantity,
       timings: timings ?? this.timings,

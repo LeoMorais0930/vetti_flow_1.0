@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
-import 'package:vetti_flow_1_0/data/repositories/mock_op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
 import 'package:vetti_flow_1_0/ui/auth/login_page.dart';
+import 'package:vetti_flow_1_0/ui/closing/closing_page.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/dashboard_page.dart';
 import 'package:vetti_flow_1_0/ui/expedition/expedition_page.dart';
@@ -23,9 +24,12 @@ class VettiFlowApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        RepositoryProvider<OpRepository>(create: (_) => MockOpRepository()),
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (_) => ProductionFlowStore(),
+        ),
+        RepositoryProvider<OpRepository>(
+          create: (context) =>
+              FlowOpRepository(context.read<ProductionFlowStore>()),
         ),
       ],
       child: MaterialApp(
@@ -40,6 +44,7 @@ class VettiFlowApp extends StatelessWidget {
             child: const DashboardPage(),
           ),
           '/expedicao': (context) => const ExpeditionPage(),
+          '/fechamento': (context) => const ClosingPage(),
           '/firmware': (context) => const FirmwarePage(),
           '/soldagem': (context) => const SolderingPage(),
           '/suporte': (context) => const SupportPage(),

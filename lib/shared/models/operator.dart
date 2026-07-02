@@ -3,7 +3,8 @@ enum WorkStage {
   dashboard('Dashboard', '/dashboard'),
   firmware('Gravacao', '/firmware'),
   soldering('Soldagem', '/soldagem'),
-  testing('Teste', '/teste'),
+  testing('Testes', '/teste'),
+  closing('Fechamento', '/fechamento'),
   expedition('Expedicao', '/expedicao'),
   warehouse('Almoxarifado', '/almoxarifado'),
   support('Suporte', '/suporte'),
@@ -58,6 +59,13 @@ class Operator {
       password: '7890',
       pin: '7890',
       stage: WorkStage.testing,
+    ),
+    Operator(
+      name: 'Bruno',
+      username: 'bruno',
+      password: '5555',
+      pin: '5555',
+      stage: WorkStage.closing,
     ),
     Operator(
       name: 'Ricardo',

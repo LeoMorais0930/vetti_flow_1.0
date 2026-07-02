@@ -25,12 +25,14 @@ class MobileBottomNav extends StatelessWidget {
           _Tab(
             icon: Icons.grid_view_rounded,
             label: 'Painel',
-            active: viewMode != ViewMode.armazenadas,
+            active: viewMode == ViewMode.kanban,
             onTap: () => onViewMode(ViewMode.kanban),
           ),
           _Tab(
             icon: Icons.format_list_bulleted_rounded,
             label: 'OPs',
+            active:
+                viewMode == ViewMode.cards || viewMode == ViewMode.tabela,
             onTap: () => onViewMode(ViewMode.cards),
           ),
           _Tab(

@@ -1,8 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_card.dart';
+
+/// Cor de destaque por etapa (espelha o acento usado na TV).
+Color stageAccent(ProductionStage stage) {
+  return switch (stage) {
+    ProductionStage.warehouse => const Color(0xFF0077BD),
+    ProductionStage.firmware => const Color(0xFF6D5BD0),
+    ProductionStage.soldering => const Color(0xFFD97706),
+    ProductionStage.testing => const Color(0xFF0E9C8A),
+    ProductionStage.closing => const Color(0xFFC2410C),
+    ProductionStage.expedition => const Color(0xFF209F58),
+    ProductionStage.storage || ProductionStage.completed => AppColors.muted,
+  };
+}
 
 class KanbanView extends StatelessWidget {
   final List<OrdemProducao> ordens;
@@ -12,17 +26,16 @@ class KanbanView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const flow = ProductionStage.productionFlow;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: StatusOP.values.map((status) {
-        final items = ordens.where((op) => op.status == status).toList();
+      children: flow.map((stage) {
+        final items = ordens.where((op) => op.stage == stage).toList();
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(
-              right: status != StatusOP.finalizada ? 14 : 0,
-            ),
+            padding: EdgeInsets.only(right: stage != flow.last ? 14 : 0),
             child: _KanbanColumn(
-              status: status,
+              stage: stage,
               items: items,
               onOpenOP: onOpenOP,
             ),
@@ -34,12 +47,12 @@ class KanbanView extends StatelessWidget {
 }
 
 class _KanbanColumn extends StatelessWidget {
-  final StatusOP status;
+  final ProductionStage stage;
   final List<OrdemProducao> items;
   final ValueChanged<String> onOpenOP;
 
   const _KanbanColumn({
-    required this.status,
+    required this.stage,
     required this.items,
     required this.onOpenOP,
   });
@@ -64,14 +77,14 @@ class _KanbanColumn extends StatelessWidget {
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(
-                    color: status.dot,
+                    color: stageAccent(stage),
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    status.shortLabel,
+                    stage.label,
                     style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
@@ -118,7 +131,7 @@ class _KanbanColumn extends StatelessWidget {
                 separatorBuilder: (_, index) => const SizedBox(height: 10),
                 itemBuilder: (_, i) => OpCard(
                   op: items[i],
-                  accentColor: status.dot,
+                  accentColor: stageAccent(stage),
                   onTap: () => onOpenOP(items[i].numero),
                 ),
               ),

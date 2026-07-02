@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
@@ -27,10 +28,26 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  ProductionFlowStore? _store;
+
   @override
   void initState() {
     super.initState();
     context.read<DashboardCubit>().loadOrdens();
+    // Mantém o dashboard em sincronia com o fluxo real: quando um operador
+    // (ou a TV) muda o estado no ProductionFlowStore, recarrega as OPs.
+    _store = context.read<ProductionFlowStore>()..addListener(_onStoreChanged);
+  }
+
+  void _onStoreChanged() {
+    if (!mounted) return;
+    context.read<DashboardCubit>().loadOrdens();
+  }
+
+  @override
+  void dispose() {
+    _store?.removeListener(_onStoreChanged);
+    super.dispose();
   }
 
   @override
@@ -199,13 +216,14 @@ class _MobileLayout extends StatelessWidget {
                       children: [
                         const SizedBox(height: 14),
                         if (state.viewMode != ViewMode.armazenadas) ...[
-                          KpiCards(
-                            counts: state.kpiCounts,
-                            atrasadas: state.atrasadasCount,
-                            activeFilter: state.filtroStatus,
-                            onToggle: cubit.toggleStatusFilter,
-                            compact: true,
-                          ),
+                          if (state.viewMode == ViewMode.kanban)
+                            KpiCards(
+                              counts: state.kpiCounts,
+                              atrasadas: state.atrasadasCount,
+                              activeFilter: state.filtroStatus,
+                              onToggle: cubit.toggleStatusFilter,
+                              compact: true,
+                            ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                             child: Row(

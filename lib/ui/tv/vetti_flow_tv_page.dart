@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -87,7 +88,9 @@ class _VettiFlowTvPageState extends State<VettiFlowTvPage> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           // Exagerado de proposito para leitura facil a distancia em TVs grandes.
-          final scale = (constraints.maxWidth / 1920).clamp(0.7, 1.4) * 1.28;
+          final widthScale = constraints.maxWidth / 1920;
+          final heightScale = constraints.maxHeight / 1080;
+          final scale = math.min(widthScale, heightScale).clamp(0.52, 1.25) * 1.08;
 
           return Column(
             children: [
@@ -634,53 +637,59 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all((big ? 40 : 30) * scale),
-      decoration: _cardDecoration(scale, accent: color),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _IconChip(icon: icon, color: color, scale: scale, big: big),
-          const Spacer(),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: (big ? 150 : 104) * scale,
-                height: 0.82,
-                fontWeight: FontWeight.w900,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final s = math.min(scale, constraints.maxHeight / (big ? 370 : 320));
+
+        return Container(
+          padding: EdgeInsets.all((big ? 40 : 30) * s),
+          decoration: _cardDecoration(s, accent: color),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _IconChip(icon: icon, color: color, scale: s, big: big),
+              const Spacer(),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: (big ? 150 : 104) * s,
+                    height: 0.82,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
-            ),
+              SizedBox(height: 14 * s),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: (big ? 46 : 38) * s,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              SizedBox(height: 8 * s),
+              Text(
+                helper,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: (big ? 30 : 26) * s,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 14 * scale),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.text,
-              fontSize: (big ? 46 : 38) * scale,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-          SizedBox(height: 8 * scale),
-          Text(
-            helper,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.muted,
-              fontSize: (big ? 30 : 26) * scale,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -789,57 +798,63 @@ class _AttentionCard extends StatelessWidget {
     final color = paused ? AppColors.orangeText : AppColors.danger;
     final label = paused ? 'OP pausada' : 'Prioridade alta';
 
-    return Container(
-      padding: EdgeInsets.all(30 * scale),
-      decoration: _cardDecoration(
-        scale,
-        accent: color,
-        fill: color.withValues(alpha: 0.06),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _IconChip(
-            icon: Icons.notification_important_rounded,
-            color: color,
-            scale: scale,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final s = math.min(scale, constraints.maxHeight / 295);
+
+        return Container(
+          padding: EdgeInsets.all(30 * s),
+          decoration: _cardDecoration(
+            s,
+            accent: color,
+            fill: color.withValues(alpha: 0.06),
           ),
-          const Spacer(),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 40 * scale,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _IconChip(
+                icon: Icons.notification_important_rounded,
+                color: color,
+                scale: s,
+              ),
+              const Spacer(),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 40 * s,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              SizedBox(height: 8 * s),
+              Text(
+                order.number,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: 52 * s,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              SizedBox(height: 8 * s),
+              Text(
+                '${order.currentStage.label} - ${_formatDuration(order.activeElapsed(now))}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 30 * s,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 8 * scale),
-          Text(
-            order.number,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.text,
-              fontSize: 52 * scale,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-          SizedBox(height: 8 * scale),
-          Text(
-            '${order.currentStage.label} - ${_formatDuration(order.activeElapsed(now))}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.muted,
-              fontSize: 30 * scale,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -851,45 +866,51 @@ class _ClearStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(30 * scale),
-      decoration: _cardDecoration(
-        scale,
-        accent: AppColors.green,
-        fill: const Color(0xFFEAF7EF),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _IconChip(
-            icon: Icons.check_circle_rounded,
-            color: AppColors.green,
-            scale: scale,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final s = math.min(scale, constraints.maxHeight / 285);
+
+        return Container(
+          padding: EdgeInsets.all(30 * s),
+          decoration: _cardDecoration(
+            s,
+            accent: AppColors.green,
+            fill: const Color(0xFFEAF7EF),
           ),
-          const Spacer(),
-          Text(
-            'Fluxo normal',
-            style: TextStyle(
-              color: AppColors.green,
-              fontSize: 44 * scale,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _IconChip(
+                icon: Icons.check_circle_rounded,
+                color: AppColors.green,
+                scale: s,
+              ),
+              const Spacer(),
+              Text(
+                'Fluxo normal',
+                style: TextStyle(
+                  color: AppColors.green,
+                  fontSize: 44 * s,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              SizedBox(height: 8 * s),
+              Text(
+                'Sem pausas ou prioridades criticas',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 30 * s,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 8 * scale),
-          Text(
-            'Sem pausas ou prioridades criticas',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.muted,
-              fontSize: 30 * scale,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1042,6 +1063,7 @@ Color _stageAccent(ProductionStage stage) {
     ProductionStage.firmware => const Color(0xFF6D5BD0),
     ProductionStage.soldering => const Color(0xFFD97706),
     ProductionStage.testing => const Color(0xFF0E9C8A),
+    ProductionStage.closing => const Color(0xFFC2410C),
     ProductionStage.expedition => const Color(0xFF209F58),
     ProductionStage.storage => AppColors.primaryDark,
     ProductionStage.completed => AppColors.green,
@@ -1054,6 +1076,7 @@ IconData _stageIcon(ProductionStage stage) {
     ProductionStage.firmware => Icons.memory_rounded,
     ProductionStage.soldering => Icons.construction_rounded,
     ProductionStage.testing => Icons.fact_check_rounded,
+    ProductionStage.closing => Icons.inventory_rounded,
     ProductionStage.expedition => Icons.local_shipping_rounded,
     ProductionStage.storage => Icons.inventory_2_rounded,
     ProductionStage.completed => Icons.check_circle_rounded,

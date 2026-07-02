@@ -2,64 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
-
-const _stages = [
-  'Separação de materiais',
-  'Montagem de placa (SMD)',
-  'Montagem mecânica',
-  'Testes funcionais',
-  'Embalagem',
-  'Expedição',
-];
-
-const _materials = <String, List<List<Object>>>{
-  'Sirene': [
-    ['Placa de circuito SMD', 1],
-    ['Alto-falante piezo 30W', 1],
-    ['Transformador de áudio', 1],
-    ['Gabinete ABS', 1],
-    ['Kit parafusos + vedação', 1],
-  ],
-  'Central': [
-    ['Placa controladora', 1],
-    ['Display LCD 16x2', 1],
-    ['Bateria selada 12V 7Ah', 1],
-    ['Fonte chaveada 14V', 1],
-    ['Caixa metálica', 1],
-  ],
-  'Controle': [
-    ['Placa RF 433MHz', 1],
-    ['Encoder HT12E', 1],
-    ['Bateria A23 12V', 1],
-    ['Carcaça + botões', 1],
-  ],
-  'Sensor': [
-    ['Sensor PIR', 1],
-    ['Lente fresnel', 1],
-    ['Placa de processamento', 1],
-    ['Suporte articulado', 1],
-  ],
-  'Módulo': [
-    ['Modem GSM quad-band', 1],
-    ['Antena GSM', 1],
-    ['Placa de interface', 1],
-    ['Slot SIM', 1],
-  ],
-  'Teclado': [
-    ['Membrana 12 teclas', 1],
-    ['Placa de varredura', 1],
-    ['Cabo flat', 1],
-    ['Frente policarbonato', 1],
-  ],
-  'Discadora': [
-    ['Placa de discagem', 1],
-    ['Relé de linha', 1],
-    ['Memória de voz', 1],
-    ['Gabinete compacto', 1],
-  ],
-};
 
 class OpDetailPanel extends StatelessWidget {
   final OrdemProducao op;
@@ -156,7 +101,15 @@ class _DetailContent extends StatelessWidget {
     final resp = Responsavel.byNome(op.responsavel);
     final isDone = op.status == StatusOP.finalizada;
     final canAdvance = !isDone;
-    final canRegress = op.status != StatusOP.aAbrir;
+    final canRegress = op.stage != ProductionStage.warehouse;
+
+    final flow = ProductionStage.productionFlow;
+    final stageIdx = flow.indexOf(op.stage);
+    final advanceLabel = stageIdx == -1
+        ? 'Finalizar OP'
+        : stageIdx == flow.length - 1
+        ? 'Concluir e expedir'
+        : 'Avançar p/ ${flow[stageIdx + 1].label}';
 
     return Column(
       children: [
@@ -295,7 +248,7 @@ class _DetailContent extends StatelessWidget {
                   canAdvance: canAdvance,
                   isDone: isDone,
                   canRegress: canRegress,
-                  actionLabel: op.status.actionLabel,
+                  actionLabel: advanceLabel,
                   op: op,
                   onAdvance: panel.onAdvance,
                   onRegress: panel.onRegress,
@@ -431,11 +384,9 @@ class _StagesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final doneCount = op.status == StatusOP.finalizada
-        ? _stages.length
-        : op.status == StatusOP.emAndamento
-        ? (op.progresso / 100 * _stages.length).floor()
-        : 0;
+    const flow = ProductionStage.productionFlow;
+    final finalizada = op.status == StatusOP.finalizada;
+    final currentIndex = op.stage.progressIndex;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -449,10 +400,12 @@ class _StagesCard extends StatelessWidget {
         children: [
           const _SectionLabel('ETAPAS DE PRODUÇÃO'),
           const SizedBox(height: 6),
-          ...List.generate(_stages.length, (i) {
-            final isOk = op.status == StatusOP.finalizada || i < doneCount;
+          ...List.generate(flow.length, (i) {
+            final isOk = finalizada || i < currentIndex;
             final isRunning =
-                op.status == StatusOP.emAndamento && i == doneCount;
+                !finalizada &&
+                i == currentIndex &&
+                op.status == StatusOP.emAndamento;
 
             final Color bg, color, textColor;
             final String mark, statusLabel;
@@ -504,7 +457,7 @@ class _StagesCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      _stages[i],
+                      flow[i].label,
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w500,
@@ -537,12 +490,9 @@ class _MaterialsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final key = op.produto.split(' ').first;
-    final mats =
-        _materials[key] ??
-        [
-          ['Componentes diversos', 1],
-        ];
+    final mats = op.materiais.isNotEmpty
+        ? op.materiais
+        : const [('Componentes diversos', 1)];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -557,8 +507,8 @@ class _MaterialsCard extends StatelessWidget {
           const _SectionLabel('MATERIAIS (BOM)'),
           const SizedBox(height: 6),
           ...mats.map((m) {
-            final nome = m[0] as String;
-            final qtdPer = m[1] as int;
+            final nome = m.$1;
+            final qtdPer = m.$2;
             return Container(
               padding: const EdgeInsets.symmetric(vertical: 9),
               decoration: BoxDecoration(
@@ -829,7 +779,7 @@ class _ActionButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Future<void> handleAdvance() async {
-      if (op.status != StatusOP.emAndamento) {
+      if (op.stage != ProductionStage.expedition) {
         onAdvance();
         return;
       }

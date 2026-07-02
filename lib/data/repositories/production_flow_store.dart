@@ -208,6 +208,8 @@ class ProductionFlowStore extends ChangeNotifier {
     required int quantity,
     required String priority,
     required String operatorName,
+    String? responsavel,
+    String? prazo,
   }) {
     final now = DateTime.now();
     final product = catalogItem(productCode);
@@ -223,6 +225,8 @@ class ProductionFlowStore extends ChangeNotifier {
       createdAt: now,
       updatedAt: now,
       operatorName: operatorName,
+      responsavel: responsavel,
+      prazo: prazo,
     );
     _orders.insert(0, order);
     _persist();
@@ -274,6 +278,31 @@ class ProductionFlowStore extends ChangeNotifier {
     });
   }
 
+  /// Volta a OP para a etapa anterior do fluxo (usado pelo dashboard).
+  void regressStage(String number) {
+    _mutate(number, (order, now) {
+      final previous = _previousStage(order.currentStage);
+      final timings = Map<ProductionStage, ProductionStageTiming>.from(
+        order.timings,
+      )..remove(order.currentStage);
+      return order.copyWith(
+        currentStage: previous,
+        status: ProductionRunStatus.waiting,
+        updatedAt: now,
+        timings: timings,
+      );
+    });
+  }
+
+  /// Remove a OP do fluxo (cancelamento pelo dashboard).
+  void cancelOrder(String number) {
+    final index = _orders.indexWhere((order) => order.number == number);
+    if (index == -1) return;
+    _orders.removeAt(index);
+    _persist();
+    notifyListeners();
+  }
+
   void completeStage(String number) {
     _mutate(number, (order, now) {
       final timings = Map<ProductionStage, ProductionStageTiming>.from(
@@ -289,6 +318,28 @@ class ProductionFlowStore extends ChangeNotifier {
         currentStage: _nextStage(order.currentStage),
         status: ProductionRunStatus.waiting,
         updatedAt: now,
+        timings: timings,
+      );
+    });
+  }
+
+  void completeClosing(String number, {required int closedQuantity}) {
+    _mutate(number, (order, now) {
+      final timings = Map<ProductionStage, ProductionStageTiming>.from(
+        order.timings,
+      );
+      final current =
+          timings[order.currentStage] ??
+          const ProductionStageTiming(startedAt: null);
+      timings[order.currentStage] = current
+          .start(current.startedAt ?? now)
+          .complete(now);
+      final safeClosed = closedQuantity.clamp(0, order.quantity).toInt();
+      return order.copyWith(
+        currentStage: _nextStage(order.currentStage),
+        status: ProductionRunStatus.waiting,
+        updatedAt: now,
+        closedQuantity: safeClosed,
         timings: timings,
       );
     });
@@ -388,6 +439,9 @@ class ProductionFlowStore extends ChangeNotifier {
       'createdAt': order.createdAt.toIso8601String(),
       'updatedAt': order.updatedAt.toIso8601String(),
       'operatorName': order.operatorName,
+      'responsavel': order.responsavel,
+      'prazo': order.prazo,
+      'closedQuantity': order.closedQuantity,
       'storedQuantity': order.storedQuantity,
       'dispatchedQuantity': order.dispatchedQuantity,
       'timings': {
@@ -409,6 +463,9 @@ class ProductionFlowStore extends ChangeNotifier {
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       operatorName: json['operatorName'] as String?,
+      responsavel: json['responsavel'] as String?,
+      prazo: json['prazo'] as String?,
+      closedQuantity: (json['closedQuantity'] as num?)?.toInt() ?? 0,
       storedQuantity: (json['storedQuantity'] as num?)?.toInt() ?? 0,
       dispatchedQuantity: (json['dispatchedQuantity'] as num?)?.toInt() ?? 0,
       timings: _timingsFromJson(json['timings'] as Map<String, dynamic>?),
@@ -468,11 +525,20 @@ class ProductionFlowStore extends ChangeNotifier {
       ProductionStage.warehouse => ProductionStage.firmware,
       ProductionStage.firmware => ProductionStage.soldering,
       ProductionStage.soldering => ProductionStage.testing,
-      ProductionStage.testing => ProductionStage.expedition,
+      ProductionStage.testing => ProductionStage.closing,
+      ProductionStage.closing => ProductionStage.expedition,
       ProductionStage.expedition => ProductionStage.completed,
       ProductionStage.storage => ProductionStage.completed,
       ProductionStage.completed => ProductionStage.completed,
     };
+  }
+
+  ProductionStage _previousStage(ProductionStage stage) {
+    final flow = ProductionStage.productionFlow;
+    final index = flow.indexOf(stage);
+    if (index == -1) return flow.last; // storage/completed -> volta p/ expedicao
+    if (index == 0) return flow.first;
+    return flow[index - 1];
   }
 
   int _sortOrders(ProductionOrderFlow a, ProductionOrderFlow b) {
