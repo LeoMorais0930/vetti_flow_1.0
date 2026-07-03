@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import 'package:vetti_flow_1_0/ui/firmware/widgets/operation_actions.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/operation_card.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/operation_metrics.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/collaborator_stage_view.dart';
+import 'package:vetti_flow_1_0/ui/shared/widgets/pause_reason_dialog.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 
 class FirmwarePage extends StatefulWidget {
@@ -63,16 +65,31 @@ class _FirmwarePageState extends State<FirmwarePage> {
   void _startRecording() {
     final order = _selectedFlowOrder();
     if (order == null) return;
+    final operator = context.read<OperatorAssignmentStore>().currentOperator;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Juliana',
+      operatorName: operator?.name ?? 'Juliana',
+      operatorPin: operator?.pin,
     );
   }
 
-  void _pauseOperation() {
+  Future<void> _pauseOperation() async {
     final order = _selectedFlowOrder();
     if (order == null) return;
-    context.read<ProductionFlowStore>().pauseStage(order.number);
+    final request = await showPauseReasonDialog(
+      context,
+      stage: ProductionStage.firmware,
+      maxQuantity: order.quantity,
+    );
+    if (!mounted || request == null) return;
+    context.read<ProductionFlowStore>().pauseStage(
+      order.number,
+      operatorName: request.operatorName,
+      operatorPin: request.operatorPin,
+      reason: request.reason,
+      customReason: request.customReason,
+      producedQuantity: request.producedQuantity,
+    );
   }
 
   void _resetOperation() {
@@ -88,14 +105,18 @@ class _FirmwarePageState extends State<FirmwarePage> {
     final defects = await showFirmwareDefectsDialog(context);
     if (!mounted || defects == null) return;
 
-    final signed = await showFirmwarePinDialog(
+    final signature = await showFirmwarePinDialog(
       context,
       selectedOperation,
       defects: defects,
     );
-    if (!mounted || signed != true) return;
+    if (!mounted || signature == null) return;
 
-    context.read<ProductionFlowStore>().completeStage(flowOrder.number);
+    context.read<ProductionFlowStore>().completeStage(
+      flowOrder.number,
+      operatorName: signature.name,
+      operatorPin: signature.pin,
+    );
     setState(() => _selectedIndex = 0);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${flowOrder.number} liberada para Soldagem.')),

@@ -162,6 +162,10 @@ class _DetailContent extends StatelessWidget {
                 Row(
                   children: [
                     _StatusBadge(status: op.status),
+                    if (op.prioridadeAlta) ...[
+                      const SizedBox(width: 9),
+                      const _PriorityBadge(),
+                    ],
                     if (op.atrasada) ...[
                       const SizedBox(width: 9),
                       Container(
@@ -185,26 +189,34 @@ class _DetailContent extends StatelessWidget {
                     ],
                   ],
                 ),
-              if (showBackArrow && op.atrasada)
+              if (showBackArrow && (op.prioridadeAlta || op.atrasada))
                 Padding(
                   padding: const EdgeInsets.only(top: 9),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.dangerBg,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: const Text(
-                      'Atrasada',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.danger,
-                      ),
-                    ),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (op.prioridadeAlta) const _PriorityBadge(),
+                      if (op.atrasada)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.dangerBg,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: const Text(
+                            'Atrasada',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.danger,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
             ],
@@ -1168,6 +1180,29 @@ class _StatusBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PriorityBadge extends StatelessWidget {
+  const _PriorityBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.dangerBg,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: const Text(
+        'Prioridade alta',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.danger,
+        ),
       ),
     );
   }

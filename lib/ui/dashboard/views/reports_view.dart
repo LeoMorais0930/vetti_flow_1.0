@@ -34,6 +34,10 @@ class ReportsView extends StatelessWidget {
           const SizedBox(height: 18),
           _StageTimingPanel(report: report),
           const SizedBox(height: 18),
+          _PauseEventsPanel(report: report),
+          const SizedBox(height: 18),
+          _OperatorWorkPanel(report: report),
+          const SizedBox(height: 18),
           _ProductBreakdownPanel(report: report),
           const SizedBox(height: 18),
           _OrdersDetailPanel(report: report),
@@ -60,8 +64,9 @@ class StageStats {
     samples++;
   }
 
-  Duration get average =>
-      samples == 0 ? Duration.zero : Duration(microseconds: total.inMicroseconds ~/ samples);
+  Duration get average => samples == 0
+      ? Duration.zero
+      : Duration(microseconds: total.inMicroseconds ~/ samples);
 }
 
 /// Estatísticas agregadas por produto.
@@ -96,6 +101,20 @@ class DefectTypeStats {
   }
 }
 
+class PauseEventRow {
+  const PauseEventRow(this.order, this.event);
+
+  final ProductionOrderFlow order;
+  final ProductionPauseEvent event;
+}
+
+class OperatorWorkRow {
+  const OperatorWorkRow(this.order, this.session);
+
+  final ProductionOrderFlow order;
+  final ProductionOperatorSession session;
+}
+
 /// Consolida todos os cálculos de relatório a partir das OPs do store.
 class ProductionReport {
   ProductionReport(List<ProductionOrderFlow> orders, this.now)
@@ -120,7 +139,8 @@ class ProductionReport {
   int _finishedDurationSamples = 0;
 
   final Map<ProductionStage, StageStats> stageStats = {
-    for (final stage in ProductionStage.productionFlow) stage: StageStats(stage),
+    for (final stage in ProductionStage.productionFlow)
+      stage: StageStats(stage),
   };
 
   final Map<String, ProductStats> _productStats = {};
@@ -138,6 +158,23 @@ class ProductionReport {
     return list;
   }
 
+  List<PauseEventRow> get pauseEvents {
+    final rows = [
+      for (final order in orders)
+        for (final event in order.pauseEvents) PauseEventRow(order, event),
+    ]..sort((a, b) => b.event.createdAt.compareTo(a.event.createdAt));
+    return rows;
+  }
+
+  List<OperatorWorkRow> get operatorWorkRows {
+    final rows = [
+      for (final order in orders)
+        for (final session in order.operatorSessions)
+          OperatorWorkRow(order, session),
+    ]..sort((a, b) => b.session.startedAt.compareTo(a.session.startedAt));
+    return rows;
+  }
+
   Duration get averageProductionDuration => _finishedDurationSamples == 0
       ? Duration.zero
       : Duration(
@@ -145,7 +182,8 @@ class ProductionReport {
               _finishedDurationTotal.inMicroseconds ~/ _finishedDurationSamples,
         );
 
-  double get defectRate => inspectedUnits == 0 ? 0 : defectUnits / inspectedUnits;
+  double get defectRate =>
+      inspectedUnits == 0 ? 0 : defectUnits / inspectedUnits;
 
   void _compute() {
     totalOrders = orders.length;
@@ -326,7 +364,8 @@ class _SummaryGrid extends StatelessWidget {
         icon: Icons.check_circle_rounded,
         label: 'Finalizadas',
         value: '${report.finishedOrders}',
-        sub: '${report.storedOrders} armazenada${report.storedOrders == 1 ? '' : 's'}',
+        sub:
+            '${report.storedOrders} armazenada${report.storedOrders == 1 ? '' : 's'}',
         color: AppColors.green,
       ),
       _StatCard(
@@ -347,7 +386,9 @@ class _SummaryGrid extends StatelessWidget {
       _StatCard(
         icon: Icons.inventory_2_outlined,
         label: 'Dispositivos produzidos',
-        value: NumberFormat.decimalPattern('pt_BR').format(report.producedUnits),
+        value: NumberFormat.decimalPattern(
+          'pt_BR',
+        ).format(report.producedUnits),
         sub: 'aprovados no fechamento',
         color: AppColors.green,
       ),
@@ -486,7 +527,10 @@ class _DefectTypePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final types = report.defectTypes;
-    final maxQty = types.fold<int>(0, (m, t) => t.quantity > m ? t.quantity : m);
+    final maxQty = types.fold<int>(
+      0,
+      (m, t) => t.quantity > m ? t.quantity : m,
+    );
     final number = NumberFormat.decimalPattern('pt_BR');
 
     return _Panel(
@@ -527,7 +571,9 @@ class _DefectTypeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fraction = maxQty == 0 ? 0.0 : (stats.quantity / maxQty).clamp(0.0, 1.0);
+    final fraction = maxQty == 0
+        ? 0.0
+        : (stats.quantity / maxQty).clamp(0.0, 1.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -680,6 +726,207 @@ class _StageBar extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pausas e saidas
+// ---------------------------------------------------------------------------
+
+class _PauseEventsPanel extends StatelessWidget {
+  const _PauseEventsPanel({required this.report});
+
+  final ProductionReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = report.pauseEvents.take(8).toList();
+
+    return _Panel(
+      title: 'Pausas e saidas',
+      subtitle: 'Motivos assinados por PIN e quantidades informadas',
+      icon: Icons.pause_circle_outline_rounded,
+      child: rows.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                'Nenhuma pausa registrada ainda.',
+                style: TextStyle(color: AppColors.muted, fontSize: 13),
+              ),
+            )
+          : Column(
+              children: [
+                for (final row in rows)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.borderLight),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            row.order.number,
+                            style: GoogleFonts.ibmPlexMono(
+                              color: AppColors.textCode,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            row.event.operatorName,
+                            style: const TextStyle(
+                              color: AppColors.textStrong,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            '${row.event.stage.label} - ${row.event.reasonLabel}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            row.event.resumedAt == null
+                                ? 'em pausa: ${formatProductionDuration(row.event.pauseDuration(report.now))}'
+                                : 'pausou ${formatProductionDuration(row.event.pauseDuration(report.now))}',
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _OperatorWorkPanel extends StatelessWidget {
+  const _OperatorWorkPanel({required this.report});
+
+  final ProductionReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = report.operatorWorkRows.take(10).toList();
+
+    return _Panel(
+      title: 'Tempo por colaborador',
+      subtitle: 'Tempo trabalhado por pessoa em cada OP e etapa',
+      icon: Icons.badge_outlined,
+      child: rows.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                'Nenhum colaborador assinou uma OP ainda.',
+                style: TextStyle(color: AppColors.muted, fontSize: 13),
+              ),
+            )
+          : Column(
+              children: [
+                for (final row in rows)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.borderLight),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            row.order.number,
+                            style: GoogleFonts.ibmPlexMono(
+                              color: AppColors.textCode,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            row.session.operatorName,
+                            style: const TextStyle(
+                              color: AppColors.textStrong,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            row.session.stage.label,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            _sessionStatus(row.session),
+                            style: TextStyle(
+                              color: row.session.isCompleted
+                                  ? AppColors.green
+                                  : row.session.isPaused
+                                  ? AppColors.orangeText
+                                  : AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            formatProductionDuration(
+                              row.session.workedDuration(report.now),
+                            ),
+                            textAlign: TextAlign.end,
+                            style: GoogleFonts.ibmPlexMono(
+                              color: AppColors.textCode,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  String _sessionStatus(ProductionOperatorSession session) {
+    if (session.isCompleted) return 'concluido';
+    if (session.isPaused) return 'pausado';
+    return 'rodando';
   }
 }
 
@@ -987,7 +1234,11 @@ class _StageTimeline extends StatelessWidget {
 }
 
 class _StageChip extends StatelessWidget {
-  const _StageChip({required this.stage, required this.timing, required this.now});
+  const _StageChip({
+    required this.stage,
+    required this.timing,
+    required this.now,
+  });
 
   final ProductionStage stage;
   final ProductionStageTiming? timing;

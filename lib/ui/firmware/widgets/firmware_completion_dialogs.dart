@@ -29,7 +29,7 @@ Future<List<FirmwareDefect>?> showFirmwareDefectsDialog(BuildContext context) {
 }
 
 /// [currentStage] é a etapa em que a tela esta operando (ex: firmware = Gravacao).
-Future<bool?> showFirmwarePinDialog(
+Future<Operator?> showFirmwarePinDialog(
   BuildContext context,
   FirmwareOperation operation, {
   List<FirmwareDefect> defects = const [],
@@ -38,7 +38,7 @@ Future<bool?> showFirmwarePinDialog(
   final compact = MediaQuery.sizeOf(context).width < 720;
 
   if (compact) {
-    return showModalBottomSheet<bool>(
+    return showModalBottomSheet<Operator>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -51,7 +51,7 @@ Future<bool?> showFirmwarePinDialog(
     );
   }
 
-  return showDialog<bool>(
+  return showDialog<Operator>(
     context: context,
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
@@ -459,7 +459,7 @@ class _PinSheetState extends State<_PinSheet> {
               Expanded(
                 child: _DialogButton(
                   label: 'Cancelar',
-                  onPressed: () => Navigator.of(context).pop(false),
+                  onPressed: () => Navigator.of(context).pop(null),
                   fillColor: const Color(0xFFF6F9FB),
                   foregroundColor: AppColors.muted,
                   borderColor: AppColors.border,
@@ -470,7 +470,7 @@ class _PinSheetState extends State<_PinSheet> {
                 child: _DialogButton(
                   label: 'Concluir OP',
                   onPressed: _resolvedOperator != null && !_wrongStage
-                      ? () => Navigator.of(context).pop(true)
+                      ? () => Navigator.of(context).pop(_resolvedOperator)
                       : null,
                   fillColor: _resolvedOperator != null && !_wrongStage
                       ? AppColors.green

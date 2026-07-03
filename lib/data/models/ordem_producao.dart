@@ -82,6 +82,7 @@ class OrdemProducao {
   final int progresso;
   final String mes;
   final bool atrasada;
+  final String prioridade;
 
   /// Etapa real da OP no fluxo de produção (fonte: ProductionFlowStore).
   final ProductionStage stage;
@@ -100,6 +101,7 @@ class OrdemProducao {
     required this.progresso,
     required this.mes,
     this.atrasada = false,
+    this.prioridade = 'Media',
     this.stage = ProductionStage.warehouse,
     this.materiais = const [],
   });
@@ -109,6 +111,8 @@ class OrdemProducao {
   String get prazoLabel => 'Prazo $prazo';
 
   String get percentLabel => '$progresso%';
+
+  bool get prioridadeAlta => prioridade == 'Alta';
 
   bool get showBar =>
       status == StatusOP.emAndamento || status == StatusOP.finalizada;
@@ -124,6 +128,7 @@ class OrdemProducao {
     int? progresso,
     String? mes,
     bool? atrasada,
+    String? prioridade,
     ProductionStage? stage,
     List<(String, int)>? materiais,
   }) {
@@ -138,6 +143,7 @@ class OrdemProducao {
       progresso: progresso ?? this.progresso,
       mes: mes ?? this.mes,
       atrasada: atrasada ?? this.atrasada,
+      prioridade: prioridade ?? this.prioridade,
       stage: stage ?? this.stage,
       materiais: materiais ?? this.materiais,
     );

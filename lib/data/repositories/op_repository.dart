@@ -6,12 +6,14 @@ class NovaOrdemDTO {
   final int qtd;
   final String responsavel;
   final String prazo;
+  final String prioridade;
 
   const NovaOrdemDTO({
     required this.produto,
     required this.qtd,
     required this.responsavel,
     required this.prazo,
+    this.prioridade = 'Media',
   });
 }
 

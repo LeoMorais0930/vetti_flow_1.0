@@ -8,6 +8,7 @@ import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/shared/widgets/pause_reason_dialog.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 
 class ExpeditionOrder {
@@ -229,16 +230,31 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
   void _startExpedition() {
     final order = _selectedFlowOrder();
     if (order == null) return;
+    final operator = context.read<OperatorAssignmentStore>().currentOperator;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Expedicao',
+      operatorName: operator?.name ?? 'Expedicao',
+      operatorPin: operator?.pin,
     );
   }
 
-  void _pauseExpedition() {
+  Future<void> _pauseExpedition() async {
     final order = _selectedFlowOrder();
     if (order == null) return;
-    context.read<ProductionFlowStore>().pauseStage(order.number);
+    final request = await showPauseReasonDialog(
+      context,
+      stage: ProductionStage.expedition,
+      maxQuantity: order.quantity,
+    );
+    if (!mounted || request == null) return;
+    context.read<ProductionFlowStore>().pauseStage(
+      order.number,
+      operatorName: request.operatorName,
+      operatorPin: request.operatorPin,
+      reason: request.reason,
+      customReason: request.customReason,
+      producedQuantity: request.producedQuantity,
+    );
   }
 
   Future<void> _finishExpedition() async {

@@ -8,6 +8,7 @@ import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/shared/widgets/pause_reason_dialog.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 
 class SolderingOperation {
@@ -131,26 +132,45 @@ class _SolderingPageState extends State<SolderingPage> {
   void _startOperation() {
     final order = _selectedFlowOrder();
     if (order == null) return;
+    final operator = context.read<OperatorAssignmentStore>().currentOperator;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Bryan',
+      operatorName: operator?.name ?? 'Bryan',
+      operatorPin: operator?.pin,
     );
   }
 
-  void _pauseOperation() {
+  Future<void> _pauseOperation() async {
     final order = _selectedFlowOrder();
     if (order == null) return;
-    context.read<ProductionFlowStore>().pauseStage(order.number);
+    final request = await showPauseReasonDialog(
+      context,
+      stage: ProductionStage.soldering,
+      maxQuantity: order.quantity,
+    );
+    if (!mounted || request == null) return;
+    context.read<ProductionFlowStore>().pauseStage(
+      order.number,
+      operatorName: request.operatorName,
+      operatorPin: request.operatorPin,
+      reason: request.reason,
+      customReason: request.customReason,
+      producedQuantity: request.producedQuantity,
+    );
   }
 
   Future<void> _sendToNextStep() async {
     final flowOrder = _selectedFlowOrder();
     if (flowOrder == null) return;
     final operation = _operationFromFlow(flowOrder);
-    final signed = await showSolderingPinDialog(context, operation);
-    if (!mounted || signed != true) return;
+    final signature = await showSolderingPinDialog(context, operation);
+    if (!mounted || signature == null) return;
 
-    context.read<ProductionFlowStore>().completeStage(flowOrder.number);
+    context.read<ProductionFlowStore>().completeStage(
+      flowOrder.number,
+      operatorName: signature.name,
+      operatorPin: signature.pin,
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${operation.number} enviada para teste.')),
     );
@@ -1272,14 +1292,14 @@ class _DividerLine extends StatelessWidget {
   }
 }
 
-Future<bool?> showSolderingPinDialog(
+Future<Operator?> showSolderingPinDialog(
   BuildContext context,
   SolderingOperation operation,
 ) {
   final compact = MediaQuery.sizeOf(context).width < 720;
 
   if (compact) {
-    return showModalBottomSheet<bool>(
+    return showModalBottomSheet<Operator>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1288,7 +1308,7 @@ Future<bool?> showSolderingPinDialog(
     );
   }
 
-  return showDialog<bool>(
+  return showDialog<Operator>(
     context: context,
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
@@ -1446,7 +1466,7 @@ class _SolderingPinSheetState extends State<_SolderingPinSheet> {
               Expanded(
                 child: _DialogButton(
                   label: 'Cancelar',
-                  onPressed: () => Navigator.of(context).pop(false),
+                  onPressed: () => Navigator.of(context).pop(null),
                   fillColor: const Color(0xFFF6F9FB),
                   foregroundColor: AppColors.muted,
                   borderColor: AppColors.border,
@@ -1457,7 +1477,7 @@ class _SolderingPinSheetState extends State<_SolderingPinSheet> {
                 child: _DialogButton(
                   label: 'Enviar OP',
                   onPressed: valid
-                      ? () => Navigator.of(context).pop(true)
+                      ? () => Navigator.of(context).pop(_operator)
                       : null,
                   fillColor: valid ? AppColors.green : const Color(0xFFE4EDF4),
                   foregroundColor: valid ? Colors.white : AppColors.muted,

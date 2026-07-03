@@ -238,6 +238,7 @@ class MockOpRepository implements OpRepository {
       status: StatusOP.aAbrir,
       progresso: 0,
       mes: 'jun',
+      prioridade: dto.prioridade,
     );
     _nextSeq++;
     _ordens.insert(0, op);

@@ -24,10 +24,13 @@ class NovaOpDialog extends StatefulWidget {
 }
 
 class _NovaOpDialogState extends State<NovaOpDialog> {
+  static const _prioridades = ['Baixa', 'Media', 'Alta'];
+
   late String _produto;
   late String _responsavel;
   int _qtd = 50;
   String _prazo = '';
+  String _prioridade = 'Media';
 
   @override
   void initState() {
@@ -52,6 +55,7 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         qtd: _qtd,
         responsavel: _responsavel,
         prazo: _prazo.trim(),
+        prioridade: _prioridade,
       ),
     );
   }
@@ -102,11 +106,17 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
               _FormField(
                 label: 'Produto',
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _produto.isNotEmpty ? _produto : null,
                   decoration: _inputDecoration(),
                   style: _inputStyle(),
                   items: widget.produtos
-                      .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                      .map(
+                        (p) => DropdownMenuItem(
+                          value: p,
+                          child: Text(p, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => _produto = v);
@@ -146,14 +156,36 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
               _FormField(
                 label: 'Responsável',
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _responsavel.isNotEmpty ? _responsavel : null,
                   decoration: _inputDecoration(),
                   style: _inputStyle(),
                   items: widget.responsaveis
-                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                      .map(
+                        (r) => DropdownMenuItem(
+                          value: r,
+                          child: Text(r, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => _responsavel = v);
+                  },
+                ),
+              ),
+              const SizedBox(height: 15),
+              _FormField(
+                label: 'Prioridade',
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _prioridade,
+                  decoration: _inputDecoration(),
+                  style: _inputStyle(),
+                  items: _prioridades
+                      .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _prioridade = v);
                   },
                 ),
               ),

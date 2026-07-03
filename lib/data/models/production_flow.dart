@@ -52,6 +52,18 @@ enum ProductionStage {
 
 enum ProductionRunStatus { waiting, active, paused, completed }
 
+enum PauseReason {
+  ginasticaLaboral('Ginastica laboral'),
+  cafe('Cafe'),
+  banheiro('Banheiro'),
+  almoco('Almoco'),
+  outro('Outro');
+
+  const PauseReason(this.label);
+
+  final String label;
+}
+
 /// Um defeito registrado no teste: tipo (código + título) e quantidade de
 /// dispositivos afetados.
 class DefectRecord {
@@ -76,6 +88,192 @@ class DefectRecord {
     title: json['title'] as String? ?? '',
     quantity: (json['quantity'] as num?)?.toInt() ?? 0,
   );
+}
+
+class ProductionPauseEvent {
+  const ProductionPauseEvent({
+    required this.stage,
+    required this.operatorName,
+    required this.operatorPin,
+    required this.reason,
+    required this.createdAt,
+    this.resumedAt,
+    this.customReason,
+    this.producedQuantity = 0,
+  });
+
+  final ProductionStage stage;
+  final String operatorName;
+  final String operatorPin;
+  final PauseReason reason;
+  final DateTime createdAt;
+  final DateTime? resumedAt;
+  final String? customReason;
+  final int producedQuantity;
+
+  String get reasonLabel {
+    if (reason != PauseReason.outro) return reason.label;
+    final custom = customReason?.trim();
+    return custom == null || custom.isEmpty ? reason.label : custom;
+  }
+
+  Duration pauseDuration(DateTime now) {
+    final end = resumedAt ?? now;
+    final duration = end.difference(createdAt);
+    return duration.isNegative ? Duration.zero : duration;
+  }
+
+  ProductionPauseEvent copyWith({DateTime? Function()? resumedAt}) {
+    return ProductionPauseEvent(
+      stage: stage,
+      operatorName: operatorName,
+      operatorPin: operatorPin,
+      reason: reason,
+      createdAt: createdAt,
+      resumedAt: resumedAt != null ? resumedAt() : this.resumedAt,
+      customReason: customReason,
+      producedQuantity: producedQuantity,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'stage': stage.name,
+    'operatorName': operatorName,
+    'operatorPin': operatorPin,
+    'reason': reason.name,
+    'createdAt': createdAt.toIso8601String(),
+    'resumedAt': resumedAt?.toIso8601String(),
+    'customReason': customReason,
+    'producedQuantity': producedQuantity,
+  };
+
+  factory ProductionPauseEvent.fromJson(Map<String, dynamic> json) {
+    return ProductionPauseEvent(
+      stage: ProductionStage.values.firstWhere(
+        (stage) => stage.name == json['stage'],
+        orElse: () => ProductionStage.warehouse,
+      ),
+      operatorName: json['operatorName'] as String? ?? '',
+      operatorPin: json['operatorPin'] as String? ?? '',
+      reason: PauseReason.values.firstWhere(
+        (reason) => reason.name == json['reason'],
+        orElse: () => PauseReason.outro,
+      ),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      resumedAt: json['resumedAt'] is String
+          ? DateTime.parse(json['resumedAt'] as String)
+          : null,
+      customReason: json['customReason'] as String?,
+      producedQuantity: (json['producedQuantity'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class ProductionOperatorSession {
+  const ProductionOperatorSession({
+    required this.stage,
+    required this.operatorName,
+    required this.operatorPin,
+    required this.startedAt,
+    this.completedAt,
+    this.pausedAt,
+    this.pausedDuration = Duration.zero,
+    this.producedQuantity = 0,
+  });
+
+  final ProductionStage stage;
+  final String operatorName;
+  final String operatorPin;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+  final DateTime? pausedAt;
+  final Duration pausedDuration;
+  final int producedQuantity;
+
+  bool get isCompleted => completedAt != null;
+
+  bool get isPaused => pausedAt != null && !isCompleted;
+
+  bool get isRunning => pausedAt == null && !isCompleted;
+
+  Duration elapsed(DateTime now) {
+    final end = completedAt ?? pausedAt ?? now;
+    final elapsed = end.difference(startedAt) - pausedDuration;
+    return elapsed.isNegative ? Duration.zero : elapsed;
+  }
+
+  Duration workedDuration(DateTime now) => elapsed(now);
+
+  ProductionOperatorSession pause(DateTime now, {int producedQuantity = 0}) {
+    return copyWith(
+      pausedAt: () => pausedAt ?? now,
+      producedQuantity: this.producedQuantity + producedQuantity,
+    );
+  }
+
+  ProductionOperatorSession resume(DateTime now) {
+    final paused = pausedAt;
+    return copyWith(
+      pausedAt: () => null,
+      pausedDuration: paused == null
+          ? pausedDuration
+          : pausedDuration + now.difference(paused),
+    );
+  }
+
+  ProductionOperatorSession complete(DateTime now) {
+    final resumed = pausedAt == null ? this : resume(now);
+    return resumed.copyWith(completedAt: () => now, pausedAt: () => null);
+  }
+
+  ProductionOperatorSession copyWith({
+    DateTime? Function()? completedAt,
+    DateTime? Function()? pausedAt,
+    Duration? pausedDuration,
+    int? producedQuantity,
+  }) {
+    return ProductionOperatorSession(
+      stage: stage,
+      operatorName: operatorName,
+      operatorPin: operatorPin,
+      startedAt: startedAt,
+      completedAt: completedAt != null ? completedAt() : this.completedAt,
+      pausedAt: pausedAt != null ? pausedAt() : this.pausedAt,
+      pausedDuration: pausedDuration ?? this.pausedDuration,
+      producedQuantity: producedQuantity ?? this.producedQuantity,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'stage': stage.name,
+    'operatorName': operatorName,
+    'operatorPin': operatorPin,
+    'startedAt': startedAt.toIso8601String(),
+    'completedAt': completedAt?.toIso8601String(),
+    'pausedAt': pausedAt?.toIso8601String(),
+    'pausedDurationMs': pausedDuration.inMilliseconds,
+    'producedQuantity': producedQuantity,
+  };
+
+  factory ProductionOperatorSession.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(Object? value) =>
+        value is String ? DateTime.parse(value) : null;
+    return ProductionOperatorSession(
+      stage: ProductionStage.values.firstWhere(
+        (stage) => stage.name == json['stage'],
+        orElse: () => ProductionStage.warehouse,
+      ),
+      operatorName: json['operatorName'] as String? ?? '',
+      operatorPin: json['operatorPin'] as String? ?? '',
+      startedAt: DateTime.parse(json['startedAt'] as String),
+      completedAt: parseDate(json['completedAt']),
+      pausedAt: parseDate(json['pausedAt']),
+      pausedDuration: Duration(
+        milliseconds: (json['pausedDurationMs'] as num?)?.toInt() ?? 0,
+      ),
+      producedQuantity: (json['producedQuantity'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
 String formatProductionDuration(Duration duration) {
@@ -165,6 +363,8 @@ class ProductionOrderFlow {
     this.dispatchedQuantity = 0,
     this.timings = const {},
     this.testDefects = const [],
+    this.operatorSessions = const [],
+    this.pauseEvents = const [],
   });
 
   final String number;
@@ -185,6 +385,8 @@ class ProductionOrderFlow {
   final int dispatchedQuantity;
   final Map<ProductionStage, ProductionStageTiming> timings;
   final List<DefectRecord> testDefects;
+  final List<ProductionOperatorSession> operatorSessions;
+  final List<ProductionPauseEvent> pauseEvents;
 
   /// Total de dispositivos marcados como defeito no teste.
   int get totalDefects =>
@@ -203,6 +405,12 @@ class ProductionOrderFlow {
 
   Duration activeElapsed(DateTime now) =>
       timings[currentStage]?.elapsed(now) ?? Duration.zero;
+
+  List<ProductionOperatorSession> sessionsAt(ProductionStage stage) =>
+      operatorSessions.where((session) => session.stage == stage).toList();
+
+  List<ProductionOperatorSession> activeSessionsAt(ProductionStage stage) =>
+      sessionsAt(stage).where((session) => !session.isCompleted).toList();
 
   Duration totalElapsed(DateTime now) {
     return timings.values.fold<Duration>(
@@ -225,6 +433,8 @@ class ProductionOrderFlow {
     int? dispatchedQuantity,
     Map<ProductionStage, ProductionStageTiming>? timings,
     List<DefectRecord>? testDefects,
+    List<ProductionOperatorSession>? operatorSessions,
+    List<ProductionPauseEvent>? pauseEvents,
   }) {
     return ProductionOrderFlow(
       number: number,
@@ -247,6 +457,8 @@ class ProductionOrderFlow {
       dispatchedQuantity: dispatchedQuantity ?? this.dispatchedQuantity,
       timings: timings ?? this.timings,
       testDefects: testDefects ?? this.testDefects,
+      operatorSessions: operatorSessions ?? this.operatorSessions,
+      pauseEvents: pauseEvents ?? this.pauseEvents,
     );
   }
 }

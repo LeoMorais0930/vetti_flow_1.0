@@ -71,7 +71,7 @@ class FlowOpRepository implements OpRepository {
     final order = _store.createOrder(
       productCode: catalogItem.code,
       quantity: dto.qtd,
-      priority: 'Media',
+      priority: dto.prioridade,
       operatorName: '',
       responsavel: dto.responsavel,
       prazo: dto.prazo,
@@ -119,6 +119,7 @@ class FlowOpRepository implements OpRepository {
       progresso: _progresso(order, finalizada),
       mes: _meses[order.createdAt.month - 1],
       atrasada: _atrasada(order.prazo, finalizada),
+      prioridade: order.priority,
       stage: order.currentStage,
       materiais: _store
           .catalogItem(order.productCode)

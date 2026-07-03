@@ -167,6 +167,15 @@ class Operator {
       usesAssignedStage: true,
     ),
     Operator(
+      name: 'Pedro H',
+      username: 'pedro h',
+      password: '3022',
+      pin: '3022',
+      stage: WorkStage.firmware,
+      area: WorkArea.production,
+      usesAssignedStage: true,
+    ),
+    Operator(
       name: 'Bryan',
       username: 'bryan',
       password: '3003',

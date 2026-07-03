@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/app/app_routes.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/mock_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
@@ -10,13 +13,21 @@ import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/dashboard_page.dart';
-import 'package:vetti_flow_1_0/ui/auth/login_page.dart';
-import 'package:vetti_flow_1_0/ui/expedition/expedition_page.dart';
-import 'package:vetti_flow_1_0/ui/firmware/firmware_page.dart';
-import 'package:vetti_flow_1_0/ui/soldering/soldering_page.dart';
-import 'package:vetti_flow_1_0/ui/tv/vetti_flow_tv_page.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 
 void main() {
+  test('every work stage has a registered app route', () {
+    final routes = vettiFlowRoutes();
+
+    for (final stage in WorkStage.values) {
+      expect(
+        routes.keys,
+        contains(stage.route),
+        reason: '${stage.label} precisa abrir ${stage.route}',
+      );
+    }
+  });
+
   test('dashboard operator routes to dashboard', () {
     final operator = Operator.authenticate('tatiane', '1001');
 
@@ -104,6 +115,153 @@ void main() {
     expect(armazenadas.first.tipoLabel, 'Armazenada parcial');
   });
 
+  testWidgets('new OP dialog submits the selected priority', (tester) async {
+    NovaOrdemDTO? created;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const ['CR4 - Modulo de 4 zonas com fio'],
+            responsaveis: const ['Tatiane'],
+            onCreate: (dto) => created = dto,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextFormField).at(1), '10/07/2026');
+    await tester.tap(find.text('Media'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alta').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Criar OP'));
+    await tester.pumpAndSettle();
+
+    expect(created, isNotNull);
+    expect(created!.prioridade, 'Alta');
+  });
+
+  test(
+    'flow repository creates dashboard OPs with selected priority',
+    () async {
+      final store = ProductionFlowStore();
+      final repository = FlowOpRepository(store);
+
+      final created = await repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: 'CR4 - Modulo de 4 zonas com fio',
+          qtd: 25,
+          responsavel: 'Tatiane',
+          prazo: '10/07/2026',
+          prioridade: 'Alta',
+        ),
+      );
+
+      final flowOrder = store.orders.firstWhere(
+        (order) => order.number == created.numero,
+      );
+
+      expect(flowOrder.priority, 'Alta');
+      expect(flowOrder.isHighPriority, isTrue);
+    },
+  );
+
+  test('stage pause records operator pin, reason and optional quantity', () {
+    final store = ProductionFlowStore();
+    final order = store.ordersAtStage(ProductionStage.firmware).first;
+
+    store.startStage(
+      order.number,
+      operatorName: 'Juliana',
+      operatorPin: '3001',
+    );
+    store.pauseStage(
+      order.number,
+      operatorName: 'Juliana',
+      operatorPin: '3001',
+      reason: PauseReason.cafe,
+      producedQuantity: 18,
+    );
+
+    final paused = store.orders.firstWhere((op) => op.number == order.number);
+    final session = paused.operatorSessions.singleWhere(
+      (item) => item.operatorPin == '3001',
+    );
+
+    expect(paused.pauseEvents, hasLength(1));
+    expect(paused.pauseEvents.single.reason, PauseReason.cafe);
+    expect(paused.pauseEvents.single.operatorPin, '3001');
+    expect(session.producedQuantity, 18);
+    expect(session.pausedAt, isNotNull);
+    expect(paused.status, ProductionRunStatus.paused);
+
+    store.startStage(
+      order.number,
+      operatorName: 'Juliana',
+      operatorPin: '3001',
+    );
+    final resumed = store.orders.firstWhere((op) => op.number == order.number);
+    expect(resumed.pauseEvents.single.resumedAt, isNotNull);
+    expect(
+      resumed.pauseEvents.single.pauseDuration(DateTime.now()).inMilliseconds,
+      greaterThanOrEqualTo(0),
+    );
+  });
+
+  test('OP stage advances only after all active operators complete', () {
+    final store = ProductionFlowStore();
+    final order = store.ordersAtStage(ProductionStage.soldering).first;
+
+    store.startStage(order.number, operatorName: 'Bryan', operatorPin: '3003');
+    store.startStage(order.number, operatorName: 'Katlyn', operatorPin: '3007');
+
+    store.completeStage(
+      order.number,
+      operatorName: 'Bryan',
+      operatorPin: '3003',
+    );
+
+    final waitingForKatlyn = store.orders.firstWhere(
+      (op) => op.number == order.number,
+    );
+    expect(waitingForKatlyn.currentStage, ProductionStage.soldering);
+    expect(waitingForKatlyn.status, ProductionRunStatus.active);
+    expect(
+      waitingForKatlyn.operatorSessions
+          .singleWhere((item) => item.operatorPin == '3003')
+          .completedAt,
+      isNotNull,
+    );
+    expect(
+      waitingForKatlyn.operatorSessions
+          .singleWhere((item) => item.operatorPin == '3003')
+          .workedDuration(DateTime.now())
+          .inMilliseconds,
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      waitingForKatlyn.operatorSessions
+          .singleWhere((item) => item.operatorPin == '3007')
+          .completedAt,
+      isNull,
+    );
+
+    store.completeStage(
+      order.number,
+      operatorName: 'Katlyn',
+      operatorPin: '3007',
+    );
+
+    final completed = store.orders.firstWhere(
+      (op) => op.number == order.number,
+    );
+    expect(completed.currentStage, ProductionStage.testing);
+    expect(completed.status, ProductionRunStatus.waiting);
+  });
+
   testWidgets('shows the initial login screen', (tester) async {
     await tester.pumpWidget(_testApp());
 
@@ -185,8 +343,40 @@ void main() {
     await tester.tap(find.text('Pausar OP'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Motivo da pausa'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '3003');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Pausar'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Retomar OP'), findsOneWidget);
     expect(find.text('Enviar para proxima etapa'), findsOneWidget);
+  });
+
+  testWidgets('pause reason outro requires an explanation', (tester) async {
+    await _setViewport(tester, const Size(1366, 768));
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_testApp(initialRoute: '/soldagem'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Pausar OP'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('pause-reason-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Outro').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pause-custom-reason')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('pause-pin')), '3003');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Pausar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Informe o motivo da pausa.'), findsOneWidget);
+    expect(find.text('Pausar OP'), findsWidgets);
   });
 
   testWidgets('dashboard shows stored tab and stored orders', (tester) async {
@@ -353,17 +543,12 @@ Widget _testApp({String initialRoute = '/login'}) {
       ChangeNotifierProvider<OperatorAssignmentStore>(
         create: (_) => OperatorAssignmentStore(),
       ),
+      RepositoryProvider<OpRepository>(create: (_) => MockOpRepository()),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
       initialRoute: initialRoute,
-      routes: {
-        '/login': (context) => const LoginPage(),
-        '/firmware': (context) => const FirmwarePage(),
-        '/soldagem': (context) => const SolderingPage(),
-        '/expedicao': (context) => const ExpeditionPage(),
-        '/tv': (context) => const VettiFlowTvPage(),
-      },
+      routes: vettiFlowRoutes(),
     ),
   );
 }

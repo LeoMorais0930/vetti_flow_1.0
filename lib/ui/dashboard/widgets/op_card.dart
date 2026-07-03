@@ -57,25 +57,15 @@ class OpCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (op.atrasada)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.dangerBg,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                        child: const Text(
-                          'Atrasada',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.danger,
-                          ),
-                        ),
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (op.prioridadeAlta) const _PriorityBadge(),
+                        if (op.prioridadeAlta && op.atrasada)
+                          const SizedBox(width: 6),
+                        if (op.atrasada) const _LateBadge(),
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -139,6 +129,52 @@ class OpCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PriorityBadge extends StatelessWidget {
+  const _PriorityBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.dangerBg,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: const Text(
+        'Alta',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: AppColors.danger,
+        ),
+      ),
+    );
+  }
+}
+
+class _LateBadge extends StatelessWidget {
+  const _LateBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.dangerBg,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: const Text(
+        'Atrasada',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: AppColors.danger,
         ),
       ),
     );

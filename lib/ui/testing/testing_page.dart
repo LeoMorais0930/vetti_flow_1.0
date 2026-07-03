@@ -8,6 +8,7 @@ import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/shared/widgets/pause_reason_dialog.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 
 class TestOperation {
@@ -171,16 +172,31 @@ class _TestingPageState extends State<TestingPage> {
   void _startTest() {
     final order = _selectedFlowOrder();
     if (order == null) return;
+    final operator = context.read<OperatorAssignmentStore>().currentOperator;
     context.read<ProductionFlowStore>().startStage(
       order.number,
-      operatorName: 'Sabrina',
+      operatorName: operator?.name ?? 'Sabrina',
+      operatorPin: operator?.pin,
     );
   }
 
-  void _pauseOperation() {
+  Future<void> _pauseOperation() async {
     final order = _selectedFlowOrder();
     if (order == null) return;
-    context.read<ProductionFlowStore>().pauseStage(order.number);
+    final request = await showPauseReasonDialog(
+      context,
+      stage: ProductionStage.testing,
+      maxQuantity: order.quantity,
+    );
+    if (!mounted || request == null) return;
+    context.read<ProductionFlowStore>().pauseStage(
+      order.number,
+      operatorName: request.operatorName,
+      operatorPin: request.operatorPin,
+      reason: request.reason,
+      customReason: request.customReason,
+      producedQuantity: request.producedQuantity,
+    );
   }
 
   Future<void> _completeTest() async {
@@ -1450,9 +1466,8 @@ class _TestDefectsSheetState extends State<_TestDefectsSheet> {
         _quantities.remove(code);
       } else {
         _quantities[code] = 1;
-        _controllers
-            .putIfAbsent(code, () => TextEditingController())
-            .text = '1';
+        _controllers.putIfAbsent(code, () => TextEditingController()).text =
+            '1';
       }
     });
   }

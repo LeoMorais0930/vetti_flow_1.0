@@ -234,7 +234,7 @@ class ProductionFlowStore extends ChangeNotifier {
     return order;
   }
 
-  void startStage(String number, {String? operatorName}) {
+  void startStage(String number, {String? operatorName, String? operatorPin}) {
     _mutate(number, (order, now) {
       final timings = Map<ProductionStage, ProductionStageTiming>.from(
         order.timings,
@@ -244,27 +244,112 @@ class ProductionFlowStore extends ChangeNotifier {
       timings[order.currentStage] = current.pausedAt == null
           ? current.start(now)
           : current.resume(now);
+
+      final sessions = [...order.operatorSessions];
+      final pauseEvents = [...order.pauseEvents];
+      final signature = _signatureKey(operatorName, operatorPin);
+      if (signature != null) {
+        final index = _sessionIndex(
+          sessions,
+          order.currentStage,
+          operatorName,
+          operatorPin,
+        );
+        if (index == -1) {
+          sessions.add(
+            ProductionOperatorSession(
+              stage: order.currentStage,
+              operatorName: operatorName ?? 'Operador',
+              operatorPin: operatorPin ?? signature,
+              startedAt: now,
+            ),
+          );
+        } else {
+          sessions[index] = sessions[index].resume(now);
+        }
+        _closeLatestPauseEvent(
+          pauseEvents,
+          order.currentStage,
+          operatorName,
+          operatorPin,
+          now,
+        );
+      }
+
       return order.copyWith(
         status: ProductionRunStatus.active,
         updatedAt: now,
         operatorName: () => operatorName ?? order.operatorName,
         timings: timings,
+        operatorSessions: sessions,
+        pauseEvents: pauseEvents,
       );
     });
   }
 
-  void pauseStage(String number) {
+  void pauseStage(
+    String number, {
+    String? operatorName,
+    String? operatorPin,
+    PauseReason reason = PauseReason.outro,
+    String? customReason,
+    int producedQuantity = 0,
+  }) {
     _mutate(number, (order, now) {
       final timings = Map<ProductionStage, ProductionStageTiming>.from(
         order.timings,
       );
       final current =
           timings[order.currentStage] ?? const ProductionStageTiming();
-      timings[order.currentStage] = current.pause(now);
+      final sessions = [...order.operatorSessions];
+      final signature = _signatureKey(operatorName, operatorPin);
+      if (signature != null) {
+        final index = _sessionIndex(
+          sessions,
+          order.currentStage,
+          operatorName,
+          operatorPin,
+        );
+        final safeQuantity = producedQuantity.clamp(0, order.quantity).toInt();
+        if (index == -1) {
+          sessions.add(
+            ProductionOperatorSession(
+              stage: order.currentStage,
+              operatorName: operatorName ?? 'Operador',
+              operatorPin: operatorPin ?? signature,
+              startedAt: now,
+            ).pause(now, producedQuantity: safeQuantity),
+          );
+        } else {
+          sessions[index] = sessions[index].pause(
+            now,
+            producedQuantity: safeQuantity,
+          );
+        }
+      }
+      final hasRunning = _hasRunningSession(sessions, order.currentStage);
+      timings[order.currentStage] = hasRunning ? current : current.pause(now);
+      final pauseEvents = [
+        ...order.pauseEvents,
+        if (signature != null)
+          ProductionPauseEvent(
+            stage: order.currentStage,
+            operatorName: operatorName ?? 'Operador',
+            operatorPin: operatorPin ?? signature,
+            reason: reason,
+            customReason: customReason,
+            producedQuantity: producedQuantity.clamp(0, order.quantity).toInt(),
+            createdAt: now,
+          ),
+      ];
       return order.copyWith(
-        status: ProductionRunStatus.paused,
+        status: hasRunning
+            ? ProductionRunStatus.active
+            : ProductionRunStatus.paused,
         updatedAt: now,
         timings: timings,
+        operatorSessions: sessions,
+        pauseEvents: pauseEvents,
       );
     });
   }
@@ -303,7 +388,12 @@ class ProductionFlowStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void completeStage(String number, {String? observation}) {
+  void completeStage(
+    String number, {
+    String? observation,
+    String? operatorName,
+    String? operatorPin,
+  }) {
     _mutate(number, (order, now) {
       final timings = Map<ProductionStage, ProductionStageTiming>.from(
         order.timings,
@@ -311,6 +401,44 @@ class ProductionFlowStore extends ChangeNotifier {
       final current =
           timings[order.currentStage] ??
           const ProductionStageTiming(startedAt: null);
+      final sessions = [...order.operatorSessions];
+      final signature = _signatureKey(operatorName, operatorPin);
+      if (signature != null) {
+        final index = _sessionIndex(
+          sessions,
+          order.currentStage,
+          operatorName,
+          operatorPin,
+        );
+        if (index == -1) {
+          sessions.add(
+            ProductionOperatorSession(
+              stage: order.currentStage,
+              operatorName: operatorName ?? 'Operador',
+              operatorPin: operatorPin ?? signature,
+              startedAt: now,
+              completedAt: now,
+            ),
+          );
+        } else {
+          sessions[index] = sessions[index].complete(now);
+        }
+        final remaining = _activeSessions(sessions, order.currentStage);
+        if (remaining.isNotEmpty) {
+          final status = remaining.any((session) => session.isRunning)
+              ? ProductionRunStatus.active
+              : ProductionRunStatus.paused;
+          return order.copyWith(
+            status: status,
+            updatedAt: now,
+            lastObservation: () {
+              final note = observation?.trim();
+              return note == null || note.isEmpty ? null : note;
+            },
+            operatorSessions: sessions,
+          );
+        }
+      }
       timings[order.currentStage] = current
           .start(current.startedAt ?? now)
           .complete(now);
@@ -323,6 +451,7 @@ class ProductionFlowStore extends ChangeNotifier {
           return note == null || note.isEmpty ? null : note;
         },
         timings: timings,
+        operatorSessions: sessions,
       );
     });
   }
@@ -477,6 +606,10 @@ class ProductionFlowStore extends ChangeNotifier {
           entry.key.name: _timingToJson(entry.value),
       },
       'testDefects': order.testDefects.map((d) => d.toJson()).toList(),
+      'operatorSessions': order.operatorSessions
+          .map((s) => s.toJson())
+          .toList(),
+      'pauseEvents': order.pauseEvents.map((p) => p.toJson()).toList(),
     };
   }
 
@@ -499,8 +632,25 @@ class ProductionFlowStore extends ChangeNotifier {
       storedQuantity: (json['storedQuantity'] as num?)?.toInt() ?? 0,
       dispatchedQuantity: (json['dispatchedQuantity'] as num?)?.toInt() ?? 0,
       timings: _timingsFromJson(json['timings'] as Map<String, dynamic>?),
-      testDefects: (json['testDefects'] as List<dynamic>?)
+      testDefects:
+          (json['testDefects'] as List<dynamic>?)
               ?.map((d) => DefectRecord.fromJson(d as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      operatorSessions:
+          (json['operatorSessions'] as List<dynamic>?)
+              ?.map(
+                (s) => ProductionOperatorSession.fromJson(
+                  s as Map<String, dynamic>,
+                ),
+              )
+              .toList() ??
+          const [],
+      pauseEvents:
+          (json['pauseEvents'] as List<dynamic>?)
+              ?.map(
+                (p) => ProductionPauseEvent.fromJson(p as Map<String, dynamic>),
+              )
               .toList() ??
           const [],
     );
@@ -582,6 +732,70 @@ class ProductionFlowStore extends ChangeNotifier {
       return a.isHighPriority ? -1 : 1;
     }
     return b.updatedAt.compareTo(a.updatedAt);
+  }
+
+  String? _signatureKey(String? operatorName, String? operatorPin) {
+    final pin = operatorPin?.trim();
+    if (pin != null && pin.isNotEmpty) return pin;
+    final name = operatorName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return null;
+  }
+
+  int _sessionIndex(
+    List<ProductionOperatorSession> sessions,
+    ProductionStage stage,
+    String? operatorName,
+    String? operatorPin,
+  ) {
+    final signature = _signatureKey(operatorName, operatorPin);
+    if (signature == null) return -1;
+    return sessions.indexWhere(
+      (session) =>
+          session.stage == stage &&
+          !session.isCompleted &&
+          (session.operatorPin == signature ||
+              session.operatorName.toLowerCase() == signature.toLowerCase()),
+    );
+  }
+
+  List<ProductionOperatorSession> _activeSessions(
+    List<ProductionOperatorSession> sessions,
+    ProductionStage stage,
+  ) {
+    return sessions
+        .where((session) => session.stage == stage && !session.isCompleted)
+        .toList();
+  }
+
+  bool _hasRunningSession(
+    List<ProductionOperatorSession> sessions,
+    ProductionStage stage,
+  ) {
+    return sessions.any(
+      (session) => session.stage == stage && session.isRunning,
+    );
+  }
+
+  void _closeLatestPauseEvent(
+    List<ProductionPauseEvent> pauseEvents,
+    ProductionStage stage,
+    String? operatorName,
+    String? operatorPin,
+    DateTime now,
+  ) {
+    final signature = _signatureKey(operatorName, operatorPin);
+    if (signature == null) return;
+    for (var i = pauseEvents.length - 1; i >= 0; i--) {
+      final event = pauseEvents[i];
+      if (event.stage == stage &&
+          event.resumedAt == null &&
+          (event.operatorPin == signature ||
+              event.operatorName.toLowerCase() == signature.toLowerCase())) {
+        pauseEvents[i] = event.copyWith(resumedAt: () => now);
+        return;
+      }
+    }
   }
 
   List<ProductionOrderFlow> _seedOrders() {
