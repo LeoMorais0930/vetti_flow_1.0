@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/ui/protheus/fila_protheus_page.dart';
 import 'package:vetti_flow_1_0/ui/auth/login_page.dart';
 import 'package:vetti_flow_1_0/ui/closing/closing_page.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
@@ -27,6 +28,7 @@ Map<String, WidgetBuilder> vettiFlowRoutes() {
     '/suporte': (context) => const SupportPage(),
     '/teste': (context) => const TestingPage(),
     '/almoxarifado': (context) => const WarehousePage(),
+    FilaProtheusPage.rota: (context) => const FilaProtheusPage(),
     '/tv': (context) => const VettiFlowTvPage(),
   };
 }

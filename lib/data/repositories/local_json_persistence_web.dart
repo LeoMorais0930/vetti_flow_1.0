@@ -2,13 +2,15 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
-class ProductionFlowPersistence {
-  static const _key = 'vetti_flow.production_flow.v1';
+class LocalJsonPersistence {
+  const LocalJsonPersistence(this.key);
 
-  String? read() => web.window.localStorage.getItem(_key);
+  final String key;
+
+  String? read() => web.window.localStorage.getItem(key);
 
   void write(String payload) {
-    web.window.localStorage.setItem(_key, payload);
+    web.window.localStorage.setItem(key, payload);
   }
 
   void listen(void Function(String? payload) onChange) {
@@ -16,7 +18,7 @@ class ProductionFlowPersistence {
       'storage',
       ((web.Event event) {
         final storageEvent = event as web.StorageEvent;
-        if (storageEvent.key == _key) {
+        if (storageEvent.key == key) {
           onChange(storageEvent.newValue);
         }
       }).toJS,

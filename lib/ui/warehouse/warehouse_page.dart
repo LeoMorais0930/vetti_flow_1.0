@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
+import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
+import 'package:vetti_flow_1_0/ui/protheus/empenhos_op_dialog.dart';
+import 'package:vetti_flow_1_0/ui/protheus/transferencia_dialog.dart';
+import 'package:vetti_flow_1_0/ui/shared/widgets/protheus_op_picker.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
@@ -110,14 +119,22 @@ class _WarehousePageState extends State<WarehousePage> {
     );
   }
 
-  void _createOrder({
-    required String productCode,
-    required int quantity,
-    required String priority,
-  }) {
-    final order = context.read<ProductionFlowStore>().createOrder(
-      productCode: productCode,
-      quantity: quantity,
+  /// Traz uma OP do Protheus para o fluxo. O VettiFlow não cria OPs.
+  void _adoptOrder({required String numero, required String priority}) {
+    final protheus = context.read<ProtheusOrderRepository>();
+    final source = protheus.open
+        .where((op) => op.displayNumber == numero)
+        .firstOrNull;
+    if (source == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('OP não está mais em aberto no Protheus.'),
+        ),
+      );
+      return;
+    }
+    final order = context.read<ProductionFlowStore>().adoptOrder(
+      source,
       priority: priority,
       operatorName: 'Vera',
     );
@@ -126,7 +143,7 @@ class _WarehousePageState extends State<WarehousePage> {
       _selectedIndex = 0;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${order.number} criada no Almoxarifado.')),
+      SnackBar(content: Text('${order.number} trazida para o Almoxarifado.')),
     );
   }
 
@@ -165,7 +182,7 @@ class _WarehousePageState extends State<WarehousePage> {
                 : requests[_selectedIndex].status,
             onShowQueue: () => setState(() => _showCreate = false),
             onShowCreate: () => setState(() => _showCreate = true),
-            onCreate: _createOrder,
+            onCreate: _adoptOrder,
             onSelect: (index) => setState(() {
               _selectedIndex = index;
               _showCreate = false;
@@ -185,7 +202,7 @@ class _WarehousePageState extends State<WarehousePage> {
               : requests[_selectedIndex].status,
           onShowQueue: () => setState(() => _showCreate = false),
           onShowCreate: () => setState(() => _showCreate = true),
-          onCreate: _createOrder,
+          onCreate: _adoptOrder,
           onSelect: (index) => setState(() {
             _selectedIndex = index;
             _showCreate = false;
@@ -237,11 +254,7 @@ class _DesktopWarehouseLayout extends StatelessWidget {
   final String status;
   final VoidCallback onShowQueue;
   final VoidCallback onShowCreate;
-  final void Function({
-    required String productCode,
-    required int quantity,
-    required String priority,
-  })
+  final void Function({required String numero, required String priority})
   onCreate;
   final ValueChanged<int> onSelect;
   final VoidCallback onStart;
@@ -332,11 +345,7 @@ class _MobileWarehouseLayout extends StatelessWidget {
   final String status;
   final VoidCallback onShowQueue;
   final VoidCallback onShowCreate;
-  final void Function({
-    required String productCode,
-    required int quantity,
-    required String priority,
-  })
+  final void Function({required String numero, required String priority})
   onCreate;
   final ValueChanged<int> onSelect;
   final VoidCallback onStart;
@@ -417,6 +426,12 @@ class _MobileWarehouseLayout extends StatelessWidget {
                             onStart: onStart,
                             onPause: onPause,
                             onDeliver: onDeliver,
+                          ),
+                          const SizedBox(height: 26),
+                          _ProtheusActions(
+                            request: selectedRequest!,
+                            autor: selectedRequest!.requestedBy,
+                            compact: true,
                           ),
                         ],
                       ],
@@ -511,7 +526,7 @@ class _WarehouseTabs extends StatelessWidget {
           ),
           Expanded(
             child: _WarehouseTabButton(
-              label: 'Criar OP',
+              label: 'Trazer OP',
               active: showCreate,
               onTap: onShowCreate,
               compact: compact,
@@ -655,6 +670,8 @@ class _WarehouseDetails extends StatelessWidget {
             onPause: onPause,
             onDeliver: onDeliver,
           ),
+          const SizedBox(height: 54),
+          _ProtheusActions(request: request, autor: request.requestedBy),
         ],
       ),
     );
@@ -956,6 +973,143 @@ class _WarehouseItemRow extends StatelessWidget {
   }
 }
 
+/// As ações que mexem no Protheus, separadas das ações do fluxo.
+///
+/// Ficam aqui porque é o almoxarifado que manuseia o material: quem descobre
+/// que falta componente, que ele está no armazém errado ou que a OP precisa
+/// consumir outra coisa é quem separa. Antes isso virava telefonema para quem
+/// tinha acesso ao Protheus.
+///
+/// Nada é aplicado na hora: tudo vai para a fila e sobe na sincronização.
+class _ProtheusActions extends StatelessWidget {
+  const _ProtheusActions({
+    required this.request,
+    required this.autor,
+    this.compact = false,
+  });
+
+  final WarehouseRequest request;
+
+  /// Quem responde pelo pedido — o operador da separação.
+  final String autor;
+
+  final bool compact;
+
+  /// O código do produto da OP, tirado do fluxo em vez do rótulo da tela.
+  ///
+  /// `request.product` é texto montado para exibição; depender dele para achar
+  /// o produto quebraria no dia em que o rótulo mudasse.
+  String? _produtoCodigo(BuildContext context) {
+    for (final order in context.read<ProductionFlowStore>().orders) {
+      if (order.number == request.number) return order.productCode;
+    }
+    return null;
+  }
+
+  Future<void> _empenhos(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final gravadas = await EmpenhosOpDialog.mostrar(
+      context,
+      op: request.number,
+      filial: context.read<FilialStore>().filial,
+      autor: autor,
+      produtoLabel: request.product,
+    );
+    if (gravadas == null || gravadas == 0) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '$gravadas alteração${gravadas == 1 ? '' : 'es'} de empenho '
+          'na fila do Protheus.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _transferir(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final gravou = await TransferenciaDialog.mostrar(
+      context,
+      filial: context.read<FilialStore>().filial,
+      autor: autor,
+      produtoInicial: _produtoCodigo(context),
+      op: request.number,
+    );
+    if (gravou != true) return;
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Transferência na fila do Protheus.'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pendentes = context
+        .watch<PendingMutationStore>()
+        .forOp(request.number)
+        .where((m) => m.status != MutationStatus.enviado)
+        .length;
+
+    final botoes = [
+      _ActionButton(
+        label: 'Alterar empenhos',
+        icon: Icons.inventory_rounded,
+        onPressed: () => _empenhos(context),
+        foregroundColor: AppColors.primary,
+        borderColor: AppColors.primary,
+        width: compact ? double.infinity : 270,
+        height: compact ? 54 : 74,
+      ),
+      _ActionButton(
+        label: 'Transferir armazem',
+        icon: Icons.swap_horiz_rounded,
+        onPressed: () => _transferir(context),
+        foregroundColor: AppColors.primary,
+        borderColor: AppColors.primary,
+        width: compact ? double.infinity : 270,
+        height: compact ? 54 : 74,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Protheus',
+          style: TextStyle(
+            color: AppColors.text,
+            fontSize: compact ? 17 : 32,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          pendentes == 0
+              ? 'As mudancas ficam na fila ate a sincronizacao com o ERP.'
+              : '$pendentes alteracao${pendentes == 1 ? '' : 'es'} desta OP '
+                    'aguardando envio ao Protheus.',
+          style: TextStyle(
+            color: pendentes == 0 ? AppColors.muted : AppColors.orangeText,
+            fontSize: compact ? 13 : 16,
+          ),
+        ),
+        SizedBox(height: compact ? 18 : 36),
+        if (compact)
+          Column(
+            children: [
+              botoes[0],
+              const SizedBox(height: 12),
+              botoes[1],
+            ],
+          )
+        else
+          Wrap(spacing: 24, runSpacing: 16, children: botoes),
+      ],
+    );
+  }
+}
+
 class _WarehouseActions extends StatelessWidget {
   const _WarehouseActions({
     required this.onStart,
@@ -1059,11 +1213,7 @@ class _WarehouseActions extends StatelessWidget {
 class _WarehouseCreateForm extends StatefulWidget {
   const _WarehouseCreateForm({required this.onCreate, this.compact = false});
 
-  final void Function({
-    required String productCode,
-    required int quantity,
-    required String priority,
-  })
+  final void Function({required String numero, required String priority})
   onCreate;
   final bool compact;
 
@@ -1072,31 +1222,44 @@ class _WarehouseCreateForm extends StatefulWidget {
 }
 
 class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
-  late String _productCode;
+  /// A OP escolhida no seletor. Busca por código de produto, cartão da
+  /// estrutura e lista de OPs vivem no [ProtheusOpPicker], o mesmo que o
+  /// diálogo do painel usa — as duas telas se comportam igual.
+  OrdemDisponivel? _selecionada;
+
   var _priority = 'Media';
-  late final TextEditingController _quantityController;
-  String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _productCode = ProductionFlowStore.catalog.first.code;
-    _quantityController = TextEditingController(
-      text: '${ProductionFlowStore.catalog.first.defaultQuantity}',
-    );
-  }
-
-  @override
-  void dispose() {
-    _quantityController.dispose();
-    super.dispose();
+  /// OPs em aberto no Protheus que ainda não estão no fluxo, no formato que o
+  /// seletor compartilhado consome.
+  List<OrdemDisponivel> get _disponiveis {
+    final adotadas = context.read<ProductionFlowStore>().adoptedKeys;
+    final catalogo = context.read<ProductCatalogRepository>();
+    return context
+        .read<ProtheusOrderRepository>()
+        .open
+        .where((op) => !adotadas.contains(op.key))
+        .map(
+          (op) => OrdemDisponivel(
+            numero: op.displayNumber,
+            numeroLegivel: op.numeroLegivel,
+            produtoCodigo: op.productCode,
+            produto:
+                catalogo.findByCode(op.productCode)?.label ?? op.productCode,
+            quantidade: op.quantity,
+            previsao: op.dueAt,
+          ),
+        )
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final selected = ProductionFlowStore.catalog.firstWhere(
-      (item) => item.code == _productCode,
-    );
+    final escolhida = _selecionada;
+    final selected = escolhida == null
+        ? null
+        : context.read<ProductCatalogRepository>().findByCode(
+            escolhida.produtoCodigo,
+          );
 
     return Container(
       width: double.infinity,
@@ -1110,7 +1273,7 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Criar OP',
+            'Trazer OP do Protheus',
             style: TextStyle(
               color: AppColors.text,
               fontSize: widget.compact ? 22 : 32,
@@ -1119,39 +1282,17 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Crie uma OP local para testar o fluxo completo antes da integracao com o Protheus.',
+            'A OP ja existe no Protheus. Selecione qual entra no fluxo de producao.',
             style: TextStyle(
               color: AppColors.muted,
               fontSize: widget.compact ? 13 : 16,
             ),
           ),
           SizedBox(height: widget.compact ? 18 : 28),
-          DropdownButtonFormField<String>(
-            initialValue: _productCode,
-            decoration: const InputDecoration(labelText: 'Produto'),
-            items: [
-              for (final item in ProductionFlowStore.catalog)
-                DropdownMenuItem(value: item.code, child: Text(item.label)),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              final item = ProductionFlowStore.catalog.firstWhere(
-                (product) => product.code == value,
-              );
-              setState(() {
-                _productCode = value;
-                _quantityController.text = '${item.defaultQuantity}';
-              });
-            },
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _quantityController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Quantidade',
-              errorText: _error,
-            ),
+          ProtheusOpPicker(
+            catalogo: context.read<ProductCatalogRepository>(),
+            ordensDisponiveis: _disponiveis,
+            onSelecionar: (op) => setState(() => _selecionada = op),
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
@@ -1167,10 +1308,10 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
             },
           ),
           const SizedBox(height: 22),
-          _WarehouseItemsPreview(item: selected),
+          if (selected != null) _WarehouseItemsPreview(item: selected),
           SizedBox(height: widget.compact ? 22 : 32),
           _ActionButton(
-            label: 'Criar OP no almoxarifado',
+            label: 'Trazer OP para o almoxarifado',
             icon: Icons.add_rounded,
             onPressed: _submit,
             fillColor: AppColors.primary,
@@ -1184,16 +1325,9 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
   }
 
   void _submit() {
-    final quantity = int.tryParse(_quantityController.text.trim());
-    if (quantity == null || quantity <= 0) {
-      setState(() => _error = 'Informe uma quantidade valida.');
-      return;
-    }
-    widget.onCreate(
-      productCode: _productCode,
-      quantity: quantity,
-      priority: _priority,
-    );
+    final op = _selecionada;
+    if (op == null) return;
+    widget.onCreate(numero: op.numero, priority: _priority);
   }
 }
 
@@ -1277,7 +1411,7 @@ class _EmptyWarehouseState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Use a aba Criar OP para iniciar um fluxo local.',
+            'Use a aba Trazer OP para puxar uma OP do Protheus.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.muted,

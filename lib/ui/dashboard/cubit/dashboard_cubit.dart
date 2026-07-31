@@ -12,13 +12,13 @@ class DashboardCubit extends Cubit<DashboardState> {
     final ordens = await _repository.fetchOrdens();
     final armazenadas = await _repository.fetchOrdensArmazenadas();
     final responsaveis = await _repository.fetchResponsaveis();
-    final produtos = await _repository.fetchProdutos();
+    final disponiveis = await _repository.fetchOrdensDisponiveis();
     emit(
       state.copyWith(
         ordens: ordens,
         armazenadas: armazenadas,
         responsaveis: responsaveis,
-        produtos: produtos,
+        ordensDisponiveis: disponiveis,
       ),
     );
   }
@@ -80,12 +80,12 @@ class DashboardCubit extends Cubit<DashboardState> {
     );
     final ordens = await _repository.fetchOrdens();
     final armazenadas = await _repository.fetchOrdensArmazenadas();
-    final produtos = await _repository.fetchProdutos();
+    final disponiveis = await _repository.fetchOrdensDisponiveis();
     emit(
       state.copyWith(
         ordens: ordens,
         armazenadas: armazenadas,
-        produtos: produtos,
+        ordensDisponiveis: disponiveis,
       ),
     );
   }
@@ -96,12 +96,12 @@ class DashboardCubit extends Cubit<DashboardState> {
     await _repository.voltarStatus(op);
     final ordens = await _repository.fetchOrdens();
     final armazenadas = await _repository.fetchOrdensArmazenadas();
-    final produtos = await _repository.fetchProdutos();
+    final disponiveis = await _repository.fetchOrdensDisponiveis();
     emit(
       state.copyWith(
         ordens: ordens,
         armazenadas: armazenadas,
-        produtos: produtos,
+        ordensDisponiveis: disponiveis,
       ),
     );
   }
@@ -120,12 +120,12 @@ class DashboardCubit extends Cubit<DashboardState> {
     await _repository.cancelarOrdem(op);
     final ordens = await _repository.fetchOrdens();
     final armazenadas = await _repository.fetchOrdensArmazenadas();
-    final produtos = await _repository.fetchProdutos();
+    final disponiveis = await _repository.fetchOrdensDisponiveis();
     emit(
       state.copyWith(
         ordens: ordens,
         armazenadas: armazenadas,
-        produtos: produtos,
+        ordensDisponiveis: disponiveis,
         selectedOP: () => null,
         confirmCancel: false,
       ),
@@ -140,16 +140,17 @@ class DashboardCubit extends Cubit<DashboardState> {
     emit(state.copyWith(novaOPOpen: false));
   }
 
-  Future<void> createOP(NovaOrdemDTO dto) async {
-    await _repository.criarOrdem(dto);
+  /// Traz uma OP do Protheus para o fluxo. O VettiFlow não cria OPs.
+  Future<void> adotarOP(AdocaoOrdemDTO dto) async {
+    await _repository.adotarOrdem(dto);
     final ordens = await _repository.fetchOrdens();
     final armazenadas = await _repository.fetchOrdensArmazenadas();
-    final produtos = await _repository.fetchProdutos();
+    final disponiveis = await _repository.fetchOrdensDisponiveis();
     emit(
       state.copyWith(
         ordens: ordens,
         armazenadas: armazenadas,
-        produtos: produtos,
+        ordensDisponiveis: disponiveis,
         novaOPOpen: false,
       ),
     );

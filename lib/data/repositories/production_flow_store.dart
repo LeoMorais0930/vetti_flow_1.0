@@ -2,183 +2,29 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
-import 'package:vetti_flow_1_0/data/repositories/production_flow_persistence.dart';
+import 'package:vetti_flow_1_0/data/models/protheus_order.dart';
+import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/local_json_persistence.dart';
 
 class ProductionFlowStore extends ChangeNotifier {
-  ProductionFlowStore() {
-    if (!_restore(_persistence.read())) {
-      _orders.addAll(_seedOrders());
-      _persist();
-    }
+  /// Começa vazio: nenhuma OP existe aqui até ser adotada do Protheus.
+  ProductionFlowStore({required ProductCatalogRepository catalog})
+    // `this._catalog` exporia o nome privado do campo na chamada.
+    // ignore: prefer_initializing_formals
+    : _catalog = catalog {
+    _restore(_persistence.read());
     _persistence.listen((payload) {
       if (_restore(payload)) notifyListeners();
     });
   }
 
-  final _persistence = ProductionFlowPersistence();
-  final _orders = <ProductionOrderFlow>[];
-  var _nextSequence = 564351;
+  /// Dados de produto vêm de fora: o store é dono do fluxo, não do catálogo.
+  final ProductCatalogRepository _catalog;
 
-  static const catalog = [
-    ProductionCatalogItem(
-      code: 'SMARTALARM32-V6',
-      name: 'Central SmartAlarm32 V6.68',
-      defaultQuantity: 500,
-      components: [
-        ProductionComponent(
-          code: 'PCI-SA32-V6',
-          description: 'Placa principal SmartAlarm32 V6',
-          quantity: 1,
-          stock: 74,
-        ),
-        ProductionComponent(
-          code: 'MOD-EG912Y',
-          description: 'Modulo modem EG912Y',
-          quantity: 1,
-          stock: 38,
-        ),
-        ProductionComponent(
-          code: 'RF-SI4463',
-          description: 'Modulo RF Si4463',
-          quantity: 1,
-          stock: 112,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'CR4',
-      name: 'Modulo de 4 zonas com fio',
-      defaultQuantity: 3000,
-      components: [
-        ProductionComponent(
-          code: 'PCI-CR4',
-          description: 'PCI CR4 v2.1',
-          quantity: 1,
-          stock: 220,
-        ),
-        ProductionComponent(
-          code: 'CN-004V',
-          description: 'Conector barra 4 vias',
-          quantity: 4,
-          stock: 860,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'CR8',
-      name: 'Modulo de 8 zonas com fio',
-      defaultQuantity: 1200,
-      components: [
-        ProductionComponent(
-          code: 'PCI-CR8',
-          description: 'PCI CR8',
-          quantity: 1,
-          stock: 96,
-        ),
-        ProductionComponent(
-          code: 'CN-008V',
-          description: 'Conector barra 8 vias',
-          quantity: 4,
-          stock: 420,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'MAG-CURTO',
-      name: 'Sensor magnetico alcance curto',
-      defaultQuantity: 900,
-      components: [
-        ProductionComponent(
-          code: 'REED-MAG',
-          description: 'Chave reed magnetica',
-          quantity: 1,
-          stock: 1800,
-        ),
-        ProductionComponent(
-          code: 'BAT-CR2032',
-          description: 'Bateria CR2032',
-          quantity: 1,
-          stock: 2400,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'INFRA-LONGO',
-      name: 'Sensor infravermelho alcance longo',
-      defaultQuantity: 650,
-      components: [
-        ProductionComponent(
-          code: 'PIR-LR',
-          description: 'Elemento PIR longo alcance',
-          quantity: 1,
-          stock: 760,
-        ),
-        ProductionComponent(
-          code: 'LENTE-PIR',
-          description: 'Lente fresnel PIR',
-          quantity: 1,
-          stock: 830,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'SIRENE-SF',
-      name: 'Sirene sem fio',
-      defaultQuantity: 300,
-      components: [
-        ProductionComponent(
-          code: 'BUZZ-12V',
-          description: 'Transdutor sonoro 12V',
-          quantity: 1,
-          stock: 410,
-        ),
-        ProductionComponent(
-          code: 'RF-SI4463',
-          description: 'Modulo RF Si4463',
-          quantity: 1,
-          stock: 112,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'SMART-TECLADO',
-      name: 'Teclado inteligente',
-      defaultQuantity: 450,
-      components: [
-        ProductionComponent(
-          code: 'PCI-TCL-SMART',
-          description: 'PCI teclado inteligente',
-          quantity: 1,
-          stock: 128,
-        ),
-        ProductionComponent(
-          code: 'DISPLAY-OLED',
-          description: 'Display OLED compacto',
-          quantity: 1,
-          stock: 210,
-        ),
-      ],
-    ),
-    ProductionCatalogItem(
-      code: 'BOTAO-PANICO',
-      name: 'Botao de panico',
-      defaultQuantity: 800,
-      components: [
-        ProductionComponent(
-          code: 'PCI-PANICO',
-          description: 'PCI botao panico RF',
-          quantity: 1,
-          stock: 330,
-        ),
-        ProductionComponent(
-          code: 'SW-TATIL',
-          description: 'Chave tatil reforcada',
-          quantity: 1,
-          stock: 1900,
-        ),
-      ],
-    ),
-  ];
+  static const _storageKey = 'vetti_flow.production_flow.v1';
+
+  final _persistence = const LocalJsonPersistence(_storageKey);
+  final _orders = <ProductionOrderFlow>[];
 
   List<ProductionOrderFlow> get orders => List.unmodifiable(_orders);
 
@@ -196,29 +42,49 @@ class ProductionFlowStore extends ChangeNotifier {
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
+  /// Produto de uma OP já existente.
+  ///
+  /// Código desconhecido devolve um item vazio com o próprio código no lugar
+  /// do nome — nunca outro produto. O fallback antigo caía no primeiro item do
+  /// catálogo, o que com centenas de produtos reais seria um erro silencioso e
+  /// caro: a tela mostraria um produto que não é o da OP.
   ProductionCatalogItem catalogItem(String code) {
-    return catalog.firstWhere(
-      (item) => item.code == code,
-      orElse: () => catalog.first,
-    );
+    return _catalog.findByCode(code) ??
+        ProductionCatalogItem(code: code, name: code);
   }
 
-  ProductionOrderFlow createOrder({
-    required String productCode,
-    required int quantity,
-    required String priority,
-    required String operatorName,
+  /// Traz uma OP do Protheus para o fluxo do VettiFlow.
+  ///
+  /// O VettiFlow não cria OPs — o dono delas é o ERP. Adotar significa criar
+  /// o envelope de etapas em volta de uma OP que já existe lá.
+  ///
+  /// Lança [ArgumentError] se a OP estiver encerrada no Protheus: encerrada é
+  /// somente leitura. Adotar a mesma OP duas vezes devolve a que já existe.
+  ProductionOrderFlow adoptOrder(
+    ProtheusOrder source, {
+    String priority = 'Media',
+    String? operatorName,
     String? responsavel,
-    String? prazo,
   }) {
+    if (source.closed) {
+      throw ArgumentError.value(
+        source.displayNumber,
+        'source',
+        'OP encerrada no Protheus é somente leitura e não pode ser adotada',
+      );
+    }
+
+    final existing = orderByProtheusKey(source.key);
+    if (existing != null) return existing;
+
     final now = DateTime.now();
-    final product = catalogItem(productCode);
-    final number = 'OP-${now.year}-${_nextSequence++}';
+    final product = _catalog.findByCode(source.productCode);
     final order = ProductionOrderFlow(
-      number: number,
-      productCode: product.code,
-      productName: product.name,
-      quantity: quantity,
+      number: source.displayNumber,
+      protheusKey: source.key,
+      productCode: source.productCode,
+      productName: product?.name ?? source.productCode,
+      quantity: source.quantity,
       currentStage: ProductionStage.warehouse,
       status: ProductionRunStatus.waiting,
       priority: priority,
@@ -226,13 +92,28 @@ class ProductionFlowStore extends ChangeNotifier {
       updatedAt: now,
       operatorName: operatorName,
       responsavel: responsavel,
-      prazo: prazo,
+      prazo: source.dueAt,
     );
     _orders.insert(0, order);
     _persist();
     notifyListeners();
     return order;
   }
+
+  /// A OP já adotada que corresponde a esta chave do Protheus, se houver.
+  ProductionOrderFlow? orderByProtheusKey(ProtheusOrderKey key) {
+    for (final order in _orders) {
+      if (order.protheusKey == key) return order;
+    }
+    return null;
+  }
+
+  /// Chaves das OPs já trazidas para o fluxo, para a tela de seleção não
+  /// oferecer o que já está em produção.
+  Set<ProtheusOrderKey> get adoptedKeys => {
+    for (final order in _orders)
+      if (order.protheusKey != null) order.protheusKey!,
+  };
 
   void startStage(String number, {String? operatorName, String? operatorPin}) {
     _mutate(number, (order, now) {
@@ -558,10 +439,7 @@ class ProductionFlowStore extends ChangeNotifier {
 
   void _persist() {
     _persistence.write(
-      jsonEncode({
-        'nextSequence': _nextSequence,
-        'orders': _orders.map(_orderToJson).toList(),
-      }),
+      jsonEncode({'orders': _orders.map(_orderToJson).toList()}),
     );
   }
 
@@ -575,8 +453,6 @@ class ProductionFlowStore extends ChangeNotifier {
         ..addAll(
           orders.map((order) => _orderFromJson(order as Map<String, dynamic>)),
         );
-      _nextSequence =
-          (decoded['nextSequence'] as num?)?.toInt() ?? _nextSequence;
       return true;
     } catch (_) {
       return false;
@@ -594,6 +470,7 @@ class ProductionFlowStore extends ChangeNotifier {
       'priority': order.priority,
       'createdAt': order.createdAt.toIso8601String(),
       'updatedAt': order.updatedAt.toIso8601String(),
+      'protheusKey': order.protheusKey?.toJson(),
       'operatorName': order.operatorName,
       'responsavel': order.responsavel,
       'prazo': order.prazo,
@@ -624,6 +501,12 @@ class ProductionFlowStore extends ChangeNotifier {
       priority: json['priority'] as String? ?? 'Media',
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
+      // Ausente nos payloads gravados antes da integração: fica nulo.
+      protheusKey: json['protheusKey'] is Map<String, dynamic>
+          ? ProtheusOrderKey.fromJson(
+              json['protheusKey'] as Map<String, dynamic>,
+            )
+          : null,
       operatorName: json['operatorName'] as String?,
       responsavel: json['responsavel'] as String?,
       prazo: json['prazo'] as String?,
@@ -796,90 +679,5 @@ class ProductionFlowStore extends ChangeNotifier {
         return;
       }
     }
-  }
-
-  List<ProductionOrderFlow> _seedOrders() {
-    final now = DateTime.now();
-    return [
-      ProductionOrderFlow(
-        number: 'OP-00564-345',
-        productCode: 'CR4',
-        productName: 'Modulo de 4 zonas com fio',
-        quantity: 3000,
-        currentStage: ProductionStage.firmware,
-        status: ProductionRunStatus.waiting,
-        priority: 'Alta',
-        createdAt: now.subtract(const Duration(hours: 2)),
-        updatedAt: now.subtract(const Duration(minutes: 24)),
-      ),
-      ProductionOrderFlow(
-        number: 'OP-00564-348',
-        productCode: 'SMARTALARM32-V6',
-        productName: 'Central SmartAlarm32 V6.68',
-        quantity: 500,
-        currentStage: ProductionStage.soldering,
-        status: ProductionRunStatus.active,
-        priority: 'Media',
-        createdAt: now.subtract(const Duration(hours: 4)),
-        updatedAt: now.subtract(const Duration(minutes: 8)),
-        timings: {
-          ProductionStage.soldering: ProductionStageTiming(
-            startedAt: now.subtract(const Duration(minutes: 18)),
-          ),
-        },
-      ),
-      ProductionOrderFlow(
-        number: 'OP-00564-350',
-        productCode: 'INFRA-LONGO',
-        productName: 'Sensor infravermelho alcance longo',
-        quantity: 650,
-        currentStage: ProductionStage.testing,
-        status: ProductionRunStatus.paused,
-        priority: 'Baixa',
-        createdAt: now.subtract(const Duration(hours: 5)),
-        updatedAt: now.subtract(const Duration(minutes: 4)),
-        timings: {
-          ProductionStage.testing: ProductionStageTiming(
-            startedAt: now.subtract(const Duration(minutes: 35)),
-            pausedAt: now.subtract(const Duration(minutes: 4)),
-          ),
-        },
-      ),
-      ProductionOrderFlow(
-        number: 'OP-00564-351',
-        productCode: 'SMART-TECLADO',
-        productName: 'Teclado inteligente',
-        quantity: 450,
-        currentStage: ProductionStage.closing,
-        status: ProductionRunStatus.waiting,
-        priority: 'Media',
-        createdAt: now.subtract(const Duration(hours: 5)),
-        updatedAt: now.subtract(const Duration(minutes: 6)),
-      ),
-      ProductionOrderFlow(
-        number: 'OP-00564-352',
-        productCode: 'SIRENE-SF',
-        productName: 'Sirene sem fio',
-        quantity: 300,
-        currentStage: ProductionStage.expedition,
-        status: ProductionRunStatus.waiting,
-        priority: 'Media',
-        createdAt: now.subtract(const Duration(hours: 6)),
-        updatedAt: now.subtract(const Duration(minutes: 2)),
-      ),
-      ProductionOrderFlow(
-        number: 'OP-00563-992',
-        productCode: 'MAG-CURTO',
-        productName: 'Sensor magnetico alcance curto',
-        quantity: 900,
-        currentStage: ProductionStage.storage,
-        status: ProductionRunStatus.completed,
-        priority: 'Baixa',
-        createdAt: now.subtract(const Duration(hours: 8)),
-        updatedAt: now.subtract(const Duration(minutes: 30)),
-        storedQuantity: 180,
-        dispatchedQuantity: 720,
-      ),
-    ];
   }
 }

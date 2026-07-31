@@ -1,4 +1,8 @@
-class ProductionFlowPersistence {
+class LocalJsonPersistence {
+  const LocalJsonPersistence(this.key);
+
+  final String key;
+
   String? read() => null;
 
   void write(String payload) {}

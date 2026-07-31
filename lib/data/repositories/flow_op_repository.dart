@@ -2,15 +2,28 @@ import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
 
 /// Implementação de [OpRepository] que projeta o [ProductionFlowStore] (fonte
 /// única, compartilhada com as telas de operador e a TV) no modelo de view
 /// [OrdemProducao] usado pelo dashboard, e roteia as ações de volta ao store.
 class FlowOpRepository implements OpRepository {
-  FlowOpRepository(this._store);
+  FlowOpRepository(
+    this._store, {
+    required ProductCatalogRepository catalog,
+    required ProtheusOrderRepository protheusOrders,
+  }) // `this._catalog` exporia o nome privado do campo na chamada.
+    // ignore: prefer_initializing_formals
+    : _catalog = catalog,
+       _protheus = protheusOrders;
 
   final ProductionFlowStore _store;
+  final ProductCatalogRepository _catalog;
+
+  /// Fonte das OPs. O VettiFlow lê daqui; quem cria OP é o Protheus.
+  final ProtheusOrderRepository _protheus;
 
   static const _meses = [
     'jan',
@@ -56,25 +69,40 @@ class FlowOpRepository implements OpRepository {
   Future<List<Responsavel>> fetchResponsaveis() async => Responsavel.todos;
 
   @override
-  Future<List<String>> fetchProdutos() async {
-    return ProductionFlowStore.catalog.map((item) => item.label).toList();
+  Future<List<OrdemDisponivel>> fetchOrdensDisponiveis() async {
+    final adotadas = _store.adoptedKeys;
+    return _protheus.open
+        .where((op) => !adotadas.contains(op.key))
+        .map(
+          (op) => OrdemDisponivel(
+            numero: op.displayNumber,
+            numeroLegivel: op.numeroLegivel,
+            produtoCodigo: op.productCode,
+            produto:
+                _catalog.findByCode(op.productCode)?.label ?? op.productCode,
+            quantidade: op.quantity,
+            previsao: op.dueAt,
+          ),
+        )
+        .toList();
   }
 
   // ── Ações ──────────────────────────────────────────────────────────────
 
   @override
-  Future<OrdemProducao> criarOrdem(NovaOrdemDTO dto) async {
-    final catalogItem = ProductionFlowStore.catalog.firstWhere(
-      (item) => item.label == dto.produto || item.code == dto.produto,
-      orElse: () => ProductionFlowStore.catalog.first,
+  Future<OrdemProducao> adotarOrdem(AdocaoOrdemDTO dto) async {
+    final source = _protheus.open.firstWhere(
+      (op) => op.displayNumber == dto.numero,
+      orElse: () => throw ArgumentError.value(
+        dto.numero,
+        'numero',
+        'OP não está em aberto no Protheus',
+      ),
     );
-    final order = _store.createOrder(
-      productCode: catalogItem.code,
-      quantity: dto.qtd,
+    final order = _store.adoptOrder(
+      source,
       priority: dto.prioridade,
-      operatorName: '',
       responsavel: dto.responsavel,
-      prazo: dto.prazo,
     );
     return _toOrdem(order);
   }

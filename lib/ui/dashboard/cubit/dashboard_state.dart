@@ -1,3 +1,4 @@
+import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 
@@ -7,7 +8,15 @@ class DashboardState {
   final List<OrdemProducao> ordens;
   final List<OrdemArmazenada> armazenadas;
   final List<Responsavel> responsaveis;
-  final List<String> produtos;
+
+  /// Produtos das OPs que estão no fluxo, para o filtro do dashboard.
+  /// Sai das próprias OPs, não do catálogo inteiro: filtrar por um produto
+  /// que não tem OP nenhuma não serve para nada.
+  List<String> get produtosEmFluxo =>
+      ({for (final o in ordens) o.produto}.toList()..sort());
+
+  /// OPs em aberto no Protheus que ainda não entraram no fluxo.
+  final List<OrdemDisponivel> ordensDisponiveis;
   final ViewMode viewMode;
   final StatusOP? filtroStatus;
   final String filtroPeriodo;
@@ -23,7 +32,7 @@ class DashboardState {
     this.ordens = const [],
     this.armazenadas = const [],
     this.responsaveis = const [],
-    this.produtos = const [],
+    this.ordensDisponiveis = const [],
     this.viewMode = ViewMode.kanban,
     this.filtroStatus,
     this.filtroPeriodo = 'todos',
@@ -119,7 +128,7 @@ class DashboardState {
     List<OrdemProducao>? ordens,
     List<OrdemArmazenada>? armazenadas,
     List<Responsavel>? responsaveis,
-    List<String>? produtos,
+    List<OrdemDisponivel>? ordensDisponiveis,
     ViewMode? viewMode,
     StatusOP? Function()? filtroStatus,
     String? filtroPeriodo,
@@ -135,7 +144,7 @@ class DashboardState {
       ordens: ordens ?? this.ordens,
       armazenadas: armazenadas ?? this.armazenadas,
       responsaveis: responsaveis ?? this.responsaveis,
-      produtos: produtos ?? this.produtos,
+      ordensDisponiveis: ordensDisponiveis ?? this.ordensDisponiveis,
       viewMode: viewMode ?? this.viewMode,
       filtroStatus: filtroStatus != null ? filtroStatus() : this.filtroStatus,
       filtroPeriodo: filtroPeriodo ?? this.filtroPeriodo,

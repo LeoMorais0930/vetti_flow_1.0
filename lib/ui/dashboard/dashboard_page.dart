@@ -18,9 +18,79 @@ import 'package:vetti_flow_1_0/ui/dashboard/widgets/filter_bar.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/kpi_cards.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/mobile_app_bar.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/mobile_bottom_nav.dart';
+import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
+import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/warehouse_repository.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_detail_panel.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/sidebar.dart';
+
+/// Monta o diálogo de OP com tudo que ele precisa do contexto.
+///
+/// Existe porque as duas montagens (desktop e mobile) vivem em classes
+/// diferentes e precisam ficar idênticas — quando divergiram antes, uma delas
+/// passou a ter menos capacidade que a outra sem ninguém perceber.
+Widget buildNovaOpDialog(
+  BuildContext context,
+  DashboardState state,
+  DashboardCubit cubit, {
+  required bool isDesktop,
+}) {
+  final catalogo = context.read<ProductCatalogRepository>();
+  final fila = context.read<PendingMutationStore>();
+  final filial = context.read<FilialStore>().filial;
+
+  return NovaOpDialog(
+    ordensDisponiveis: state.ordensDisponiveis,
+    catalogo: catalogo,
+    armazens: context.read<WarehouseRepository>().armazens,
+    responsaveis: state.responsaveis.map((r) => r.nome).toList(),
+    onCreate: cubit.adotarOP,
+    onClose: cubit.closeNovaOP,
+    isDesktop: isDesktop,
+    saldoDisponivel: (produto, local) {
+      final item = catalogo.findByCode(produto);
+      if (item == null) return 0;
+      final saldos = fila.saldosEfetivos(
+        produto,
+        filial,
+        item.saldos,
+      );
+      for (final s in saldos) {
+        if (s.local == local) return s.disponivel;
+      }
+      return 0;
+    },
+    onSolicitar: (pedido, responsavel, prioridade) {
+      fila.enqueue(
+        (id, agora) => AberturaOpMutation(
+          id: id,
+          filial: filial,
+          criadoEm: agora,
+          autor: responsavel,
+          produto: pedido.produto,
+          produtoDescricao: pedido.produtoDescricao,
+          quantidade: pedido.quantidade,
+          localProducao: pedido.localProducao,
+          previsao: pedido.previsao,
+          observacao: pedido.observacao,
+          empenhos: pedido.empenhos,
+        ),
+      );
+      cubit.closeNovaOP();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Abertura de OP solicitada para ${pedido.produto}. '
+            'Vai para o Protheus na próxima sincronização.',
+          ),
+        ),
+      );
+    },
+  );
+}
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -119,7 +189,7 @@ class _DesktopLayout extends StatelessWidget {
                             responsaveis: state.responsaveis
                                 .map((r) => r.nome)
                                 .toList(),
-                            produtos: state.produtos,
+                            produtos: state.produtosEmFluxo,
                             viewMode: state.viewMode,
                             hasActiveFilters: state.hasActiveFilters,
                             resultText: state.resultText,
@@ -158,13 +228,7 @@ class _DesktopLayout extends StatelessWidget {
                 isDesktop: true,
               ),
             if (state.novaOPOpen)
-              NovaOpDialog(
-                produtos: state.produtos,
-                responsaveis: state.responsaveis.map((r) => r.nome).toList(),
-                onCreate: cubit.createOP,
-                onClose: cubit.closeNovaOP,
-                isDesktop: true,
-              ),
+              buildNovaOpDialog(context, state, cubit, isDesktop: true),
           ],
         );
       },
@@ -403,13 +467,7 @@ class _MobileLayout extends StatelessWidget {
               ),
             ),
             if (state.novaOPOpen)
-              NovaOpDialog(
-                produtos: state.produtos,
-                responsaveis: state.responsaveis.map((r) => r.nome).toList(),
-                onCreate: cubit.createOP,
-                onClose: cubit.closeNovaOP,
-                isDesktop: false,
-              ),
+              buildNovaOpDialog(context, state, cubit, isDesktop: false),
           ],
         );
       },
@@ -871,7 +929,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   value: _produto,
                   items: {
                     'todos': 'Todos os produtos',
-                    for (final p in widget.state.produtos) p: p,
+                    for (final p in widget.state.produtosEmFluxo) p: p,
                   },
                   onChanged: (v) => setState(() => _produto = v),
                 ),

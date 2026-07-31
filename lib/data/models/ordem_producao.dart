@@ -88,7 +88,9 @@ class OrdemProducao {
   final ProductionStage stage;
 
   /// Materiais (BOM) do produto: (descrição, quantidade por unidade).
-  final List<(String, int)> materiais;
+  /// A quantidade é fracionária: a estrutura do Protheus usa frações para
+  /// itens rateados.
+  final List<(String, double)> materiais;
 
   const OrdemProducao({
     required this.numero,
@@ -130,7 +132,7 @@ class OrdemProducao {
     bool? atrasada,
     String? prioridade,
     ProductionStage? stage,
-    List<(String, int)>? materiais,
+    List<(String, double)>? materiais,
   }) {
     return OrdemProducao(
       numero: numero ?? this.numero,

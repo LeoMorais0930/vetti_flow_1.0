@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/protheus/fila_protheus_page.dart';
 
 class VettiTopBar extends StatelessWidget {
   const VettiTopBar({
@@ -60,6 +64,9 @@ class VettiTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            const _FilialSelector(compact: true),
+            const SizedBox(width: 6),
+            const _FilaProtheusButton(compact: true),
             _LogoutButton(compact: true, dark: true, onPressed: logout),
           ],
         ),
@@ -97,6 +104,9 @@ class VettiTopBar extends StatelessWidget {
           const Spacer(),
           _OperatorBlock(name: operatorName, role: operatorRole, dark: true),
           const SizedBox(width: 16),
+          const _FilialSelector(),
+          const SizedBox(width: 10),
+          const _FilaProtheusButton(),
           _LogoutButton(dark: true, onPressed: logout),
         ],
       ),
@@ -338,6 +348,102 @@ class _OperatorBlock extends StatelessWidget {
     if (words.length == 1) return words.first.characters.first.toUpperCase();
     return '${words.first.characters.first}${words.last.characters.first}'
         .toUpperCase();
+  }
+}
+
+/// Atalho para a fila do Protheus, com a contagem do que está represado.
+///
+/// Fica na barra de todas as telas de operação de propósito: quem pede a
+/// alteração precisa ver que ela ainda não chegou ao ERP. Sem esse número à
+/// vista, a fila vira um lugar onde as coisas somem.
+class _FilaProtheusButton extends StatelessWidget {
+  const _FilaProtheusButton({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    // A barra também aparece em telas montadas fora da árvore de providers
+    // (testes de widget isolados, por exemplo); sem fila, o botão some.
+    final fila = context.watch<PendingMutationStore?>();
+    if (fila == null) return const SizedBox.shrink();
+
+    final pendentes = fila.awaitingCount;
+
+    return IconButton(
+      tooltip: pendentes == 0
+          ? 'Fila do Protheus'
+          : '$pendentes aguardando o Protheus',
+      onPressed: () =>
+          Navigator.of(context).pushNamed(FilaProtheusPage.rota),
+      icon: Badge(
+        isLabelVisible: pendentes > 0,
+        label: Text('$pendentes'),
+        backgroundColor: AppColors.orange,
+        child: Icon(
+          Icons.cloud_sync_rounded,
+          size: compact ? 20 : 22,
+          color: Colors.white.withValues(alpha: 0.92),
+        ),
+      ),
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilialSelector extends StatelessWidget {
+  const _FilialSelector({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FilialStore?>();
+    if (store == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 4 : 5,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: store.filial,
+          isDense: true,
+          dropdownColor: const Color(0xFF0B202E),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: compact ? 12 : 13,
+            fontWeight: FontWeight.w700,
+          ),
+          icon: Icon(
+            Icons.expand_more_rounded,
+            size: compact ? 16 : 18,
+            color: Colors.white70,
+          ),
+          items: [
+            for (final f in FilialStore.filiaisDisponiveis)
+              DropdownMenuItem(
+                value: f,
+                child: Text('Filial $f'),
+              ),
+          ],
+          onChanged: (v) {
+            if (v != null) store.setFilial(v);
+          },
+        ),
+      ),
+    );
   }
 }
 

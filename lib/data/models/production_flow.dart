@@ -1,3 +1,5 @@
+import 'package:vetti_flow_1_0/data/models/warehouse.dart';
+
 enum ProductionStage {
   warehouse,
   firmware,
@@ -343,6 +345,81 @@ class ProductionStageTiming {
   }
 }
 
+/// Identidade de uma OP no Protheus (tabela SC2).
+///
+/// A chave é composta — foi conferida no SX2 do ambiente da Vetti, não é
+/// suposição. `itemGrade` (C2_ITEMGRD) faz parte dela e costuma ser esquecido.
+///
+/// O VettiFlow não cria OPs: elas nascem no Protheus e são adotadas aqui. Esta
+/// chave é o que amarra o envelope de fluxo do VettiFlow à OP de verdade.
+class ProtheusOrderKey {
+  const ProtheusOrderKey({
+    required this.filial,
+    required this.numero,
+    required this.item,
+    required this.sequencia,
+    this.itemGrade = '',
+  });
+
+  /// C2_FILIAL
+  final String filial;
+
+  /// C2_NUM
+  final String numero;
+
+  /// C2_ITEM
+  final String item;
+
+  /// C2_SEQUEN
+  final String sequencia;
+
+  /// C2_ITEMGRD
+  final String itemGrade;
+
+  /// Formato concatenado usado em D3_OP e D4_OP: número + item + sequência.
+  String get opConcatenada => '$numero$item$sequencia';
+
+  /// Mesma chave, separada para leitura humana: `015942-01-001`.
+  ///
+  /// Os 11 dígitos grudados são o formato do banco, não algo para se mostrar
+  /// a quem opera.
+  String get numeroLegivel => '$numero-$item-$sequencia';
+
+  Map<String, dynamic> toJson() => {
+    'filial': filial,
+    'numero': numero,
+    'item': item,
+    'sequencia': sequencia,
+    'itemGrade': itemGrade,
+  };
+
+  factory ProtheusOrderKey.fromJson(Map<String, dynamic> json) {
+    return ProtheusOrderKey(
+      filial: json['filial'] as String? ?? '',
+      numero: json['numero'] as String? ?? '',
+      item: json['item'] as String? ?? '',
+      sequencia: json['sequencia'] as String? ?? '',
+      itemGrade: json['itemGrade'] as String? ?? '',
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProtheusOrderKey &&
+      other.filial == filial &&
+      other.numero == numero &&
+      other.item == item &&
+      other.sequencia == sequencia &&
+      other.itemGrade == itemGrade;
+
+  @override
+  int get hashCode => Object.hash(filial, numero, item, sequencia, itemGrade);
+
+  @override
+  String toString() =>
+      'ProtheusOrderKey($filial/$numero/$item/$sequencia/$itemGrade)';
+}
+
 class ProductionOrderFlow {
   const ProductionOrderFlow({
     required this.number,
@@ -354,6 +431,7 @@ class ProductionOrderFlow {
     required this.priority,
     required this.createdAt,
     required this.updatedAt,
+    this.protheusKey,
     this.operatorName,
     this.responsavel,
     this.prazo,
@@ -376,6 +454,11 @@ class ProductionOrderFlow {
   final String priority;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Identidade desta OP no Protheus. Nulo enquanto a OP for local (criada
+  /// pelo próprio app antes da integração) — fora isso, sempre preenchida.
+  final ProtheusOrderKey? protheusKey;
+
   final String? operatorName;
   final String? responsavel;
   final String? prazo;
@@ -446,6 +529,8 @@ class ProductionOrderFlow {
       priority: priority ?? this.priority,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      // Identidade não muda: quem é dono da OP é o Protheus.
+      protheusKey: protheusKey,
       operatorName: operatorName != null ? operatorName() : this.operatorName,
       responsavel: responsavel ?? this.responsavel,
       prazo: prazo ?? this.prazo,
@@ -463,20 +548,87 @@ class ProductionOrderFlow {
   }
 }
 
+/// Formata quantidade do Protheus, que pode ser fracionária.
+///
+/// A estrutura de produto usa frações para itens rateados (`0.001348` de um
+/// código de custo indireto, por exemplo). Mostrar isso como inteiro zeraria o
+/// valor, então as casas decimais só aparecem quando existem.
+String formatProductionQuantity(double value) {
+  if (value == value.roundToDouble()) return value.toInt().toString();
+  return value
+      .toStringAsFixed(6)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
+/// Produto do cadastro do Protheus (SB1) com sua estrutura (SG1) e saldo (SB2).
 class ProductionCatalogItem {
   const ProductionCatalogItem({
     required this.code,
     required this.name,
-    required this.defaultQuantity,
-    required this.components,
+    this.unit = '',
+    this.type = '',
+    this.group = '',
+    this.stock = 0,
+    this.committed = 0,
+    this.components = const [],
+    this.saldos = const [],
   });
 
+  /// B1_COD
   final String code;
+
+  /// B1_DESC
   final String name;
-  final int defaultQuantity;
+
+  /// B1_UM
+  final String unit;
+
+  /// B1_TIPO — PA, PI, MP, MC…
+  final String type;
+
+  /// B1_GRUPO
+  final String group;
+
+  /// Soma de B2_QATU. Instantâneo: saldo real muda o tempo todo e é por
+  /// almoxarifado — quando a consulta ao vivo existir, isto sai daqui.
+  final int stock;
+
+  /// Soma de B2_QEMP (empenhado).
+  final int committed;
+
   final List<ProductionComponent> components;
 
+  /// Posição por almoxarifado (SB2 quebrada por B2_LOCAL).
+  ///
+  /// É o que [stock] esconde: o mesmo total pode estar todo na expedição ou
+  /// espalhado por três linhas de produção, e transferir entre armazéns só faz
+  /// sentido com esse detalhe à mão.
+  ///
+  /// Vazia para produto sem posição de estoque em lugar nenhum.
+  final List<SaldoArmazem> saldos;
+
   String get label => '$code - $name';
+
+  int get available => stock - committed;
+
+  /// Saldo neste almoxarifado, ou zero se o produto não tem posição lá.
+  SaldoArmazem? saldoEm(String local, {String? filial}) {
+    for (final s in saldos) {
+      if (s.local == local && (filial == null || s.filial == filial)) return s;
+    }
+    return null;
+  }
+
+  /// Almoxarifados onde há algo deste produto, do maior saldo para o menor.
+  List<SaldoArmazem> saldosComEstoque({String? filial}) {
+    final lista =
+        saldos
+            .where((s) => (filial == null || s.filial == filial) && s.saldo != 0)
+            .toList()
+          ..sort((a, b) => b.saldo.compareTo(a.saldo));
+    return lista;
+  }
 }
 
 class ProductionComponent {
@@ -485,13 +637,24 @@ class ProductionComponent {
     required this.description,
     required this.quantity,
     required this.stock,
+    this.unit = '',
   });
 
   final String code;
   final String description;
-  final int quantity;
+
+  /// G1_QUANT — quantidade por unidade produzida, pode ser fracionária.
+  final double quantity;
+
   final int stock;
 
-  String get quantityLabel => '$quantity un';
+  /// B1_UM do componente.
+  final String unit;
+
+  /// Quantidade com a unidade real do componente: "1 PC", "0.001348 KG".
+  String get quantityWithUnit =>
+      '${formatProductionQuantity(quantity)}${unit.isEmpty ? '' : ' $unit'}';
+
+  String get quantityLabel => '${formatProductionQuantity(quantity)} un';
   String get stockLabel => '$stock un';
 }
