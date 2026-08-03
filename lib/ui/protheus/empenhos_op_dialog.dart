@@ -281,17 +281,22 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
                       linhas: _linhas,
                       armazens: armazens,
                       catalogo: catalogo,
+                      // A OP já existe: `_base` (o retrato real da SD4) é o
+                      // que ela já tem reservado, e o Protheus já conta isso
+                      // dentro do B2_QEMP. Passar op/baseOp soma essa reserva
+                      // de volta — senão o disponível descontaria a própria
+                      // OP duas vezes.
                       saldoDisponivel: (produto, local) {
                         final item = catalogo.findByCode(produto);
-                        if (item == null) return 0;
-                        for (final s in fila.saldosEfetivos(
-                          produto,
-                          widget.filial,
-                          item.saldos,
-                        )) {
-                          if (s.local == local) return s.disponivel;
-                        }
-                        return 0;
+                        if (item == null) return null;
+                        return fila.disponivelPara(
+                          produto: produto,
+                          filial: widget.filial,
+                          local: local,
+                          baseCatalogo: item.saldos,
+                          op: widget.op,
+                          baseOp: _base,
+                        );
                       },
                       onAlterar: (i, nova) =>
                           setState(() => _linhas[i] = nova),

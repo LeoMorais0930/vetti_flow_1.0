@@ -54,7 +54,7 @@ class SolicitacaoOpForm extends StatefulWidget {
   /// Chamado a cada mudança: o pedido, ou `null` enquanto faltar algo.
   final ValueChanged<SolicitacaoOp?> onMudar;
 
-  final double Function(String produto, String local)? saldoDisponivel;
+  final double? Function(String produto, String local)? saldoDisponivel;
 
   /// Almoxarifado sugerido para a produção — `01` (ALMOXARIFADO) na Vetti.
   final String localPadrao;

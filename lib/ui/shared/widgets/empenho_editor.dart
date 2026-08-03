@@ -40,8 +40,13 @@ class EmpenhoEditor extends StatelessWidget {
   final void Function(EmpenhoLinha nova) onIncluir;
 
   /// Saldo disponível de um componente num almoxarifado, para a linha avisar
-  /// quando o empenho passa do que há. Nulo esconde o aviso.
-  final double Function(String produto, String local)? saldoDisponivel;
+  /// quando o empenho passa do que há.
+  ///
+  /// `null` no retorno (com a função presente) diz "este produto não tem
+  /// posição neste armazém nesta filial" — diferente de saldo zero, que é uma
+  /// posição real só que vazia. A função ausente (`saldoDisponivel == null`)
+  /// desliga o aviso inteiro, para quem chama sem essa informação disponível.
+  final double? Function(String produto, String local)? saldoDisponivel;
 
   final bool somenteLeitura;
 
@@ -101,10 +106,9 @@ class EmpenhoEditor extends StatelessWidget {
                   armazens: armazens,
                   ultima: i == linhas.length - 1,
                   somenteLeitura: somenteLeitura,
-                  disponivel: saldoDisponivel?.call(
-                    linhas[i].produto,
-                    linhas[i].local,
-                  ),
+                  disponivelNoArmazem: saldoDisponivel == null
+                      ? null
+                      : (local) => saldoDisponivel!(linhas[i].produto, local),
                   onAlterar: (nova) => onAlterar(i, nova),
                   onRemover: () => onRemover(i),
                 ),
@@ -117,6 +121,7 @@ class EmpenhoEditor extends StatelessWidget {
             catalogo: catalogo,
             armazens: armazens,
             jaPresentes: {for (final l in linhas) '${l.produto}|${l.local}'},
+            saldoDisponivel: saldoDisponivel,
             onIncluir: onIncluir,
           ),
         ],
@@ -134,14 +139,19 @@ class _LinhaEmpenho extends StatefulWidget {
     required this.somenteLeitura,
     required this.onAlterar,
     required this.onRemover,
-    this.disponivel,
+    this.disponivelNoArmazem,
   });
 
   final EmpenhoLinha linha;
   final List<Armazem> armazens;
   final bool ultima;
   final bool somenteLeitura;
-  final double? disponivel;
+
+  /// Disponível deste componente, num armazém qualquer da lista — usada tanto
+  /// para o aviso da linha (no armazém escolhido) quanto para separar, no
+  /// dropdown, os armazéns onde o produto tem posição dos que não têm.
+  final double? Function(String local)? disponivelNoArmazem;
+
   final ValueChanged<EmpenhoLinha> onAlterar;
   final VoidCallback onRemover;
 
@@ -189,8 +199,17 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
 
   @override
   Widget build(BuildContext context) {
-    final disponivel = widget.disponivel;
+    final temInfoSaldo = widget.disponivelNoArmazem != null;
+    final disponivel = widget.disponivelNoArmazem?.call(widget.linha.local);
+    // `temInfoSaldo` e `disponivel == null` juntos dizem "este produto não tem
+    // posição neste armazém" — diferente de `disponivel == 0`, que é uma
+    // posição real e vazia.
+    final semPosicao = temInfoSaldo && disponivel == null;
     final falta = disponivel != null && widget.linha.quantidade > disponivel;
+    final armazensOrdenados = _ordenarArmazensPorPosicao(
+      widget.armazens,
+      widget.disponivelNoArmazem,
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -264,12 +283,23 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
                           color: AppColors.text,
                         ),
                         items: [
-                          for (final a in widget.armazens)
+                          for (final a in armazensOrdenados)
                             DropdownMenuItem(
                               value: a.codigo,
                               child: Text(
-                                a.codigo,
+                                _rotuloArmazem(
+                                  a.codigo,
+                                  widget.disponivelNoArmazem,
+                                ),
                                 overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: temPosicao(
+                                    a.codigo,
+                                    widget.disponivelNoArmazem,
+                                  )
+                                      ? null
+                                      : AppColors.muted,
+                                ),
                               ),
                             ),
                         ],
@@ -288,7 +318,16 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
               ],
             ],
           ),
-          if (falta)
+          if (semPosicao)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Este produto não tem posição no almox. ${widget.linha.local} '
+                'nesta filial.',
+                style: TextStyle(fontSize: 11, color: AppColors.orangeText),
+              ),
+            )
+          else if (falta)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
@@ -303,6 +342,37 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
   }
 }
 
+/// Separa os armazéns onde [disponivelNoArmazem] acha posição dos que não
+/// têm, sem tirar nenhum da lista — o operador ainda pode escolher um vazio
+/// de propósito (começar uma posição nova, por exemplo).
+///
+/// `null` em [disponivelNoArmazem] (a função em si, não o retorno) significa
+/// que não há essa informação para oferecer: devolve a lista como veio.
+List<Armazem> _ordenarArmazensPorPosicao(
+  List<Armazem> armazens,
+  double? Function(String local)? disponivelNoArmazem,
+) {
+  if (disponivelNoArmazem == null) return armazens;
+  final comPosicao = <Armazem>[];
+  final semPosicao = <Armazem>[];
+  for (final a in armazens) {
+    (disponivelNoArmazem(a.codigo) != null ? comPosicao : semPosicao).add(a);
+  }
+  return [...comPosicao, ...semPosicao];
+}
+
+bool temPosicao(
+  String codigo,
+  double? Function(String local)? disponivelNoArmazem,
+) => disponivelNoArmazem == null || disponivelNoArmazem(codigo) != null;
+
+String _rotuloArmazem(
+  String codigo,
+  double? Function(String local)? disponivelNoArmazem,
+) => temPosicao(codigo, disponivelNoArmazem)
+    ? codigo
+    : '$codigo (sem posição aqui)';
+
 /// Acrescenta um componente que não está na estrutura padrão.
 ///
 /// Acontece de verdade: substituição de componente em falta, reforço de
@@ -313,12 +383,17 @@ class _AdicionarComponente extends StatefulWidget {
     required this.armazens,
     required this.jaPresentes,
     required this.onIncluir,
+    this.saldoDisponivel,
   });
 
   final ProductCatalogRepository catalogo;
   final List<Armazem> armazens;
   final Set<String> jaPresentes;
   final ValueChanged<EmpenhoLinha> onIncluir;
+
+  /// Mesma função da [EmpenhoEditor] — usada aqui só para separar, no
+  /// dropdown, os armazéns onde o produto escolhido tem posição.
+  final double? Function(String produto, String local)? saldoDisponivel;
 
   @override
   State<_AdicionarComponente> createState() => _AdicionarComponenteState();
@@ -390,6 +465,13 @@ class _AdicionarComponenteState extends State<_AdicionarComponente> {
     }
 
     final produto = _produto;
+    final disponivelNoArmazem = produto == null || widget.saldoDisponivel == null
+        ? null
+        : (String local) => widget.saldoDisponivel!(produto.code, local);
+    final armazensOrdenados = _ordenarArmazensPorPosicao(
+      widget.armazens,
+      disponivelNoArmazem,
+    );
     final duplicado =
         produto != null &&
         widget.jaPresentes.contains('${produto.code}|$_local');
@@ -434,13 +516,20 @@ class _AdicionarComponenteState extends State<_AdicionarComponente> {
                     initialValue: _local.isNotEmpty ? _local : null,
                     decoration: campoDecoracao(),
                     items: [
-                      for (final a in widget.armazens)
+                      for (final a in armazensOrdenados)
                         DropdownMenuItem(
                           value: a.codigo,
                           child: Text(
-                            a.label,
+                            temPosicao(a.codigo, disponivelNoArmazem)
+                                ? a.label
+                                : '${a.label} (sem posição aqui)',
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12.5),
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: temPosicao(a.codigo, disponivelNoArmazem)
+                                  ? null
+                                  : AppColors.muted,
+                            ),
                           ),
                         ),
                     ],

@@ -39,7 +39,7 @@ class NovaOpDialog extends StatefulWidget {
 
   final VoidCallback onClose;
   final bool isDesktop;
-  final double Function(String produto, String local)? saldoDisponivel;
+  final double? Function(String produto, String local)? saldoDisponivel;
 
   const NovaOpDialog({
     super.key,

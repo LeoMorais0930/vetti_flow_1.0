@@ -50,18 +50,18 @@ Widget buildNovaOpDialog(
     onCreate: cubit.adotarOP,
     onClose: cubit.closeNovaOP,
     isDesktop: isDesktop,
+    // OP ainda não existe no Protheus: não há reserva própria para somar de
+    // volta (por isso `op` e `baseOp` ficam de fora), diferente da edição de
+    // uma OP já aberta em EmpenhosOpDialog.
     saldoDisponivel: (produto, local) {
       final item = catalogo.findByCode(produto);
-      if (item == null) return 0;
-      final saldos = fila.saldosEfetivos(
-        produto,
-        filial,
-        item.saldos,
+      if (item == null) return null;
+      return fila.disponivelPara(
+        produto: produto,
+        filial: filial,
+        local: local,
+        baseCatalogo: item.saldos,
       );
-      for (final s in saldos) {
-        if (s.local == local) return s.disponivel;
-      }
-      return 0;
     },
     onSolicitar: (pedido, responsavel, prioridade) {
       fila.enqueue(

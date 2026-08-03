@@ -396,6 +396,13 @@ class _FilaProtheusButton extends StatelessWidget {
   }
 }
 
+/// Mostra a filial em que o app está operando.
+///
+/// Era um dropdown até 03/08/2026, quando a Vetti operava 03 e 04. Hoje
+/// [FilialStore.filiaisDisponiveis] tem um único valor, então virou selo: não
+/// há escolha para oferecer, mas o operador continua vendo em que filial as
+/// mutações vão gravar — tirar o indicador de vez esconderia essa informação
+/// no dia em que outra filial voltar a existir.
 class _FilialSelector extends StatelessWidget {
   const _FilialSelector({this.compact = false});
 
@@ -416,42 +423,12 @@ class _FilialSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white24),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: store.filial,
-          isDense: true,
-          dropdownColor: const Color(0xFF0B202E),
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: compact ? 12 : 13,
-            fontWeight: FontWeight.w700,
-          ),
-          icon: Icon(
-            Icons.expand_more_rounded,
-            size: compact ? 16 : 18,
-            color: Colors.white70,
-          ),
-          // Fechado na barra estreita cabe só o código; aberto vale a palavra
-          // inteira, que é quando o operador precisa ter certeza do que escolhe.
-          selectedItemBuilder: compact
-              ? (context) => [
-                  for (final f in FilialStore.filiaisDisponiveis)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(f),
-                    ),
-                ]
-              : null,
-          items: [
-            for (final f in FilialStore.filiaisDisponiveis)
-              DropdownMenuItem(
-                value: f,
-                child: Text('Filial $f'),
-              ),
-          ],
-          onChanged: (v) {
-            if (v != null) store.setFilial(v);
-          },
+      child: Text(
+        compact ? store.filial : 'Filial ${store.filial}',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: compact ? 12 : 13,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

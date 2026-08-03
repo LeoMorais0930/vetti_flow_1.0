@@ -245,6 +245,11 @@ class _TransferenciaDialogState extends State<TransferenciaDialog> {
                             label: 'De',
                             child: _SeletorArmazem(
                               armazens: armazens,
+                              // Os que têm posição real deste produto na
+                              // filial — o resto (ex.: `02 USA`, `11 ESTOQUE
+                              // ADRIAN`) não desaparece, mas fica separado, em
+                              // vez de oferecido com a mesma cara.
+                              comPosicao: {for (final s in saldos) s.local},
                               valor: _origem,
                               onMudar: (v) => setState(() => _origem = v),
                             ),
@@ -263,6 +268,7 @@ class _TransferenciaDialogState extends State<TransferenciaDialog> {
                             label: 'Para',
                             child: _SeletorArmazem(
                               armazens: armazens,
+                              comPosicao: {for (final s in saldos) s.local},
                               valor: _destino,
                               onMudar: (v) => setState(() => _destino = v),
                             ),
@@ -376,26 +382,49 @@ class _SeletorArmazem extends StatelessWidget {
     required this.armazens,
     required this.valor,
     required this.onMudar,
+    this.comPosicao,
   });
 
   final List<Armazem> armazens;
   final String valor;
   final ValueChanged<String> onMudar;
 
+  /// Códigos onde o produto escolhido tem posição real na filial. `null`
+  /// (nenhum produto escolhido ainda, ou saldo não calculado) mostra todos
+  /// sem distinção.
+  final Set<String>? comPosicao;
+
   @override
   Widget build(BuildContext context) {
+    final posicao = comPosicao;
+    final ordenados = posicao == null
+        ? armazens
+        : [
+            for (final a in armazens)
+              if (posicao.contains(a.codigo)) a,
+            for (final a in armazens)
+              if (!posicao.contains(a.codigo)) a,
+          ];
+
     return DropdownButtonFormField<String>(
       isExpanded: true,
       initialValue: valor.isNotEmpty ? valor : null,
       decoration: campoDecoracao(hint: 'Armazém'),
       items: [
-        for (final a in armazens)
+        for (final a in ordenados)
           DropdownMenuItem(
             value: a.codigo,
             child: Text(
-              a.label,
+              posicao == null || posicao.contains(a.codigo)
+                  ? a.label
+                  : '${a.label} (sem posição aqui)',
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12.5),
+              style: TextStyle(
+                fontSize: 12.5,
+                color: posicao == null || posicao.contains(a.codigo)
+                    ? null
+                    : AppColors.muted,
+              ),
             ),
           ),
       ],

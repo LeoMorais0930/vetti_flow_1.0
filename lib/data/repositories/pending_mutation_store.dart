@@ -204,19 +204,56 @@ class PendingMutationStore extends ChangeNotifier {
     return resultado;
   }
 
-  /// O saldo por armazém de um produto depois das transferências na fila.
+  /// O saldo por armazém de um produto depois do que está na fila.
+  ///
+  /// Projeta as duas coisas que mudam saldo antes de chegar ao Protheus:
+  /// transferência move `saldo` entre locais; empenho (de **qualquer** OP,
+  /// menos [excluirOp] quando informado) muda `empenhado` no local de destino.
+  /// Empenho pendente precisa entrar aqui — senão duas OPs abertas no mesmo
+  /// dia podem pedir o mesmo material sem nenhum aviso, porque a reserva só
+  /// existiria de verdade depois que a API aplicasse no Protheus.
+  ///
+  /// [excluirOp] serve para quem está editando os empenhos de uma OP: a
+  /// própria fila dela não deve contar como "reservado por outra OP" — quem
+  /// soma de volta a reserva real dessa OP é [disponivelPara].
   ///
   /// Um destino que ainda não tem linha na SB2 aparece aqui zerado mais o que
-  /// entrou — é exatamente o que o Protheus criaria ao receber a transferência.
+  /// entrou — é exatamente o que o Protheus criaria ao receber a transferência
+  /// ou o empenho.
   List<SaldoArmazem> saldosEfetivos(
     String produto,
     String filial,
-    List<SaldoArmazem> base,
-  ) {
+    List<SaldoArmazem> base, {
+    String? excluirOp,
+  }) {
     final porLocal = {
       for (final s in base)
         if (s.filial == filial) s.local: s,
     };
+
+    SaldoArmazem linha(String local) =>
+        porLocal[local] ??
+        SaldoArmazem(filial: filial, local: local, saldo: 0, empenhado: 0);
+
+    void ajustarSaldo(String local, double delta) {
+      final atual = linha(local);
+      porLocal[local] = SaldoArmazem(
+        filial: filial,
+        local: local,
+        saldo: atual.saldo + delta,
+        empenhado: atual.empenhado,
+      );
+    }
+
+    void ajustarEmpenhado(String local, double delta) {
+      final atual = linha(local);
+      porLocal[local] = SaldoArmazem(
+        filial: filial,
+        local: local,
+        saldo: atual.saldo,
+        empenhado: atual.empenhado + delta,
+      );
+    }
 
     final transferencias =
         _mutations
@@ -230,30 +267,100 @@ class PendingMutationStore extends ChangeNotifier {
             .toList()
           ..sort((a, b) => a.criadoEm.compareTo(b.criadoEm));
 
-    SaldoArmazem linha(String local) =>
-        porLocal[local] ??
-        SaldoArmazem(filial: filial, local: local, saldo: 0, empenhado: 0);
-
     for (final t in transferencias) {
-      final origem = linha(t.localOrigem);
-      final destino = linha(t.localDestino);
-      porLocal[t.localOrigem] = SaldoArmazem(
-        filial: filial,
-        local: t.localOrigem,
-        saldo: origem.saldo - t.quantidade,
-        empenhado: origem.empenhado,
-      );
-      porLocal[t.localDestino] = SaldoArmazem(
-        filial: filial,
-        local: t.localDestino,
-        saldo: destino.saldo + t.quantidade,
-        empenhado: destino.empenhado,
-      );
+      ajustarSaldo(t.localOrigem, -t.quantidade);
+      ajustarSaldo(t.localDestino, t.quantidade);
+    }
+
+    final empenhos =
+        _mutations
+            .whereType<EmpenhoMutation>()
+            .where(
+              (m) =>
+                  m.produto == produto &&
+                  m.filial == filial &&
+                  m.status != MutationStatus.enviado &&
+                  (excluirOp == null || m.op != excluirOp),
+            )
+            .toList()
+          ..sort((a, b) => a.criadoEm.compareTo(b.criadoEm));
+
+    for (final m in empenhos) {
+      switch (m.operacao) {
+        case EmpenhoOperacao.excluir:
+          ajustarEmpenhado(
+            m.localAnterior ?? m.local,
+            -(m.quantidadeAnterior ?? 0),
+          );
+        case EmpenhoOperacao.incluir:
+          ajustarEmpenhado(m.local, m.quantidade);
+        case EmpenhoOperacao.alterar:
+          final anterior = m.localAnterior ?? m.local;
+          if (anterior != m.local) {
+            ajustarEmpenhado(anterior, -(m.quantidadeAnterior ?? 0));
+            ajustarEmpenhado(m.local, m.quantidade);
+          } else {
+            ajustarEmpenhado(m.local, m.quantidade - (m.quantidadeAnterior ?? 0));
+          }
+      }
     }
 
     final saida = porLocal.values.toList()
       ..sort((a, b) => a.local.compareTo(b.local));
     return saida;
+  }
+
+  /// O disponível de um produto num almoxarifado, para quem está mexendo na
+  /// OP [op].
+  ///
+  /// O `B2_QEMP` do Protheus já inclui a reserva que a própria OP tem hoje
+  /// naquele produto/local — sem somar de volta, o disponível descontaria essa
+  /// reserva duas vezes: uma porque já está no `B2_QEMP`, outra porque a tela
+  /// compara contra a quantidade que o operador está digitando para a mesma
+  /// linha. [baseOp] é o retrato real da SD4 daquela OP (o que [byOp] devolve,
+  /// **antes** de qualquer edição em tela ou fila) — é dali que vem o que "já é
+  /// dela" hoje de verdade.
+  ///
+  /// Quando [op] é `null` (abertura de OP nova, que ainda não existe no
+  /// Protheus), não há reserva própria para somar de volta — o comportamento
+  /// cai no de [saldosEfetivos].
+  ///
+  /// Devolve `null` quando o produto não tem nenhuma posição na filial e local
+  /// pedidos e nenhuma mutação pendente cria uma: sem isso, "não existe esse
+  /// armazém para este produto" e "saldo zero de verdade" ficam
+  /// indistinguíveis, e o Protheus trata os dois de formas bem diferentes.
+  double? disponivelPara({
+    required String produto,
+    required String filial,
+    required String local,
+    required List<SaldoArmazem> baseCatalogo,
+    String? op,
+    List<ProtheusEmpenho> baseOp = const [],
+  }) {
+    final efetivo = saldosEfetivos(
+      produto,
+      filial,
+      baseCatalogo,
+      excluirOp: op,
+    );
+
+    SaldoArmazem? linha;
+    for (final s in efetivo) {
+      if (s.local == local) {
+        linha = s;
+        break;
+      }
+    }
+    if (linha == null) return null;
+
+    var reservadoPelaPropriaOp = 0.0;
+    for (final e in baseOp) {
+      if (e.produto == produto && e.local == local) {
+        reservadoPelaPropriaOp += e.quantidade;
+      }
+    }
+
+    return linha.disponivel + reservadoPelaPropriaOp;
   }
 
   /// As OPs pedidas mas ainda não abertas no Protheus.
