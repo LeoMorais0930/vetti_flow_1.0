@@ -56,19 +56,29 @@ class VettiFlowApp extends StatelessWidget {
         // para quem precisa de `context.watch<HybridX>()` reagir ao refresh.
         // É a mesma instância nos dois — chamar refresh() atualiza os dois
         // lados juntos.
+        //
+        // O registro pela interface usa `create:` e não `.value:` de
+        // propósito: como as três agora são `ChangeNotifier` (para o refresh
+        // funcionar), `RepositoryProvider<X>.value(value: catalog)` faz o
+        // `provider` recusar em runtime ("Tried to use Provider with a
+        // subtype of Listenable... this is likely a mistake") — o pacote
+        // assume que perdemos o `ChangeNotifierProvider` de propósito. Não
+        // perdemos: ele está logo ali embaixo, registrado pelo tipo
+        // concreto. `create: (_) => catalog` devolve a mesma instância sem
+        // acionar essa checagem.
         ChangeNotifierProvider<HybridProductCatalogRepository>.value(
           value: catalog,
         ),
-        RepositoryProvider<ProductCatalogRepository>.value(value: catalog),
+        RepositoryProvider<ProductCatalogRepository>(create: (_) => catalog),
         ChangeNotifierProvider<HybridProtheusOrderRepository>.value(
           value: protheusOrders,
         ),
-        RepositoryProvider<ProtheusOrderRepository>.value(
-          value: protheusOrders,
+        RepositoryProvider<ProtheusOrderRepository>(
+          create: (_) => protheusOrders,
         ),
         RepositoryProvider<WarehouseRepository>.value(value: warehouses),
         ChangeNotifierProvider<HybridEmpenhoRepository>.value(value: empenhos),
-        RepositoryProvider<EmpenhoRepository>.value(value: empenhos),
+        RepositoryProvider<EmpenhoRepository>(create: (_) => empenhos),
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (context) => ProductionFlowStore(
             catalog: context.read<ProductCatalogRepository>(),
