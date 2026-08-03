@@ -6,6 +6,7 @@ import 'package:vetti_flow_1_0/data/models/warehouse.dart';
 import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
 
@@ -164,6 +165,8 @@ void main() {
           testOrder(numero: '015962'),
           testOrderNaFilial03(numero: '039736'),
         ]),
+        empenhos: AssetEmpenhoRepository(const []),
+        pendingMutations: PendingMutationStore(),
         // Lê a cada chamada, como o app faz com a FilialStore.
         filial: () => filial,
       );
@@ -188,6 +191,8 @@ void main() {
         protheusOrders: testProtheusRepository([
           testOrderNaFilial03(numero: '039736'),
         ]),
+        empenhos: AssetEmpenhoRepository(const []),
+        pendingMutations: PendingMutationStore(),
         filial: () => '04',
       );
 

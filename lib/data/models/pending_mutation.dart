@@ -11,6 +11,10 @@ enum MutationKind {
 
   /// Mover saldo de um almoxarifado para outro (SB2, via movimento interno).
   transferencia,
+
+  /// Apontar produção de uma OP: entrada do produto acabado + consumo dos
+  /// componentes (SD3, SC2.C2_QUJE, SD4, SB2).
+  baixaProducao,
 }
 
 /// Onde a mutação está no caminho entre o VettiFlow e o Protheus.
@@ -139,6 +143,10 @@ sealed class PendingMutation {
       MutationKind.aberturaOp => AberturaOpMutation._fromJson(json, payload),
       MutationKind.empenho => EmpenhoMutation._fromJson(json, payload),
       MutationKind.transferencia => TransferenciaMutation._fromJson(
+        json,
+        payload,
+      ),
+      MutationKind.baixaProducao => BaixaProducaoMutation._fromJson(
         json,
         payload,
       ),
@@ -581,6 +589,153 @@ final class TransferenciaMutation extends PendingMutation {
       localDestino: p['localDestino'] as String? ?? '',
       op: p['op'] as String?,
       motivo: p['motivo'] as String?,
+    );
+  }
+}
+
+/// Consumo de um componente numa baixa de produção.
+class BaixaComponente {
+  const BaixaComponente({
+    required this.produto,
+    required this.local,
+    required this.quantidade,
+  });
+
+  /// D4_COD
+  final String produto;
+
+  /// D4_LOCAL de onde o componente sai.
+  final String local;
+
+  /// Quanto foi consumido nesta baixa — proporcional ao empenho real da OP
+  /// (`D4_QTDEORI ÷ C2_QUANT`), não à estrutura padrão do produto: respeita
+  /// ajustes que o operador já fez no empenho.
+  final double quantidade;
+
+  Map<String, dynamic> toJson() => {
+    'produto': produto,
+    'local': local,
+    'quantidade': quantidade,
+  };
+
+  factory BaixaComponente.fromJson(Map<String, dynamic> json) =>
+      BaixaComponente(
+        produto: json['produto'] as String? ?? '',
+        local: json['local'] as String? ?? '',
+        quantidade: (json['quantidade'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// Apontamento de produção de uma OP que já existe no Protheus.
+///
+/// Existe porque até 03/08/2026 o VettiFlow não escrevia nada de volta no
+/// Protheus quando uma OP terminava de produzir: `SC2.C2_QUJE` (quantidade já
+/// produzida) e o consumo real de componente (SD3) nunca refletiam o que
+/// acontecia no chão de fábrica. Dispara só na expedição — é o único ponto do
+/// fluxo do VettiFlow que corresponde a "produção terminou" no sentido do
+/// Protheus; etapas internas (solda, mecânica) não têm contrapartida real lá.
+final class BaixaProducaoMutation extends PendingMutation {
+  const BaixaProducaoMutation({
+    required super.id,
+    required super.filial,
+    required super.criadoEm,
+    required super.autor,
+    required this.op,
+    required this.produto,
+    required this.produtoDescricao,
+    required this.quantidadeProduzida,
+    required this.localProducao,
+    required this.componentes,
+    super.status,
+    super.erro,
+    super.protheusRef,
+  });
+
+  /// D4_OP / C2_NUM+ITEM+SEQUEN concatenados — a OP que produziu.
+  final String op;
+
+  /// C2_PRODUTO — o produto acabado que entra em estoque.
+  final String produto;
+
+  final String produtoDescricao;
+
+  /// Quantidade produzida **nesta** baixa — não o total da OP. Vem de
+  /// `closedQuantity`, capturado no fechamento, que pode ser menor que o
+  /// planejado por defeito ou refugo.
+  final int quantidadeProduzida;
+
+  /// C2_LOCAL — onde o produto acabado entra.
+  final String localProducao;
+
+  /// O consumo de cada componente nesta baixa.
+  final List<BaixaComponente> componentes;
+
+  @override
+  MutationKind get kind => MutationKind.baixaProducao;
+
+  @override
+  String get titulo => 'Produção · OP $op';
+
+  @override
+  String get detalhe =>
+      '$produto · $quantidadeProduzida un · '
+      '${componentes.length} componente${componentes.length == 1 ? '' : 's'} '
+      'consumido${componentes.length == 1 ? '' : 's'}';
+
+  @override
+  Map<String, dynamic> payload() => {
+    'op': op,
+    'produto': produto,
+    'produtoDescricao': produtoDescricao,
+    'quantidadeProduzida': quantidadeProduzida,
+    'localProducao': localProducao,
+    'componentes': [for (final c in componentes) c.toJson()],
+  };
+
+  @override
+  BaixaProducaoMutation copyWithStatus({
+    required MutationStatus status,
+    String? erro,
+    String? protheusRef,
+  }) => BaixaProducaoMutation(
+    id: id,
+    filial: filial,
+    criadoEm: criadoEm,
+    autor: autor,
+    op: op,
+    produto: produto,
+    produtoDescricao: produtoDescricao,
+    quantidadeProduzida: quantidadeProduzida,
+    localProducao: localProducao,
+    componentes: componentes,
+    status: status,
+    erro: erro,
+    protheusRef: protheusRef ?? this.protheusRef,
+  );
+
+  static BaixaProducaoMutation _fromJson(
+    Map<String, dynamic> json,
+    Map<String, dynamic> p,
+  ) {
+    final env = _Envelope(json);
+    return BaixaProducaoMutation(
+      id: env.id,
+      filial: env.filial,
+      criadoEm: env.criadoEm,
+      autor: env.autor,
+      status: env.status,
+      erro: env.erro,
+      protheusRef: env.protheusRef,
+      op: p['op'] as String? ?? '',
+      produto: p['produto'] as String? ?? '',
+      produtoDescricao: p['produtoDescricao'] as String? ?? '',
+      quantidadeProduzida: (p['quantidadeProduzida'] as num?)?.toInt() ?? 0,
+      localProducao: p['localProducao'] as String? ?? '',
+      componentes:
+          (p['componentes'] as List<dynamic>?)
+              ?.map((c) => BaixaComponente.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 }

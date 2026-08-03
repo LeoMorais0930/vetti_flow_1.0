@@ -1,7 +1,10 @@
 import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
+import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
+import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
@@ -14,12 +17,18 @@ class FlowOpRepository implements OpRepository {
     this._store, {
     required ProductCatalogRepository catalog,
     required ProtheusOrderRepository protheusOrders,
+    required EmpenhoRepository empenhos,
+    required PendingMutationStore pendingMutations,
     required String Function() filial,
   }) // `this._catalog` e `this._filial` exporiam o nome privado do campo na
     // chamada.
     // ignore: prefer_initializing_formals
     : _catalog = catalog,
        _protheus = protheusOrders,
+       // ignore: prefer_initializing_formals
+       _empenhos = empenhos,
+       // ignore: prefer_initializing_formals
+       _pendingMutations = pendingMutations,
        // ignore: prefer_initializing_formals
        _filial = filial;
 
@@ -28,6 +37,13 @@ class FlowOpRepository implements OpRepository {
 
   /// Fonte das OPs. O VettiFlow lê daqui; quem cria OP é o Protheus.
   final ProtheusOrderRepository _protheus;
+
+  /// O empenho real (SD4) de uma OP — usado para saber a razão de consumo de
+  /// cada componente quando a OP produz.
+  final EmpenhoRepository _empenhos;
+
+  /// Onde a baixa de produção entra na fila, junto com as outras mutações.
+  final PendingMutationStore _pendingMutations;
 
   /// A filial em que se está operando, lida a cada chamada.
   ///
@@ -129,9 +145,69 @@ class FlowOpRepository implements OpRepository {
     if (order == null) return;
     if (order.currentStage == ProductionStage.expedition) {
       _store.completeExpedition(numero, storedQuantity: quantidadeArmazenada);
+      _enfileirarBaixaProducao(order);
     } else {
       _store.completeStage(numero);
     }
+  }
+
+  /// Aponta a produção desta OP no Protheus: entrada do produto acabado e
+  /// consumo dos componentes, proporcional ao empenho real da OP.
+  ///
+  /// Até 03/08/2026 o VettiFlow terminava a expedição sem escrever nada de
+  /// volta — `SC2.C2_QUJE` e o consumo real de componente (SD3) nunca
+  /// refletiam a produção. Dispara só aqui: é o único ponto do fluxo que
+  /// corresponde a "produção terminou" no sentido do Protheus, já que etapas
+  /// internas (solda, mecânica) não têm contrapartida real lá.
+  ///
+  /// Silencioso quando falta contexto para apontar algo de verdade: OP sem
+  /// vínculo com o Protheus (criada localmente antes da integração), sem
+  /// nenhuma quantidade fechada, ou cujo empenho não tem para onde ratear.
+  void _enfileirarBaixaProducao(ProductionOrderFlow order) {
+    if (order.closedQuantity <= 0) return;
+    final key = order.protheusKey;
+    if (key == null) return;
+
+    final filial = _filial();
+    final protheusOrder = _protheus.byKey(key);
+    if (protheusOrder == null || protheusOrder.quantity <= 0) return;
+
+    final op = key.opConcatenada;
+    final base = _empenhos.byOp(op, filial: filial);
+    final efetivo = _pendingMutations.empenhosEfetivos(op, base);
+
+    final componentes = [
+      for (final e in efetivo)
+        BaixaComponente(
+          produto: e.produto,
+          local: e.local,
+          // Proporcional ao empenho **real** da OP (D4_QTDEORI ÷ C2_QUANT),
+          // não à estrutura padrão do produto — respeita ajustes que a
+          // Gestora já fez no empenho. Uma linha incluída pela fila e ainda
+          // sem D4_QTDEORI (nunca existiu na SD4 real) usa a própria
+          // quantidade como razão: não há histórico anterior para ratear.
+          quantidade:
+              order.closedQuantity *
+              (e.quantidadeOriginal ?? e.quantidade) /
+              protheusOrder.quantity,
+        ),
+    ];
+    if (componentes.isEmpty) return;
+
+    _pendingMutations.enqueue(
+      (id, agora) => BaixaProducaoMutation(
+        id: id,
+        filial: filial,
+        criadoEm: agora,
+        autor: _responsavel(order),
+        op: op,
+        produto: order.productCode,
+        produtoDescricao: order.productName,
+        quantidadeProduzida: order.closedQuantity,
+        localProducao: protheusOrder.localProducao,
+        componentes: componentes,
+      ),
+    );
   }
 
   @override

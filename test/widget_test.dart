@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/app/app_routes.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
@@ -116,6 +118,8 @@ void main() {
       store,
       catalog: TestCatalog(),
       protheusOrders: protheus,
+      empenhos: AssetEmpenhoRepository(const []),
+      pendingMutations: PendingMutationStore(),
       filial: () => '04',
     );
     final order = store.adoptOrder(testOrder(numero: '015961'));
@@ -332,6 +336,8 @@ void main() {
       store,
       catalog: TestCatalog(),
       protheusOrders: testProtheusRepository(),
+      empenhos: AssetEmpenhoRepository(const []),
+      pendingMutations: PendingMutationStore(),
       filial: () => '04',
     );
 
@@ -583,6 +589,8 @@ void main() {
       store,
       catalog: TestCatalog(),
       protheusOrders: protheusRepo,
+      empenhos: AssetEmpenhoRepository(const []),
+      pendingMutations: PendingMutationStore(),
       filial: () => '04',
     );
     await tester.pumpWidget(
@@ -758,6 +766,8 @@ Widget _testApp({String initialRoute = '/login', ProductionFlowStore? store}) {
           flowStore,
           catalog: TestCatalog(),
           protheusOrders: protheus,
+          empenhos: AssetEmpenhoRepository(const []),
+          pendingMutations: PendingMutationStore(),
           filial: () => '04',
         ),
       ),

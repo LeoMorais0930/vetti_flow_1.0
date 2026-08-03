@@ -59,6 +59,7 @@ class PendingMutationStore extends ChangeNotifier {
           EmpenhoMutation() => m.op == op,
           TransferenciaMutation() => m.op == op,
           AberturaOpMutation() => m.protheusRef == op,
+          BaixaProducaoMutation() => m.op == op,
         },
       )
       .toList(growable: false);

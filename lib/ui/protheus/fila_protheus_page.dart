@@ -363,6 +363,7 @@ class _Cartao extends StatelessWidget {
     MutationKind.aberturaOp => Icons.note_add_rounded,
     MutationKind.empenho => Icons.inventory_2_rounded,
     MutationKind.transferencia => Icons.swap_horiz_rounded,
+    MutationKind.baixaProducao => Icons.precision_manufacturing_rounded,
   };
 
   @override

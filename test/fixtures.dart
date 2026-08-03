@@ -99,6 +99,7 @@ ProtheusOrder testOrder({
   String sequencia = '001',
   bool encerrada = false,
   String? previsao = '10/08/2026',
+  String localProducao = '10',
 }) {
   return ProtheusOrder(
     key: ProtheusOrderKey(
@@ -109,6 +110,7 @@ ProtheusOrder testOrder({
     ),
     productCode: produto,
     quantity: quantidade,
+    localProducao: localProducao,
     issuedAt: '29/07/2026',
     dueAt: previsao,
     closed: encerrada,

@@ -10,6 +10,7 @@ class ProtheusOrder {
     required this.key,
     required this.productCode,
     required this.quantity,
+    this.localProducao = '',
     this.issuedAt,
     this.dueAt,
     this.closed = false,
@@ -22,6 +23,9 @@ class ProtheusOrder {
 
   /// C2_QUANT
   final int quantity;
+
+  /// C2_LOCAL — onde o produto acabado entra quando a OP produz.
+  final String localProducao;
 
   /// C2_EMISSAO, já em dd/MM/yyyy.
   final String? issuedAt;
@@ -53,6 +57,7 @@ class ProtheusOrder {
       ),
       productCode: json['produto'] as String? ?? '',
       quantity: (json['quantidade'] as num?)?.toInt() ?? 0,
+      localProducao: json['local'] as String? ?? '',
       issuedAt: json['emissao'] as String?,
       dueAt: json['previsao'] as String?,
       closed: json['encerrada'] as bool? ?? false,

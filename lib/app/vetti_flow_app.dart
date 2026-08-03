@@ -88,6 +88,8 @@ class VettiFlowApp extends StatelessWidget {
               context.read<ProductionFlowStore>(),
               catalog: context.read<ProductCatalogRepository>(),
               protheusOrders: context.read<ProtheusOrderRepository>(),
+              empenhos: context.read<EmpenhoRepository>(),
+              pendingMutations: context.read<PendingMutationStore>(),
               filial: () => filiais.filial,
             );
           },
