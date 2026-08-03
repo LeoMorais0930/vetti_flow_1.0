@@ -66,6 +66,12 @@ class _WarehousePageState extends State<WarehousePage> {
     final catalog = context.read<ProductionFlowStore>().catalogItem(
       order.productCode,
     );
+    // O estoque exibido é o da filial em que se está operando. O campo
+    // `component.stock` soma as filiais e produz um total que não existe em
+    // nenhuma tela do Protheus — quem separa material precisa do número do
+    // lugar de onde ele vai tirar a peça.
+    final produtos = context.read<ProductCatalogRepository>();
+    final filial = context.read<FilialStore>().filial;
     return WarehouseRequest(
       number: 'REQ-${order.number.substring(order.number.length - 5)}',
       operation: order.number,
@@ -80,10 +86,21 @@ class _WarehousePageState extends State<WarehousePage> {
             code: component.code,
             description: component.description,
             quantity: '${component.quantity * order.quantity} un',
-            stock: component.stockLabel,
+            stock: _saldoLabel(produtos, component.code, filial),
           ),
       ],
     );
+  }
+
+  /// Saldo do componente na filial corrente, já formatado.
+  String _saldoLabel(
+    ProductCatalogRepository produtos,
+    String codigo,
+    String filial,
+  ) {
+    final item = produtos.findByCode(codigo);
+    if (item == null) return '—';
+    return '${formatProductionQuantity(item.saldoNa(filial))} un';
   }
 
   void _startPicking() {
@@ -122,7 +139,8 @@ class _WarehousePageState extends State<WarehousePage> {
   /// Traz uma OP do Protheus para o fluxo. O VettiFlow não cria OPs.
   void _adoptOrder({required String numero, required String priority}) {
     final protheus = context.read<ProtheusOrderRepository>();
-    final source = protheus.open
+    final source = protheus
+        .openIn(context.read<FilialStore>().filial)
         .where((op) => op.displayNumber == numero)
         .firstOrNull;
     if (source == null) {
@@ -1231,12 +1249,22 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
 
   /// OPs em aberto no Protheus que ainda não estão no fluxo, no formato que o
   /// seletor compartilhado consome.
-  List<OrdemDisponivel> get _disponiveis {
+  /// Para uso **dentro do build**: assina a filial, então trocar de filial na
+  /// barra superior refaz a lista na hora. Com `read` a tela continuava
+  /// mostrando as OPs da filial anterior sem nenhum sinal disso.
+  List<OrdemDisponivel> get _disponiveis =>
+      _disponiveisEm(context.watch<FilialStore>().filial);
+
+  /// Para uso **fora do build** (callbacks), onde `watch` não é permitido.
+  List<OrdemDisponivel> get _disponiveisAgora =>
+      _disponiveisEm(context.read<FilialStore>().filial);
+
+  List<OrdemDisponivel> _disponiveisEm(String filial) {
     final adotadas = context.read<ProductionFlowStore>().adoptedKeys;
     final catalogo = context.read<ProductCatalogRepository>();
     return context
         .read<ProtheusOrderRepository>()
-        .open
+        .openIn(filial)
         .where((op) => !adotadas.contains(op.key))
         .map(
           (op) => OrdemDisponivel(
@@ -1254,7 +1282,13 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
 
   @override
   Widget build(BuildContext context) {
-    final escolhida = _selecionada;
+    final disponiveis = _disponiveis;
+    // Uma OP escolhida antes da troca de filial não vale mais: ela é de um
+    // estoque que esta filial não alcança. Some da seleção em vez de virar um
+    // pedido que o Protheus recusaria depois.
+    final escolhida = disponiveis.any((o) => o.numero == _selecionada?.numero)
+        ? _selecionada
+        : null;
     final selected = escolhida == null
         ? null
         : context.read<ProductCatalogRepository>().findByCode(
@@ -1291,7 +1325,7 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
           SizedBox(height: widget.compact ? 18 : 28),
           ProtheusOpPicker(
             catalogo: context.read<ProductCatalogRepository>(),
-            ordensDisponiveis: _disponiveis,
+            ordensDisponiveis: disponiveis,
             onSelecionar: (op) => setState(() => _selecionada = op),
           ),
           const SizedBox(height: 14),
@@ -1327,6 +1361,12 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
   void _submit() {
     final op = _selecionada;
     if (op == null) return;
+    // Reconfere contra a filial corrente: o botão pode ter sido tocado com uma
+    // seleção feita antes da troca.
+    if (!_disponiveisAgora.any((o) => o.numero == op.numero)) {
+      setState(() => _selecionada = null);
+      return;
+    }
     widget.onCreate(numero: op.numero, priority: _priority);
   }
 }

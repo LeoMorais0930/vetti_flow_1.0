@@ -590,11 +590,15 @@ class ProductionCatalogItem {
   /// B1_GRUPO
   final String group;
 
-  /// Soma de B2_QATU. Instantâneo: saldo real muda o tempo todo e é por
-  /// almoxarifado — quando a consulta ao vivo existir, isto sai daqui.
+  /// Soma de B2_QATU de **todas as filiais e almoxarifados**.
+  ///
+  /// Não mostre este número ao operador: ele opera em uma filial, e o total da
+  /// empresa não bate com o que ele vê no Protheus. Para tela, use [saldoNa].
+  /// Serve para varredura e diagnóstico, onde o recorte por filial não importa.
   final int stock;
 
-  /// Soma de B2_QEMP (empenhado).
+  /// Soma de B2_QEMP (empenhado) de **todas as filiais**. Mesma ressalva de
+  /// [stock] — para tela, use [empenhadoNa].
   final int committed;
 
   final List<ProductionComponent> components;
@@ -610,7 +614,36 @@ class ProductionCatalogItem {
 
   String get label => '$code - $name';
 
+  /// Disponível somando **todas** as filiais. Ver a ressalva em [stock]: para
+  /// mostrar número ao operador, use [disponivelNa].
   int get available => stock - committed;
+
+  /// Saldo (B2_QATU) só da filial informada.
+  ///
+  /// É este o número que o operador precisa ver: ele opera em uma filial, e o
+  /// saldo da outra não está ao alcance dele. Somar as duas produz um total que
+  /// não existe em lugar nenhum do ERP.
+  double saldoNa(String filial) {
+    var total = 0.0;
+    for (final s in saldos) {
+      if (s.filial == filial) total += s.saldo;
+    }
+    return total;
+  }
+
+  /// Empenhado (B2_QEMP) só da filial informada.
+  double empenhadoNa(String filial) {
+    var total = 0.0;
+    for (final s in saldos) {
+      if (s.filial == filial) total += s.empenhado;
+    }
+    return total;
+  }
+
+  /// O que sobra para empenhar nesta filial. Pode ser negativo — o Protheus
+  /// permite estouro e a tela precisa mostrar isso, não esconder.
+  double disponivelNa(String filial) =>
+      saldoNa(filial) - empenhadoNa(filial);
 
   /// Saldo neste almoxarifado, ou zero se o produto não tem posição lá.
   SaldoArmazem? saldoEm(String local, {String? filial}) {
@@ -646,6 +679,11 @@ class ProductionComponent {
   /// G1_QUANT — quantidade por unidade produzida, pode ser fracionária.
   final double quantity;
 
+  /// Saldo do componente somando **todas as filiais** — o mesmo agregado de
+  /// `ProductionCatalogItem.stock`, denormalizado aqui na explosão da estrutura.
+  ///
+  /// Quem monta tela deve buscar o número da filial corrente no catálogo
+  /// (`findByCode(code)?.saldoNa(filial)`) em vez de usar este campo.
   final int stock;
 
   /// B1_UM do componente.

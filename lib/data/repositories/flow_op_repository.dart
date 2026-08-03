@@ -14,16 +14,27 @@ class FlowOpRepository implements OpRepository {
     this._store, {
     required ProductCatalogRepository catalog,
     required ProtheusOrderRepository protheusOrders,
-  }) // `this._catalog` exporia o nome privado do campo na chamada.
+    required String Function() filial,
+  }) // `this._catalog` e `this._filial` exporiam o nome privado do campo na
+    // chamada.
     // ignore: prefer_initializing_formals
     : _catalog = catalog,
-       _protheus = protheusOrders;
+       _protheus = protheusOrders,
+       // ignore: prefer_initializing_formals
+       _filial = filial;
 
   final ProductionFlowStore _store;
   final ProductCatalogRepository _catalog;
 
   /// Fonte das OPs. O VettiFlow lê daqui; quem cria OP é o Protheus.
   final ProtheusOrderRepository _protheus;
+
+  /// A filial em que se está operando, lida a cada chamada.
+  ///
+  /// É função e não valor porque o operador troca de filial pela barra
+  /// superior: guardar o valor no construtor congelaria a lista na filial em
+  /// que o app abriu.
+  final String Function() _filial;
 
   static const _meses = [
     'jan',
@@ -71,7 +82,8 @@ class FlowOpRepository implements OpRepository {
   @override
   Future<List<OrdemDisponivel>> fetchOrdensDisponiveis() async {
     final adotadas = _store.adoptedKeys;
-    return _protheus.open
+    return _protheus
+        .openIn(_filial())
         .where((op) => !adotadas.contains(op.key))
         .map(
           (op) => OrdemDisponivel(
@@ -91,12 +103,13 @@ class FlowOpRepository implements OpRepository {
 
   @override
   Future<OrdemProducao> adotarOrdem(AdocaoOrdemDTO dto) async {
-    final source = _protheus.open.firstWhere(
+    final filial = _filial();
+    final source = _protheus.openIn(filial).firstWhere(
       (op) => op.displayNumber == dto.numero,
       orElse: () => throw ArgumentError.value(
         dto.numero,
         'numero',
-        'OP não está em aberto no Protheus',
+        'OP não está em aberto no Protheus para a filial $filial',
       ),
     );
     final order = _store.adoptOrder(

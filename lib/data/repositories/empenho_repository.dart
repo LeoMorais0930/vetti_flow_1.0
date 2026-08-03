@@ -12,7 +12,12 @@ import 'package:vetti_flow_1_0/data/models/protheus_empenho.dart';
 /// `PendingMutationStore`, e é ela que projeta um sobre o outro.
 abstract class EmpenhoRepository {
   /// Empenhos de uma OP, na chave concatenada (número + item + sequência).
-  List<ProtheusEmpenho> byOp(String op);
+  ///
+  /// [filial] restringe ao que aquela filial enxerga. Hoje o número da OP não
+  /// se repete entre filiais no recorte embarcado, mas o Protheus numera **por
+  /// filial**: sem esse filtro, o dia em que repetir, uma filial passa a ver o
+  /// empenho da outra sem nenhum sinal de que isso aconteceu.
+  List<ProtheusEmpenho> byOp(String op, {String? filial});
 
   /// Todas as OPs que têm empenho carregado.
   Set<String> get opsComEmpenho;
@@ -52,8 +57,11 @@ class AssetEmpenhoRepository implements EmpenhoRepository {
   }
 
   @override
-  List<ProtheusEmpenho> byOp(String op) =>
-      List.unmodifiable(_porOp[op] ?? const []);
+  List<ProtheusEmpenho> byOp(String op, {String? filial}) {
+    final linhas = _porOp[op] ?? const <ProtheusEmpenho>[];
+    if (filial == null) return List.unmodifiable(linhas);
+    return List.unmodifiable(linhas.where((e) => e.filial == filial));
+  }
 
   @override
   Set<String> get opsComEmpenho => _porOp.keys.toSet();

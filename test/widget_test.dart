@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/app/app_routes.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
@@ -115,6 +116,7 @@ void main() {
       store,
       catalog: TestCatalog(),
       protheusOrders: protheus,
+      filial: () => '04',
     );
     final order = store.adoptOrder(testOrder(numero: '015961'));
     while (store.orders.first.currentStage != ProductionStage.expedition) {
@@ -330,6 +332,7 @@ void main() {
       store,
       catalog: TestCatalog(),
       protheusOrders: testProtheusRepository(),
+      filial: () => '04',
     );
 
     final created = await repository.adotarOrdem(
@@ -580,6 +583,7 @@ void main() {
       store,
       catalog: TestCatalog(),
       protheusOrders: protheusRepo,
+      filial: () => '04',
     );
     await tester.pumpWidget(
       MultiProvider(
@@ -743,6 +747,9 @@ Widget _testApp({String initialRoute = '/login', ProductionFlowStore? store}) {
       RepositoryProvider<ProductCatalogRepository>.value(value: TestCatalog()),
       RepositoryProvider<ProtheusOrderRepository>.value(value: protheus),
       ChangeNotifierProvider<ProductionFlowStore>.value(value: flowStore),
+      // As telas de operação leem a filial corrente para não mostrar OP nem
+      // saldo da outra. Os fixtures são todos da `04`.
+      ChangeNotifierProvider<FilialStore>(create: (_) => FilialStore()),
       ChangeNotifierProvider<OperatorAssignmentStore>(
         create: (_) => OperatorAssignmentStore(),
       ),
@@ -751,6 +758,7 @@ Widget _testApp({String initialRoute = '/login', ProductionFlowStore? store}) {
           flowStore,
           catalog: TestCatalog(),
           protheusOrders: protheus,
+          filial: () => '04',
         ),
       ),
     ],

@@ -12,17 +12,29 @@ import 'package:vetti_flow_1_0/data/models/protheus_order.dart';
 /// O VettiFlow enxerga **todas** as OPs, mas "ver todas" é consulta, não
 /// carregamento: quem entra no store de fluxo são apenas as OPs adotadas.
 abstract class ProtheusOrderRepository {
-  /// Todas as OPs, encerradas inclusive.
+  /// Todas as OPs de **todas as filiais**, encerradas inclusive.
+  ///
+  /// Não use para montar tela: quem opera está em uma filial e não pode ver a
+  /// OP da outra. Para tela, use [openIn].
   List<ProtheusOrder> get all;
 
-  /// Só as que podem ser operadas (C2_DATRF vazio).
+  /// Só as que podem ser operadas (C2_DATRF vazio), de todas as filiais.
+  /// Mesma ressalva de [all].
   List<ProtheusOrder> get open;
+
+  /// As operáveis de uma filial. O Protheus numera OP por filial, então "OP
+  /// 015942" só é identidade completa junto com a filial.
+  List<ProtheusOrder> openIn(String filial);
 
   ProtheusOrder? byKey(ProtheusOrderKey key);
 
   /// Busca por número, produto ou descrição do produto.
+  ///
+  /// Passe [filial] para restringir ao que a filial corrente enxerga; sem ela a
+  /// busca varre a empresa inteira.
   List<ProtheusOrder> search(
     String term, {
+    String? filial,
     bool onlyOpen = true,
     int limit = 50,
   });
@@ -63,6 +75,11 @@ class AssetProtheusOrderRepository implements ProtheusOrderRepository {
       _orders.where((o) => !o.closed).toList(growable: false);
 
   @override
+  List<ProtheusOrder> openIn(String filial) => _orders
+      .where((o) => !o.closed && o.key.filial == filial)
+      .toList(growable: false);
+
+  @override
   ProtheusOrder? byKey(ProtheusOrderKey key) {
     for (final order in _orders) {
       if (order.key == key) return order;
@@ -73,11 +90,17 @@ class AssetProtheusOrderRepository implements ProtheusOrderRepository {
   @override
   List<ProtheusOrder> search(
     String term, {
+    String? filial,
     bool onlyOpen = true,
     int limit = 50,
   }) {
     final needle = term.trim().toLowerCase();
-    final source = onlyOpen ? open : _orders;
+    var source = onlyOpen ? open : _orders;
+    if (filial != null) {
+      source = source
+          .where((o) => o.key.filial == filial)
+          .toList(growable: false);
+    }
     if (needle.isEmpty) return source.take(limit).toList(growable: false);
 
     final hits = <ProtheusOrder>[];

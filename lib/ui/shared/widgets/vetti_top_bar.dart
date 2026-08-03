@@ -431,6 +431,17 @@ class _FilialSelector extends StatelessWidget {
             size: compact ? 16 : 18,
             color: Colors.white70,
           ),
+          // Fechado na barra estreita cabe só o código; aberto vale a palavra
+          // inteira, que é quando o operador precisa ter certeza do que escolhe.
+          selectedItemBuilder: compact
+              ? (context) => [
+                  for (final f in FilialStore.filiaisDisponiveis)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(f),
+                    ),
+                ]
+              : null,
           items: [
             for (final f in FilialStore.filiaisDisponiveis)
               DropdownMenuItem(

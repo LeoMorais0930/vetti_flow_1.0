@@ -72,7 +72,7 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
   /// O retrato do Protheus, contra o qual o diff é calculado.
   late final List<ProtheusEmpenho> _base = context
       .read<EmpenhoRepository>()
-      .byOp(widget.op);
+      .byOp(widget.op, filial: widget.filial);
 
   late List<EmpenhoLinha> _linhas;
   final _motivo = TextEditingController();

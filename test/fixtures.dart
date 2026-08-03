@@ -115,6 +115,31 @@ ProtheusOrder testOrder({
   );
 }
 
+/// Mesma OP, na outra filial de produção da Vetti.
+///
+/// Existe para os testes de isolamento: o Protheus numera OP **por filial**, e
+/// quem opera na 04 não pode enxergar o que é da 03.
+ProtheusOrder testOrderNaFilial03({
+  required String numero,
+  String produto = '730-0863',
+  int quantidade = 500,
+  bool encerrada = false,
+}) {
+  return ProtheusOrder(
+    key: ProtheusOrderKey(
+      filial: '03',
+      numero: numero,
+      item: '01',
+      sequencia: '001',
+    ),
+    productCode: produto,
+    quantity: quantidade,
+    issuedAt: '29/07/2026',
+    dueAt: '10/08/2026',
+    closed: encerrada,
+  );
+}
+
 /// Quatro OPs em aberto e uma encerrada, esta última para exercitar a regra
 /// de somente leitura.
 List<ProtheusOrder> testProtheusOrders() => [

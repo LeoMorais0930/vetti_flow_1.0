@@ -79,11 +79,18 @@ class VettiFlowApp extends StatelessWidget {
           create: (_) => OperatorAssignmentStore(),
         ),
         RepositoryProvider<OpRepository>(
-          create: (context) => FlowOpRepository(
-            context.read<ProductionFlowStore>(),
-            catalog: context.read<ProductCatalogRepository>(),
-            protheusOrders: context.read<ProtheusOrderRepository>(),
-          ),
+          create: (context) {
+            // A filial entra como leitura tardia, não como valor: o operador
+            // troca de filial na barra superior e a lista de OPs precisa
+            // acompanhar sem recriar o repositório.
+            final filiais = context.read<FilialStore>();
+            return FlowOpRepository(
+              context.read<ProductionFlowStore>(),
+              catalog: context.read<ProductCatalogRepository>(),
+              protheusOrders: context.read<ProtheusOrderRepository>(),
+              filial: () => filiais.filial,
+            );
+          },
         ),
       ],
       child: MaterialApp(
