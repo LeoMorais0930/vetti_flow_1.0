@@ -22,6 +22,7 @@ import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
 import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_repository.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_detail_panel.dart';
@@ -38,7 +39,12 @@ Widget buildNovaOpDialog(
   DashboardCubit cubit, {
   required bool isDesktop,
 }) {
-  final catalogo = context.read<ProductCatalogRepository>();
+  // `watch`, não `read`: o saldo e a lista de OPs atualizam ao vivo, e este
+  // diálogo precisa reconstruir quando isso acontece (ver
+  // HybridProductCatalogRepository.refreshSaldo e
+  // HybridProtheusOrderRepository.refresh).
+  final catalogo = context.watch<HybridProductCatalogRepository>();
+  final protheusOrders = context.watch<HybridProtheusOrderRepository>();
   final fila = context.read<PendingMutationStore>();
   final filial = context.read<FilialStore>().filial;
 
@@ -50,6 +56,7 @@ Widget buildNovaOpDialog(
     onCreate: cubit.adotarOP,
     onClose: cubit.closeNovaOP,
     isDesktop: isDesktop,
+    retratoDesatualizado: protheusOrders.usandoRetratoDesatualizado,
     // OP ainda não existe no Protheus: não há reserva própria para somar de
     // volta (por isso `op` e `baseOp` ficam de fora), diferente da edição de
     // uma OP já aberta em EmpenhosOpDialog.

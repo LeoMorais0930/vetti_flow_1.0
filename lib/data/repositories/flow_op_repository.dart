@@ -97,6 +97,16 @@ class FlowOpRepository implements OpRepository {
 
   @override
   Future<List<OrdemDisponivel>> fetchOrdensDisponiveis() async {
+    // Busca fresco antes de listar: sem isso, duas instalações do app podem
+    // ver a mesma OP como disponível mesmo depois de uma delas já ter
+    // adotado — cada uma carregava só o retrato do momento em que abriu.
+    // Se a API estiver fora do alcance, `refresh` mantém o retrato anterior
+    // e liga `usandoRetratoDesatualizado`; a tela segue funcionando.
+    final protheus = _protheus;
+    if (protheus is HybridProtheusOrderRepository) {
+      await protheus.refresh(_filial());
+    }
+
     final adotadas = _store.adoptedKeys;
     return _protheus
         .openIn(_filial())
@@ -120,6 +130,13 @@ class FlowOpRepository implements OpRepository {
   @override
   Future<OrdemProducao> adotarOrdem(AdocaoOrdemDTO dto) async {
     final filial = _filial();
+    // Confere de novo com o Protheus bem no momento de adotar — reduz (não
+    // elimina: adotar ainda não é uma reserva atômica no servidor) a janela
+    // em que duas máquinas adotam a mesma OP a poucos segundos de distância.
+    final protheus = _protheus;
+    if (protheus is HybridProtheusOrderRepository) {
+      await protheus.refresh(filial);
+    }
     final source = _protheus.openIn(filial).firstWhere(
       (op) => op.displayNumber == dto.numero,
       orElse: () => throw ArgumentError.value(

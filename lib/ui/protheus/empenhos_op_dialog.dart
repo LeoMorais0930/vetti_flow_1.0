@@ -3,7 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_empenho.dart';
-import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart'
+    show EmpenhoRepository, HybridEmpenhoRepository;
 import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_repository.dart';
@@ -69,23 +70,47 @@ class EmpenhosOpDialog extends StatefulWidget {
 }
 
 class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
-  /// O retrato do Protheus, contra o qual o diff é calculado.
-  late final List<ProtheusEmpenho> _base = context
-      .read<EmpenhoRepository>()
-      .byOp(widget.op, filial: widget.filial);
+  /// O retrato do Protheus, contra o qual o diff é calculado. Só existe
+  /// depois de [_carregar] — busca ao vivo antes de mostrar qualquer campo
+  /// editável, para não trocar o chão debaixo de uma edição já em andamento.
+  late List<ProtheusEmpenho> _base;
 
   late List<EmpenhoLinha> _linhas;
   final _motivo = TextEditingController();
 
+  bool _carregando = true;
+
+  /// A busca ao vivo falhou — o que está na tela é o retrato anterior, não
+  /// confirmado agora contra o Protheus.
+  bool _usandoRetratoDesatualizado = false;
+
   @override
   void initState() {
     super.initState();
+    _carregar();
+  }
+
+  /// Busca o empenho real desta OP na API antes de montar a tela — feito uma
+  /// vez só, aqui, e não a cada rebuild, porque depois disso o operador pode
+  /// já ter começado a editar e sobrescrever `_linhas` embaixo dele seria
+  /// perder o que ele digitou.
+  Future<void> _carregar() async {
+    final empenhoRepo = context.read<EmpenhoRepository>();
+    if (empenhoRepo is HybridEmpenhoRepository) {
+      await empenhoRepo.refresh(widget.op, widget.filial);
+    }
+    if (!mounted) return;
+
+    _base = context.read<EmpenhoRepository>().byOp(
+      widget.op,
+      filial: widget.filial,
+    );
     final catalogo = context.read<ProductCatalogRepository>();
     final efetivo = context.read<PendingMutationStore>().empenhosEfetivos(
       widget.op,
       _base,
     );
-    _linhas = [
+    final linhas = [
       for (final e in efetivo)
         EmpenhoLinha(
           produto: e.produto,
@@ -95,6 +120,14 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
           quantidadeOriginal: e.quantidadeOriginal,
         ),
     ];
+
+    setState(() {
+      _linhas = linhas;
+      _carregando = false;
+      _usandoRetratoDesatualizado = empenhoRepo is HybridEmpenhoRepository
+          ? empenhoRepo.usandoRetratoDesatualizado
+          : false;
+    });
   }
 
   @override
@@ -203,6 +236,21 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
 
   @override
   Widget build(BuildContext context) {
+    if (_carregando) {
+      return Dialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: const Padding(
+          padding: EdgeInsets.all(48),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
+
     final catalogo = context.read<ProductCatalogRepository>();
     final armazens = context.read<WarehouseRepository>().armazens;
     final fila = context.watch<PendingMutationStore>();
@@ -266,6 +314,18 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_usandoRetratoDesatualizado)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Text(
+                          'Não deu para confirmar com o Protheus agora — '
+                          'mostrando o último retrato conhecido.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.orangeText,
+                          ),
+                        ),
+                      ),
                     if (_base.isEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 14),

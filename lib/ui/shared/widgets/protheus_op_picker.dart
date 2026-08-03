@@ -25,6 +25,7 @@ class ProtheusOpPicker extends StatefulWidget {
     required this.catalogo,
     required this.ordensDisponiveis,
     required this.onSelecionar,
+    this.retratoDesatualizado = false,
   });
 
   final ProductCatalogRepository catalogo;
@@ -34,6 +35,10 @@ class ProtheusOpPicker extends StatefulWidget {
 
   /// Chamado a cada mudança: a OP escolhida, ou `null` se ainda não há uma.
   final ValueChanged<OrdemDisponivel?> onSelecionar;
+
+  /// A busca ao vivo no Protheus falhou — esta lista pode não refletir OPs
+  /// adotadas em outra máquina agora mesmo.
+  final bool retratoDesatualizado;
 
   @override
   State<ProtheusOpPicker> createState() => _ProtheusOpPickerState();
@@ -87,6 +92,16 @@ class _ProtheusOpPickerState extends State<ProtheusOpPicker> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.retratoDesatualizado)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              'Não deu para confirmar com o Protheus agora — mostrando o '
+              'último retrato conhecido. Outra máquina pode já ter adotado '
+              'alguma destas OPs.',
+              style: TextStyle(fontSize: 12, color: AppColors.orangeText),
+            ),
+          ),
         ProdutoBusca(
           catalogo: widget.catalogo,
           opsPorProduto: _opsPorProduto,

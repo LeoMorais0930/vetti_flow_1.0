@@ -1,8 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/warehouse.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_sync_client.dart';
 
 /// Lançada quando se pede um produto que não existe no catálogo.
 class ProductNotFoundException implements Exception {
@@ -118,5 +120,80 @@ class AssetProductCatalogRepository implements ProductCatalogRepository {
   @override
   Map<String, String> get descriptions => {
     for (final item in _items) item.code: item.name,
+  };
+}
+
+/// Cadastro embarcado, com saldo (SB2) atualizado ao vivo produto a produto.
+///
+/// Nome, unidade e estrutura (SB1/SG1) continuam vindo do retrato embarcado —
+/// mudam raramente, e reextrair isso ao vivo a cada busca de produto seria
+/// custo sem ganho. O que precisa ser ao vivo é o saldo: é ele que diz se dá
+/// para empenhar mais um componente, e ficar velho aqui é o tipo de erro que
+/// só aparece quando alguém já mexeu na peça errada.
+///
+/// [refreshSaldo] busca só o produto pedido — não existe "atualizar o
+/// catálogo inteiro", ele tem centenas de itens e a tela só precisa de um de
+/// cada vez. Se a API estiver fora do alcance, mantém o saldo anterior
+/// daquele produto e liga [usandoRetratoDesatualizado].
+class HybridProductCatalogRepository extends ChangeNotifier
+    implements ProductCatalogRepository {
+  HybridProductCatalogRepository(
+    List<ProductionCatalogItem> inicial, {
+    required ProtheusSyncClient client,
+  }) // `this._client` exporia o nome privado do campo na chamada.
+    // ignore: prefer_initializing_formals
+    : _client = client,
+      _byCode = {for (final item in inicial) item.code: item};
+
+  final ProtheusSyncClient _client;
+  final Map<String, ProductionCatalogItem> _byCode;
+
+  bool _usandoRetratoDesatualizado = false;
+  String? _ultimoErro;
+
+  bool get usandoRetratoDesatualizado => _usandoRetratoDesatualizado;
+
+  String? get ultimoErro => _ultimoErro;
+
+  /// Busca o saldo de [produto] na filial e sobrepõe só essa parte do item.
+  /// Sem efeito se o produto não existir no catálogo — não há o que
+  /// sobrepor.
+  Future<void> refreshSaldo(String produto, String filial) async {
+    final atual = _byCode[produto];
+    if (atual == null) return;
+    try {
+      final saldosFrescos = await _client.saldosDoProduto(
+        produto,
+        filial: filial,
+      );
+      final deOutrasFiliais = atual.saldos.where((s) => s.filial != filial);
+      _byCode[produto] = atual.copyWith(
+        saldos: [...deOutrasFiliais, ...saldosFrescos],
+      );
+      _usandoRetratoDesatualizado = false;
+      _ultimoErro = null;
+    } on SyncUnavailableException catch (e) {
+      _usandoRetratoDesatualizado = true;
+      _ultimoErro = e.motivo;
+    }
+    notifyListeners();
+  }
+
+  @override
+  List<ProductionCatalogItem> get items => List.unmodifiable(_byCode.values);
+
+  @override
+  ProductionCatalogItem? findByCode(String code) => _byCode[code];
+
+  @override
+  ProductionCatalogItem requireByCode(String code) {
+    final item = _byCode[code];
+    if (item == null) throw ProductNotFoundException(code);
+    return item;
+  }
+
+  @override
+  Map<String, String> get descriptions => {
+    for (final item in _byCode.values) item.code: item.name,
   };
 }

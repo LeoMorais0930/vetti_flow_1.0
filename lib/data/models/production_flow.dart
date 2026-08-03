@@ -662,6 +662,21 @@ class ProductionCatalogItem {
           ..sort((a, b) => b.saldo.compareTo(a.saldo));
     return lista;
   }
+
+  /// Só para sobrepor saldo vindo ao vivo da API — cadastro e estrutura
+  /// (nome, unidade, componentes) não mudam por esse caminho, só [saldos].
+  ProductionCatalogItem copyWith({List<SaldoArmazem>? saldos}) =>
+      ProductionCatalogItem(
+        code: code,
+        name: name,
+        unit: unit,
+        type: type,
+        group: group,
+        stock: stock,
+        committed: committed,
+        components: components,
+        saldos: saldos ?? this.saldos,
+      );
 }
 
 class ProductionComponent {

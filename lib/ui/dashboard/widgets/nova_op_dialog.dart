@@ -41,6 +41,10 @@ class NovaOpDialog extends StatefulWidget {
   final bool isDesktop;
   final double? Function(String produto, String local)? saldoDisponivel;
 
+  /// A busca ao vivo de OPs abertas falhou — mostra o aviso na aba "trazer
+  /// existente".
+  final bool retratoDesatualizado;
+
   const NovaOpDialog({
     super.key,
     required this.ordensDisponiveis,
@@ -52,6 +56,7 @@ class NovaOpDialog extends StatefulWidget {
     required this.onClose,
     this.isDesktop = true,
     this.saldoDisponivel,
+    this.retratoDesatualizado = false,
   });
 
   @override
@@ -172,6 +177,7 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                       ordensDisponiveis: widget.ordensDisponiveis,
                       onSelecionar: (op) =>
                           setState(() => _selecionada = op),
+                      retratoDesatualizado: widget.retratoDesatualizado,
                     )
                   else
                     SolicitacaoOpForm(

@@ -23,36 +23,51 @@ class VettiFlowApp extends StatelessWidget {
     required this.protheusOrders,
     required this.warehouses,
     required this.empenhos,
-    required this.apiBaseUrl,
+    required this.syncClient,
   });
 
-  /// Produtos, estrutura e saldo por armazém — SB1/SG1/SB2 no Protheus.
-  final ProductCatalogRepository catalog;
+  /// Produtos e estrutura são estáticos (SB1/SG1); o saldo (SB2) atualiza ao
+  /// vivo produto a produto — ver [HybridProductCatalogRepository.refreshSaldo].
+  final HybridProductCatalogRepository catalog;
 
-  /// Ordens de produção — SC2. Retrato: o dono da OP continua sendo o ERP.
-  final ProtheusOrderRepository protheusOrders;
+  /// Ordens de produção — SC2. O dono da OP continua sendo o ERP; a lista de
+  /// abertas atualiza ao vivo — ver [HybridProtheusOrderRepository.refresh].
+  final HybridProtheusOrderRepository protheusOrders;
 
-  /// Almoxarifados — NNR.
+  /// Almoxarifados — NNR. Cadastro puro, não muda: continua estático.
   final WarehouseRepository warehouses;
 
-  /// Empenhos das OPs em aberto — SD4.
-  final EmpenhoRepository empenhos;
+  /// Empenhos das OPs em aberto — SD4, ao vivo por OP — ver
+  /// [HybridEmpenhoRepository.refresh].
+  final HybridEmpenhoRepository empenhos;
 
-  /// Raiz da API que leva a fila de mutações ao Protheus.
-  final String apiBaseUrl;
+  /// Cliente da API — leva a fila de mutações e traz a leitura ao vivo.
+  /// Construído em `main.dart` porque os repositórios híbridos já precisam
+  /// dele antes da árvore de widgets existir.
+  final ProtheusSyncClient syncClient;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // As origens de dados do Protheus chegam prontas de fora. Hoje são as
-        // implementações que leem o recorte do banco migrado; trocar por
-        // implementações que falam com a API não exige mudar tela nenhuma.
+        // Registrados nos dois tipos: pela interface, para os ~20 pontos de
+        // tela que já leem `context.read<ProtheusOrderRepository>()` etc. sem
+        // saber que agora existe atualização ao vivo; e pelo tipo concreto,
+        // para quem precisa de `context.watch<HybridX>()` reagir ao refresh.
+        // É a mesma instância nos dois — chamar refresh() atualiza os dois
+        // lados juntos.
+        ChangeNotifierProvider<HybridProductCatalogRepository>.value(
+          value: catalog,
+        ),
         RepositoryProvider<ProductCatalogRepository>.value(value: catalog),
+        ChangeNotifierProvider<HybridProtheusOrderRepository>.value(
+          value: protheusOrders,
+        ),
         RepositoryProvider<ProtheusOrderRepository>.value(
           value: protheusOrders,
         ),
         RepositoryProvider<WarehouseRepository>.value(value: warehouses),
+        ChangeNotifierProvider<HybridEmpenhoRepository>.value(value: empenhos),
         RepositoryProvider<EmpenhoRepository>.value(value: empenhos),
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (context) => ProductionFlowStore(
@@ -65,10 +80,7 @@ class VettiFlowApp extends StatelessWidget {
         ChangeNotifierProvider<PendingMutationStore>(
           create: (_) => PendingMutationStore(),
         ),
-        RepositoryProvider<ProtheusSyncClient>(
-          create: (_) => ProtheusSyncClient(baseUrl: apiBaseUrl),
-          dispose: (client) => client.dispose(),
-        ),
+        RepositoryProvider<ProtheusSyncClient>.value(value: syncClient),
         ChangeNotifierProvider<MutationSyncService>(
           create: (context) => MutationSyncService(
             store: context.read<PendingMutationStore>(),

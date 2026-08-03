@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:vetti_flow_1_0/data/models/protheus_empenho.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_sync_client.dart';
 
 /// Fonte dos empenhos das OPs — o Protheus, via SD4.
 ///
@@ -65,4 +67,59 @@ class AssetEmpenhoRepository implements EmpenhoRepository {
 
   @override
   Set<String> get opsComEmpenho => _porOp.keys.toSet();
+}
+
+/// Retrato do asset, atualizado ao vivo quando a API responde.
+///
+/// [refresh] busca o empenho real (SD4) de **uma** OP só — é assim que o
+/// editor de empenho conhece o estado atual antes de a Gestora editar. Se a
+/// API estiver fora do alcance, mantém o retrato anterior daquela OP e liga
+/// [usandoRetratoDesatualizado] em vez de travar a tela. Ver
+/// [HybridProtheusOrderRepository] para o mesmo padrão aplicado à lista de OPs.
+class HybridEmpenhoRepository extends ChangeNotifier
+    implements EmpenhoRepository {
+  HybridEmpenhoRepository(
+    List<ProtheusEmpenho> inicial, {
+    required ProtheusSyncClient client,
+  }) // `this._client` exporia o nome privado do campo na chamada.
+    // ignore: prefer_initializing_formals
+    : _client = client,
+      _todasLinhas = [...inicial],
+      _atual = AssetEmpenhoRepository(inicial);
+
+  final ProtheusSyncClient _client;
+  final List<ProtheusEmpenho> _todasLinhas;
+  AssetEmpenhoRepository _atual;
+
+  bool _usandoRetratoDesatualizado = false;
+  String? _ultimoErro;
+
+  bool get usandoRetratoDesatualizado => _usandoRetratoDesatualizado;
+
+  String? get ultimoErro => _ultimoErro;
+
+  /// Busca o empenho de [op] na API e substitui só as linhas dessa OP — o
+  /// resto do retrato (outras OPs) fica como estava.
+  Future<void> refresh(String op, String filial) async {
+    try {
+      final linhas = await _client.empenhosDaOp(op, filial: filial);
+      _todasLinhas
+        ..removeWhere((e) => e.op == op)
+        ..addAll(linhas);
+      _atual = AssetEmpenhoRepository(_todasLinhas);
+      _usandoRetratoDesatualizado = false;
+      _ultimoErro = null;
+    } on SyncUnavailableException catch (e) {
+      _usandoRetratoDesatualizado = true;
+      _ultimoErro = e.motivo;
+    }
+    notifyListeners();
+  }
+
+  @override
+  List<ProtheusEmpenho> byOp(String op, {String? filial}) =>
+      _atual.byOp(op, filial: filial);
+
+  @override
+  Set<String> get opsComEmpenho => _atual.opsComEmpenho;
 }

@@ -1247,13 +1247,30 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
 
   var _priority = 'Media';
 
+  @override
+  void initState() {
+    super.initState();
+    // Busca fresco ao abrir o formulário — mesma lógica de
+    // FlowOpRepository.fetchOrdensDisponiveis, aqui porque esta tela lê o
+    // repositório direto em vez de passar pelo OpRepository do dashboard.
+    final protheus = context.read<ProtheusOrderRepository>();
+    if (protheus is HybridProtheusOrderRepository) {
+      protheus.refresh(context.read<FilialStore>().filial);
+    }
+  }
+
   /// OPs em aberto no Protheus que ainda não estão no fluxo, no formato que o
   /// seletor compartilhado consome.
   /// Para uso **dentro do build**: assina a filial, então trocar de filial na
   /// barra superior refaz a lista na hora. Com `read` a tela continuava
   /// mostrando as OPs da filial anterior sem nenhum sinal disso.
-  List<OrdemDisponivel> get _disponiveis =>
-      _disponiveisEm(context.watch<FilialStore>().filial);
+  List<OrdemDisponivel> get _disponiveis {
+    // Também assina o repositório híbrido: sem isso, o refresh disparado no
+    // initState chegaria mas a tela não recontruiria para mostrar o
+    // resultado.
+    context.watch<HybridProtheusOrderRepository?>();
+    return _disponiveisEm(context.watch<FilialStore>().filial);
+  }
 
   /// Para uso **fora do build** (callbacks), onde `watch` não é permitido.
   List<OrdemDisponivel> get _disponiveisAgora =>
@@ -1327,6 +1344,9 @@ class _WarehouseCreateFormState extends State<_WarehouseCreateForm> {
             catalogo: context.read<ProductCatalogRepository>(),
             ordensDisponiveis: disponiveis,
             onSelecionar: (op) => setState(() => _selecionada = op),
+            retratoDesatualizado:
+                context.watch<HybridProtheusOrderRepository?>()?.usandoRetratoDesatualizado ??
+                false,
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(

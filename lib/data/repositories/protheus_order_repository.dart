@@ -1,8 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_order.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_sync_client.dart';
 
 /// Fonte das ordens de produção — o Protheus, via SC2.
 ///
@@ -116,4 +118,90 @@ class AssetProtheusOrderRepository implements ProtheusOrderRepository {
     }
     return hits;
   }
+}
+
+/// Retrato do asset, atualizado ao vivo quando a API responde.
+///
+/// Existe porque ler só o retrato estático deixa duas instalações do
+/// VettiFlow (duas máquinas, por exemplo) enxergando OPs abertas
+/// desatualizadas — cada uma pode achar que uma OP já adotada em outra
+/// máquina ainda está livre. [refresh] busca o que está aberto agora no
+/// Protheus; se a API estiver fora do alcance, mantém o retrato anterior e
+/// liga [usandoRetratoDesatualizado] em vez de travar a tela — o chão de
+/// fábrica continua funcionando sem o Protheus, como sempre funcionou.
+///
+/// Todos os métodos da interface continuam síncronos: leem de um
+/// [AssetProtheusOrderRepository] interno, trocado inteiro a cada [refresh]
+/// bem-sucedido. Quem quer refletir a atualização escuta este
+/// [ChangeNotifier] (mesmo padrão de [FilialStore]/[PendingMutationStore]).
+class HybridProtheusOrderRepository extends ChangeNotifier
+    implements ProtheusOrderRepository {
+  HybridProtheusOrderRepository(
+    List<ProtheusOrder> inicial, {
+    required ProtheusSyncClient client,
+    Map<String, String>? descriptions,
+  }) // `this._client` exporia o nome privado do campo na chamada.
+    // ignore: prefer_initializing_formals
+    : _client = client,
+      _descriptions = descriptions ?? const {},
+       _atual = AssetProtheusOrderRepository(
+         inicial,
+         descriptions: descriptions,
+       );
+
+  final ProtheusSyncClient _client;
+  final Map<String, String> _descriptions;
+  AssetProtheusOrderRepository _atual;
+
+  bool _usandoRetratoDesatualizado = false;
+  String? _ultimoErro;
+
+  /// Verdadeiro quando o último [refresh] falhou — o que está aqui é o
+  /// retrato anterior, não confirmado agora contra o Protheus.
+  bool get usandoRetratoDesatualizado => _usandoRetratoDesatualizado;
+
+  String? get ultimoErro => _ultimoErro;
+
+  /// Busca as OPs abertas de [filial] na API e substitui o retrato dessa
+  /// filial pelo que voltou. OPs de outras filiais e OPs já encerradas desta
+  /// mesma filial continuam vindo do retrato original — a API só devolve o
+  /// que está aberto agora.
+  Future<void> refresh(String filial) async {
+    try {
+      final abertas = await _client.opsAbertas(filial: filial);
+      final preservadas = _atual.all.where(
+        (o) => o.key.filial != filial || o.closed,
+      );
+      _atual = AssetProtheusOrderRepository(
+        [...preservadas, ...abertas],
+        descriptions: _descriptions,
+      );
+      _usandoRetratoDesatualizado = false;
+      _ultimoErro = null;
+    } on SyncUnavailableException catch (e) {
+      _usandoRetratoDesatualizado = true;
+      _ultimoErro = e.motivo;
+    }
+    notifyListeners();
+  }
+
+  @override
+  List<ProtheusOrder> get all => _atual.all;
+
+  @override
+  List<ProtheusOrder> get open => _atual.open;
+
+  @override
+  List<ProtheusOrder> openIn(String filial) => _atual.openIn(filial);
+
+  @override
+  ProtheusOrder? byKey(ProtheusOrderKey key) => _atual.byKey(key);
+
+  @override
+  List<ProtheusOrder> search(
+    String term, {
+    String? filial,
+    bool onlyOpen = true,
+    int limit = 50,
+  }) => _atual.search(term, filial: filial, onlyOpen: onlyOpen, limit: limit);
 }

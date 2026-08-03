@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 
@@ -84,12 +86,26 @@ class _ProdutoBuscaState extends State<ProdutoBusca> {
 
   void _aoMudar(String _) {
     setState(() {});
-    widget.onProduto(_produto);
+    final produto = _produto;
+    widget.onProduto(produto);
+    if (produto != null) _atualizarSaldo(produto.code);
   }
 
   void _escolher(ProductionCatalogItem item) {
     _controller.text = item.code;
     _aoMudar(item.code);
+  }
+
+  /// Busca o saldo deste produto na filial corrente assim que ele é
+  /// reconhecido — sem isso, o disponível mostrado vem só do retrato
+  /// embarcado, que pode já ter mudado desde a última extração. Silencioso
+  /// se o catálogo não for o híbrido (ex.: em teste) ou se a busca falhar —
+  /// quem mostra o aviso de retrato desatualizado é a tela que lê o saldo.
+  void _atualizarSaldo(String codigo) {
+    final catalogo = widget.catalogo;
+    if (catalogo is! HybridProductCatalogRepository) return;
+    final filial = context.read<FilialStore>().filial;
+    catalogo.refreshSaldo(codigo, filial);
   }
 
   @override
