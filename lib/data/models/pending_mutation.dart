@@ -301,18 +301,33 @@ class EmpenhoLinha {
     required this.descricao,
     required this.quantidade,
     required this.local,
+    this.quantidadeOriginal,
   });
 
   final String produto;
   final String descricao;
+
+  /// O que resta do empenho hoje — em edição de OP existente é o D4_QUANT
+  /// (ver [ProtheusEmpenho.quantidade]); numa OP nova é a quantidade inteira,
+  /// já que nada foi consumido ainda.
   final double quantidade;
+
   final String local;
+
+  /// D4_QTDEORI, só para dar contexto na tela ("418 de 500, 82 já
+  /// produzidos"). `null` numa OP nova, que ainda não tem histórico de
+  /// consumo — ali [quantidade] já é o valor cheio.
+  final double? quantidadeOriginal;
+
+  double? get consumido =>
+      quantidadeOriginal == null ? null : quantidadeOriginal! - quantidade;
 
   Map<String, dynamic> toJson() => {
     'produto': produto,
     'descricao': descricao,
     'quantidade': quantidade,
     'local': local,
+    'quantidadeOriginal': quantidadeOriginal,
   };
 
   factory EmpenhoLinha.fromJson(Map<String, dynamic> json) => EmpenhoLinha(
@@ -320,6 +335,7 @@ class EmpenhoLinha {
     descricao: json['descricao'] as String? ?? '',
     quantidade: (json['quantidade'] as num?)?.toDouble() ?? 0,
     local: json['local'] as String? ?? '',
+    quantidadeOriginal: (json['quantidadeOriginal'] as num?)?.toDouble(),
   );
 }
 

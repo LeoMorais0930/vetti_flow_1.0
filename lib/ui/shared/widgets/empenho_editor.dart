@@ -206,6 +206,10 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
     // posição real e vazia.
     final semPosicao = temInfoSaldo && disponivel == null;
     final falta = disponivel != null && widget.linha.quantidade > disponivel;
+    // D4_QUANT (o que a linha mostra e edita) é o que **resta** do empenho —
+    // não o pedido original. Sem este aviso, "418" parece um número errado
+    // para quem espera ver os 500 da estrutura padrão do produto.
+    final consumido = widget.linha.consumido;
     final armazensOrdenados = _ordenarArmazensPorPosicao(
       widget.armazens,
       widget.disponivelNoArmazem,
@@ -243,6 +247,19 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
+                    if (consumido != null && consumido != 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '${formatProductionQuantity(widget.linha.quantidade)} '
+                          'de ${formatProductionQuantity(widget.linha.quantidadeOriginal!)} '
+                          '· ${formatProductionQuantity(consumido)} já produzido${consumido == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppColors.textCode,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

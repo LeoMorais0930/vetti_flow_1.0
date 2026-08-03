@@ -92,6 +92,7 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
           descricao: catalogo.findByCode(e.produto)?.name ?? e.produto,
           quantidade: e.quantidade,
           local: e.local,
+          quantidadeOriginal: e.quantidadeOriginal,
         ),
     ];
   }
