@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/app/vetti_flow_app.dart';
 import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
@@ -20,6 +21,22 @@ const _apiBaseUrl = String.fromEnvironment(
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Os três repositórios híbridos (catálogo, OPs, empenho) são ChangeNotifier
+  // por dentro — é o que faz o refresh ao vivo reconstruir tela — mas
+  // continuam registrados também pela interface de sempre (`ProductCatalogRepository`
+  // etc.), sem isso as ~20 telas que já leem por ali teriam que mudar. O
+  // `provider` recusa em runtime um valor Listenable exposto fora de
+  // ChangeNotifierProvider/ListenableProvider, achando que é engano — aqui é
+  // de propósito: o registro concreto (reativo) e o de interface (estável)
+  // apontam para a mesma instância em `vetti_flow_app.dart`. Como
+  // `ProductCatalogRepository`/`ProtheusOrderRepository`/`EmpenhoRepository`
+  // são interfaces simples, não `ChangeNotifier`, não dá para usar
+  // `ChangeNotifierProvider<Interface>` diretamente — exigiria toda
+  // implementação (inclusive os testes) virar ChangeNotifier só por causa
+  // disso. Desligar a checagem é o próprio escape hatch documentado pelo
+  // pacote para este caso.
+  Provider.debugCheckInvalidValueType = null;
 
   // O cliente nasce aqui, não dentro do widget: os repositórios híbridos
   // (OPs, empenho, saldo) precisam dele já no arranque para poder atualizar

@@ -55,30 +55,23 @@ class VettiFlowApp extends StatelessWidget {
         // saber que agora existe atualização ao vivo; e pelo tipo concreto,
         // para quem precisa de `context.watch<HybridX>()` reagir ao refresh.
         // É a mesma instância nos dois — chamar refresh() atualiza os dois
-        // lados juntos.
-        //
-        // O registro pela interface usa `create:` e não `.value:` de
-        // propósito: como as três agora são `ChangeNotifier` (para o refresh
-        // funcionar), `RepositoryProvider<X>.value(value: catalog)` faz o
-        // `provider` recusar em runtime ("Tried to use Provider with a
-        // subtype of Listenable... this is likely a mistake") — o pacote
-        // assume que perdemos o `ChangeNotifierProvider` de propósito. Não
-        // perdemos: ele está logo ali embaixo, registrado pelo tipo
-        // concreto. `create: (_) => catalog` devolve a mesma instância sem
-        // acionar essa checagem.
+        // lados juntos. O `provider` recusaria isso por padrão (Listenable
+        // exposto fora de ChangeNotifierProvider) se não fosse
+        // `Provider.debugCheckInvalidValueType = null` em `main.dart` — ver o
+        // comentário lá para o motivo.
         ChangeNotifierProvider<HybridProductCatalogRepository>.value(
           value: catalog,
         ),
-        RepositoryProvider<ProductCatalogRepository>(create: (_) => catalog),
+        RepositoryProvider<ProductCatalogRepository>.value(value: catalog),
         ChangeNotifierProvider<HybridProtheusOrderRepository>.value(
           value: protheusOrders,
         ),
-        RepositoryProvider<ProtheusOrderRepository>(
-          create: (_) => protheusOrders,
+        RepositoryProvider<ProtheusOrderRepository>.value(
+          value: protheusOrders,
         ),
         RepositoryProvider<WarehouseRepository>.value(value: warehouses),
         ChangeNotifierProvider<HybridEmpenhoRepository>.value(value: empenhos),
-        RepositoryProvider<EmpenhoRepository>(create: (_) => empenhos),
+        RepositoryProvider<EmpenhoRepository>.value(value: empenhos),
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (context) => ProductionFlowStore(
             catalog: context.read<ProductCatalogRepository>(),
