@@ -8,6 +8,7 @@ import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/cards_view.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/views/solicitacoes_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/stored_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/kanban_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/views/reports_view.dart';
@@ -99,6 +100,13 @@ Widget buildNovaOpDialog(
   );
 }
 
+/// "N solicitações pendentes" para o cabeçalho da aba — lido direto da fila,
+/// sem passar pelo cubit (mesma fonte que `SolicitacoesView` usa).
+String _solicitacoesResultText(BuildContext context) {
+  final n = context.watch<PendingMutationStore>().aberturasPendentes.length;
+  return '$n solicitação${n == 1 ? '' : 'es'} pendente${n == 1 ? '' : 's'}';
+}
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -173,6 +181,15 @@ class _DesktopLayout extends StatelessWidget {
                         if (state.viewMode == ViewMode.armazenadas) ...[
                           _StoredHeader(
                             resultText: state.armazenadasResultText,
+                          ),
+                          const SizedBox(height: 18),
+                          _buildView(state, cubit),
+                        ] else if (state.viewMode ==
+                            ViewMode.solicitacoes) ...[
+                          _StoredHeader(
+                            titulo: 'Solicitações de OP',
+                            icone: Icons.note_add_outlined,
+                            resultText: _solicitacoesResultText(context),
                           ),
                           const SizedBox(height: 18),
                           _buildView(state, cubit),
@@ -253,6 +270,8 @@ class _DesktopLayout extends StatelessWidget {
         return CardsView(ordens: ordens, onOpenOP: cubit.openOP);
       case ViewMode.armazenadas:
         return StoredView(items: state.armazenadas);
+      case ViewMode.solicitacoes:
+        return const SolicitacoesView();
       case ViewMode.responsaveis:
         return const OperatorAssignmentsView();
       case ViewMode.relatorios:
@@ -306,6 +325,21 @@ class _MobileLayout extends StatelessWidget {
                           const Padding(
                             padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
                             child: OperatorAssignmentsView(),
+                          ),
+                        ] else if (state.viewMode ==
+                            ViewMode.solicitacoes) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                            child: _StoredHeader(
+                              titulo: 'Solicitações de OP',
+                              icone: Icons.note_add_outlined,
+                              resultText: _solicitacoesResultText(context),
+                              compact: true,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: SolicitacoesView(),
                           ),
                         ] else if (state.viewMode != ViewMode.armazenadas) ...[
                           if (state.viewMode == ViewMode.kanban)
@@ -496,10 +530,17 @@ class _MobileLayout extends StatelessWidget {
 }
 
 class _StoredHeader extends StatelessWidget {
-  const _StoredHeader({required this.resultText, this.compact = false});
+  const _StoredHeader({
+    required this.resultText,
+    this.compact = false,
+    this.titulo = 'OPs armazenadas',
+    this.icone = Icons.inventory_2_outlined,
+  });
 
   final String resultText;
   final bool compact;
+  final String titulo;
+  final IconData icone;
 
   @override
   Widget build(BuildContext context) {
@@ -523,11 +564,7 @@ class _StoredHeader extends StatelessWidget {
               color: AppColors.bgAndamento,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.inventory_2_outlined,
-              color: AppColors.primary,
-              size: 21,
-            ),
+            child: Icon(icone, color: AppColors.primary, size: 21),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -535,7 +572,7 @@ class _StoredHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'OPs armazenadas',
+                  titulo,
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: compact ? 16 : 18,
                     fontWeight: FontWeight.w700,

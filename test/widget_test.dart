@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/app/app_routes.dart';
+import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/repositories/empenho_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/filial_store.dart';
@@ -606,6 +607,9 @@ void main() {
           ChangeNotifierProvider<OperatorAssignmentStore>(
             create: (_) => OperatorAssignmentStore(),
           ),
+          ChangeNotifierProvider<PendingMutationStore>(
+            create: (_) => PendingMutationStore(),
+          ),
           RepositoryProvider<OpRepository>.value(value: repository),
         ],
         child: MaterialApp(
@@ -626,6 +630,82 @@ void main() {
 
     expect(find.text('OPs armazenadas'), findsOneWidget);
     expect(find.text(numeroArmazenado), findsOneWidget);
+  });
+
+  testWidgets('dashboard shows pending OP opening requests and cancels one', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = ProductionFlowStore(catalog: TestCatalog());
+    final protheusRepo = testProtheusRepository();
+    final fila = PendingMutationStore();
+    fila.enqueue(
+      (id, agora) => AberturaOpMutation(
+        id: id,
+        filial: '04',
+        criadoEm: agora,
+        autor: 'Tatiane',
+        produto: '575-0863',
+        produtoDescricao: '575-0863 - PLACA TESTE',
+        quantidade: 50,
+        localProducao: '01',
+      ),
+    );
+    final repository = FlowOpRepository(
+      store,
+      catalog: TestCatalog(),
+      protheusOrders: protheusRepo,
+      empenhos: AssetEmpenhoRepository(const []),
+      pendingMutations: fila,
+      filial: () => '04',
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          RepositoryProvider<ProductCatalogRepository>.value(
+            value: TestCatalog(),
+          ),
+          RepositoryProvider<ProtheusOrderRepository>.value(
+            value: protheusRepo,
+          ),
+          ChangeNotifierProvider<ProductionFlowStore>.value(value: store),
+          ChangeNotifierProvider<OperatorAssignmentStore>(
+            create: (_) => OperatorAssignmentStore(),
+          ),
+          ChangeNotifierProvider<PendingMutationStore>.value(value: fila),
+          RepositoryProvider<OpRepository>.value(value: repository),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: BlocProvider(
+            create: (_) => DashboardCubit(repository),
+            child: const DashboardPage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // O selo com a contagem aparece ao lado do rótulo da aba.
+    expect(find.text('Solicitações'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+
+    await tester.tap(find.text('Solicitações'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Solicitações de OP'), findsOneWidget);
+    expect(find.textContaining('575-0863'), findsWidgets);
+    expect(fila.aberturasPendentes, hasLength(1));
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(fila.aberturasPendentes, isEmpty);
+    expect(find.text('Nenhuma solicitação de OP pendente.'), findsOneWidget);
   });
 
   testWidgets('expedition dispatches partial and full stored quantity', (

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
 
@@ -17,6 +18,10 @@ class Sidebar extends StatelessWidget {
         .currentOperator;
     final managerName = currentOperator?.name ?? 'Tatiane';
     final managerRole = currentOperator?.role ?? 'Coordenadora da producao';
+    final solicitacoesPendentes = context
+        .watch<PendingMutationStore>()
+        .aberturasPendentes
+        .length;
 
     return Container(
       width: 230,
@@ -72,6 +77,13 @@ class Sidebar extends StatelessWidget {
               label: 'Armazenadas',
               active: viewMode == ViewMode.armazenadas,
               onTap: () => onViewMode(ViewMode.armazenadas),
+            ),
+            _NavItem(
+              icon: _requestIcon,
+              label: 'Solicitações',
+              active: viewMode == ViewMode.solicitacoes,
+              badge: solicitacoesPendentes > 0 ? solicitacoesPendentes : null,
+              onTap: () => onViewMode(ViewMode.solicitacoes),
             ),
             _NavItem(
               icon: _userIcon,
@@ -147,12 +159,14 @@ class _NavItem extends StatelessWidget {
   final Widget icon;
   final String label;
   final bool active;
+  final int? badge;
   final VoidCallback? onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
     this.active = false,
+    this.badge,
     this.onTap,
   });
 
@@ -191,6 +205,27 @@ class _NavItem extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (badge != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$badge',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -203,5 +238,6 @@ class _NavItem extends StatelessWidget {
 final _panelIcon = Icon(Icons.grid_view_rounded, size: 17);
 final _listIcon = Icon(Icons.format_list_bulleted_rounded, size: 17);
 final _boxIcon = Icon(Icons.inventory_2_outlined, size: 17);
+final _requestIcon = Icon(Icons.note_add_outlined, size: 17);
 final _userIcon = Icon(Icons.person_outline_rounded, size: 17);
 final _chartIcon = Icon(Icons.bar_chart_rounded, size: 17);

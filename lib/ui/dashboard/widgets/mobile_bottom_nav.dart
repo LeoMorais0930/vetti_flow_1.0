@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_state.dart';
 
@@ -14,6 +16,11 @@ class MobileBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final solicitacoesPendentes = context
+        .watch<PendingMutationStore>()
+        .aberturasPendentes
+        .length;
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -41,6 +48,13 @@ class MobileBottomNav extends StatelessWidget {
             onTap: () => onViewMode(ViewMode.armazenadas),
           ),
           _Tab(
+            icon: Icons.note_add_outlined,
+            label: 'Solic.',
+            active: viewMode == ViewMode.solicitacoes,
+            badge: solicitacoesPendentes > 0 ? solicitacoesPendentes : null,
+            onTap: () => onViewMode(ViewMode.solicitacoes),
+          ),
+          _Tab(
             icon: Icons.groups_2_outlined,
             label: 'Equipe',
             active: viewMode == ViewMode.responsaveis,
@@ -62,12 +76,14 @@ class _Tab extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool active;
+  final int? badge;
   final VoidCallback? onTap;
 
   const _Tab({
     required this.icon,
     required this.label,
     this.active = false,
+    this.badge,
     this.onTap,
   });
 
@@ -80,7 +96,35 @@ class _Tab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: color),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, size: 22, color: color),
+                if (badge != null)
+                  Positioned(
+                    right: -6,
+                    top: -3,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.orange,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$badge',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
               label,
