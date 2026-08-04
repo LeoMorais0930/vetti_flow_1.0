@@ -7,6 +7,7 @@ import 'package:vetti_flow_1_0/ui/dashboard/cubit/dashboard_cubit.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/dashboard_page.dart';
 import 'package:vetti_flow_1_0/ui/expedition/expedition_page.dart';
 import 'package:vetti_flow_1_0/ui/firmware/firmware_page.dart';
+import 'package:vetti_flow_1_0/ui/smd/smd_page.dart';
 import 'package:vetti_flow_1_0/ui/soldering/soldering_page.dart';
 import 'package:vetti_flow_1_0/ui/support/support_page.dart';
 import 'package:vetti_flow_1_0/ui/testing/testing_page.dart';
@@ -23,6 +24,7 @@ Map<String, WidgetBuilder> vettiFlowRoutes() {
     '/expedicao': (context) => const ExpeditionPage(),
     '/fechamento': (context) => const ClosingPage(),
     '/firmware': (context) => const FirmwarePage(),
+    '/smd': (context) => const SmdPage(),
     '/soldagem': (context) => const SolderingPage(),
     '/suporte': (context) => const SupportPage(),
     '/teste': (context) => const TestingPage(),

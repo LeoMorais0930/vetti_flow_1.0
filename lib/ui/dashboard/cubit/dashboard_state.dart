@@ -18,6 +18,8 @@ class DashboardState {
   final bool novaOPOpen;
   final bool confirmCancel;
   final bool filtrosOpen;
+  final bool databaseSyncing;
+  final String databaseSyncMessage;
 
   const DashboardState({
     this.ordens = const [],
@@ -34,6 +36,8 @@ class DashboardState {
     this.novaOPOpen = false,
     this.confirmCancel = false,
     this.filtrosOpen = false,
+    this.databaseSyncing = false,
+    this.databaseSyncMessage = '',
   });
 
   List<OrdemProducao> get ordensFiltradas {
@@ -130,6 +134,8 @@ class DashboardState {
     bool? novaOPOpen,
     bool? confirmCancel,
     bool? filtrosOpen,
+    bool? databaseSyncing,
+    String? databaseSyncMessage,
   }) {
     return DashboardState(
       ordens: ordens ?? this.ordens,
@@ -146,6 +152,8 @@ class DashboardState {
       novaOPOpen: novaOPOpen ?? this.novaOPOpen,
       confirmCancel: confirmCancel ?? this.confirmCancel,
       filtrosOpen: filtrosOpen ?? this.filtrosOpen,
+      databaseSyncing: databaseSyncing ?? this.databaseSyncing,
+      databaseSyncMessage: databaseSyncMessage ?? this.databaseSyncMessage,
     );
   }
 }

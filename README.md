@@ -1,6 +1,18 @@
-# VettiFlow 1.0
+# VettiFlow 1.0 - PROJETO FIXO ATUAL
 
-Projeto Flutter/Dart base para implementar as telas do VettiFlow.
+Projeto Flutter/Dart fixo em uso para as telas do VettiFlow.
+
+Workspace atual:
+
+```text
+C:\Users\Leonardo Morais\Desktop\VettiFlow\vetti flow 1.0 flutter dart
+```
+
+Atalho recomendado para abrir nos projetos recentes:
+
+```text
+C:\Users\Leonardo Morais\Desktop\VettiFlow\VettiFlow - FIXO ATUAL
+```
 
 ## Rodar localmente
 

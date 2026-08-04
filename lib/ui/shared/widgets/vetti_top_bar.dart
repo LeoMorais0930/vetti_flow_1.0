@@ -19,53 +19,104 @@ class VettiTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     void logout() => Navigator.of(context).pushReplacementNamed('/login');
 
-    if (compact) {
-      return Container(
-        height: 86,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0B202E), Color(0xFF123A52)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          border: const Border(bottom: BorderSide(color: Color(0xFF1F5875))),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryDark.withValues(alpha: 0.22),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const _HeaderLogo(compact: true, dark: true),
-            Container(
-              width: 1,
-              height: 34,
-              margin: const EdgeInsets.symmetric(horizontal: 12),
-              color: Colors.white24,
-            ),
-            Expanded(
-              child: _StageTitle(title: title, compact: true, dark: true),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: _OperatorBlock(
-                name: operatorName,
-                role: operatorRole,
-                compact: true,
-                dark: true,
-              ),
-            ),
-            const SizedBox(width: 8),
-            _LogoutButton(compact: true, dark: true, onPressed: logout),
-          ],
-        ),
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final effectiveCompact = compact || constraints.maxWidth < 720;
+        if (effectiveCompact) {
+          return _CompactTopBar(
+            title: title,
+            operatorName: operatorName,
+            operatorRole: operatorRole,
+            onLogout: logout,
+          );
+        }
 
+        return _DesktopTopBar(
+          title: title,
+          operatorName: operatorName,
+          operatorRole: operatorRole,
+          onLogout: logout,
+        );
+      },
+    );
+  }
+}
+
+class _CompactTopBar extends StatelessWidget {
+  const _CompactTopBar({
+    required this.title,
+    required this.operatorName,
+    required this.operatorRole,
+    required this.onLogout,
+  });
+
+  final String title;
+  final String operatorName;
+  final String? operatorRole;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 86,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0B202E), Color(0xFF123A52)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        border: const Border(bottom: BorderSide(color: Color(0xFF1F5875))),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.22),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const _HeaderLogo(compact: true, dark: true),
+          Container(
+            width: 1,
+            height: 34,
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            color: Colors.white24,
+          ),
+          Expanded(child: _StageTitle(title: title, compact: true, dark: true)),
+          const SizedBox(width: 10),
+          Flexible(
+            child: _OperatorBlock(
+              name: operatorName,
+              role: operatorRole,
+              compact: true,
+              dark: true,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _LogoutButton(compact: true, dark: true, onPressed: onLogout),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopTopBar extends StatelessWidget {
+  const _DesktopTopBar({
+    required this.title,
+    required this.operatorName,
+    required this.operatorRole,
+    required this.onLogout,
+  });
+
+  final String title;
+  final String operatorName;
+  final String? operatorRole;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       height: 84,
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -97,7 +148,7 @@ class VettiTopBar extends StatelessWidget {
           const Spacer(),
           _OperatorBlock(name: operatorName, role: operatorRole, dark: true),
           const SizedBox(width: 16),
-          _LogoutButton(dark: true, onPressed: logout),
+          _LogoutButton(dark: true, onPressed: onLogout),
         ],
       ),
     );

@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/shared/layout/app_breakpoints.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
@@ -31,40 +35,34 @@ class SupportPage extends StatefulWidget {
 }
 
 class _SupportPageState extends State<SupportPage> {
-  final _orders = const [
-    SupportOrder(
-      number: 'OP-00564-345',
-      product: 'CR4 - Controle 4 teclas',
-      defectCode: 'T2',
-      defect: 'Sem resposta',
-      quantity: '12 un',
-      origin: 'Teste',
-      status: 'Aguardando',
-    ),
-    SupportOrder(
-      number: 'OP-00565-112',
-      product: 'Central Vetti Smart',
-      defectCode: 'T7',
-      defect: 'Falha intermitente',
-      quantity: '5 un',
-      origin: 'Teste',
-      status: 'Em conserto',
-    ),
-    SupportOrder(
-      number: 'OP-00566-078',
-      product: 'Modulo RF Vetti One',
-      defectCode: 'T4',
-      defect: 'Consumo alto',
-      quantity: '8 un',
-      origin: 'Teste',
-      status: 'Armazenada',
-    ),
-  ];
-
   var _selectedIndex = 0;
   var _conferenceStatus = 'Aguardando';
 
-  SupportOrder get _selectedOrder => _orders[_selectedIndex];
+  List<SupportOrder> _supportOrdersFrom(List<ProductionOrderFlow> orders) {
+    return [
+      for (final order in orders)
+        if (order.testDefects.isNotEmpty)
+          for (final defect in order.testDefects)
+            SupportOrder(
+              number: order.number,
+              product: order.productLabel,
+              defectCode: defect.code,
+              defect: defect.title,
+              quantity: '${defect.quantity} un',
+              origin: ProductionStage.testing.label,
+              status: _supportStatus(order),
+            ),
+    ];
+  }
+
+  List<SupportOrder> _currentSupportOrders() =>
+      _supportOrdersFrom(context.read<ProductionFlowStore>().orders);
+
+  SupportOrder? _selectedOrder(List<SupportOrder> orders) {
+    if (orders.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, orders.length - 1).toInt();
+    return orders[index];
+  }
 
   void _startConference() {
     setState(() => _conferenceStatus = 'Em conferencia');
@@ -75,17 +73,27 @@ class _SupportPageState extends State<SupportPage> {
   }
 
   Future<void> _confirmConference() async {
-    final confirmed = await showSupportConfirmDialog(context, _selectedOrder);
+    final order = _selectedOrder(_currentSupportOrders());
+    if (order == null) return;
+    final confirmed = await showSupportConfirmDialog(context, order);
     if (!mounted || confirmed != true) return;
     setState(() => _conferenceStatus = 'Confirmada');
   }
 
   Future<void> _requestItems() async {
-    await showSupportRequestDialog(context, _selectedOrder);
+    final order = _selectedOrder(_currentSupportOrders());
+    if (order == null) return;
+    await showSupportRequestDialog(context, order);
   }
 
   @override
   Widget build(BuildContext context) {
+    final orders = _supportOrdersFrom(
+      context.watch<ProductionFlowStore>().orders,
+    );
+    final selectedIndex = orders.isEmpty
+        ? 0
+        : _selectedIndex.clamp(0, orders.length - 1).toInt();
     return LayoutBuilder(
       builder: (context, constraints) {
         final formFactor = constraints.maxWidth >= 1180
@@ -95,8 +103,8 @@ class _SupportPageState extends State<SupportPage> {
 
         if (isMobile) {
           return _MobileSupportLayout(
-            orders: _orders,
-            selectedIndex: _selectedIndex,
+            orders: orders,
+            selectedIndex: selectedIndex,
             conferenceStatus: _conferenceStatus,
             onSelect: (index) => setState(() => _selectedIndex = index),
             onStart: _startConference,
@@ -107,8 +115,8 @@ class _SupportPageState extends State<SupportPage> {
         }
 
         return _DesktopSupportLayout(
-          orders: _orders,
-          selectedIndex: _selectedIndex,
+          orders: orders,
+          selectedIndex: selectedIndex,
           conferenceStatus: _conferenceStatus,
           onSelect: (index) => setState(() => _selectedIndex = index),
           onStart: _startConference,
@@ -118,6 +126,14 @@ class _SupportPageState extends State<SupportPage> {
         );
       },
     );
+  }
+
+  String _supportStatus(ProductionOrderFlow order) {
+    if (order.currentStage == ProductionStage.completed ||
+        order.currentStage == ProductionStage.storage) {
+      return 'Concluida';
+    }
+    return 'Aguardando';
   }
 }
 
@@ -142,7 +158,8 @@ class _DesktopSupportLayout extends StatelessWidget {
   final VoidCallback onConfirm;
   final VoidCallback onRequest;
 
-  SupportOrder get selectedOrder => orders[selectedIndex];
+  SupportOrder? get selectedOrder =>
+      orders.isEmpty ? null : orders[selectedIndex];
 
   @override
   Widget build(BuildContext context) {
@@ -150,9 +167,14 @@ class _DesktopSupportLayout extends StatelessWidget {
       backgroundColor: AppColors.pageBackground,
       body: Column(
         children: [
-          const VettiTopBar(
+          VettiTopBar(
             title: 'Suporte Tecnico',
-            operatorName: 'Bruno',
+            operatorName:
+                context
+                    .watch<OperatorAssignmentStore>()
+                    .currentOperator
+                    ?.name ??
+                'Operador',
             operatorRole: 'Suporte',
           ),
           Expanded(
@@ -177,14 +199,16 @@ class _DesktopSupportLayout extends StatelessWidget {
                       ),
                       const SizedBox(width: 72),
                       Expanded(
-                        child: _SupportDetails(
-                          order: selectedOrder,
-                          conferenceStatus: conferenceStatus,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onConfirm: onConfirm,
-                          onRequest: onRequest,
-                        ),
+                        child: selectedOrder == null
+                            ? const _EmptySupportState()
+                            : _SupportDetails(
+                                order: selectedOrder!,
+                                conferenceStatus: conferenceStatus,
+                                onStart: onStart,
+                                onPause: onPause,
+                                onConfirm: onConfirm,
+                                onRequest: onRequest,
+                              ),
                       ),
                     ],
                   ),
@@ -219,7 +243,8 @@ class _MobileSupportLayout extends StatelessWidget {
   final VoidCallback onConfirm;
   final VoidCallback onRequest;
 
-  SupportOrder get selectedOrder => orders[selectedIndex];
+  SupportOrder? get selectedOrder =>
+      orders.isEmpty ? null : orders[selectedIndex];
 
   @override
   Widget build(BuildContext context) {
@@ -238,9 +263,14 @@ class _MobileSupportLayout extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                const VettiTopBar(
+                VettiTopBar(
                   title: 'Suporte Tecnico',
-                  operatorName: 'Bruno',
+                  operatorName:
+                      context
+                          .watch<OperatorAssignmentStore>()
+                          .currentOperator
+                          ?.name ??
+                      'Operador',
                   compact: true,
                 ),
                 Expanded(
@@ -254,33 +284,38 @@ class _MobileSupportLayout extends StatelessWidget {
                           child: _SupportHeader(compact: true),
                         ),
                         const SizedBox(height: 18),
-                        for (var i = 0; i < orders.length; i++) ...[
-                          _SupportCard(
-                            order: orders[i],
-                            selected: i == selectedIndex,
+                        if (orders.isEmpty)
+                          const _EmptySupportState(compact: true)
+                        else ...[
+                          for (var i = 0; i < orders.length; i++) ...[
+                            _SupportCard(
+                              order: orders[i],
+                              selected: i == selectedIndex,
+                              compact: true,
+                              onTap: () => onSelect(i),
+                            ),
+                            if (i < orders.length - 1)
+                              const SizedBox(height: 12),
+                          ],
+                          const SizedBox(height: 24),
+                          _SupportDefectPanel(order: selectedOrder!),
+                          const SizedBox(height: 18),
+                          _SupportActions(
                             compact: true,
-                            onTap: () => onSelect(i),
+                            onStart: onStart,
+                            onPause: onPause,
+                            onConfirm: onConfirm,
+                            onRequest: onRequest,
                           ),
-                          if (i < orders.length - 1) const SizedBox(height: 12),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Status: $conferenceStatus',
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
-                        const SizedBox(height: 24),
-                        _SupportDefectPanel(order: selectedOrder),
-                        const SizedBox(height: 18),
-                        _SupportActions(
-                          compact: true,
-                          onStart: onStart,
-                          onPause: onPause,
-                          onConfirm: onConfirm,
-                          onRequest: onRequest,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Status: $conferenceStatus',
-                          style: const TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 12,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -352,6 +387,54 @@ class _SupportHeader extends StatelessWidget {
           style: TextStyle(color: AppColors.muted, fontSize: compact ? 13 : 16),
         ),
       ],
+    );
+  }
+}
+
+class _EmptySupportState extends StatelessWidget {
+  const _EmptySupportState({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 18 : 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.build_circle_outlined,
+            color: AppColors.iconMuted,
+            size: compact ? 34 : 48,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Nenhuma OP com defeito.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: compact ? 18 : 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'As OPs aparecem aqui quando o teste registrar defeitos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: compact ? 12.5 : 15,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

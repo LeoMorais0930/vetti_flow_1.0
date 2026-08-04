@@ -1,0 +1,1311 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
+import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
+import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/data/repositories/flow_op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_product_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/warehouse_request_store.dart';
+
+void main() {
+  test('product lookup keeps VT branch and selected warehouse balances', () {
+    const component = ProtheusProductComponent(
+      code: '575-0863',
+      description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+      quantityPerUnit: 2,
+      unit: 'PC',
+      filial: '04',
+      armazem: '01',
+      requirementSource: 'SD4',
+      sourceOrder: '01595601001',
+      originalQuantity: 20,
+      commitmentQuantity: 10,
+      stockAvailable: 8,
+      warehouseBalances: [
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '01',
+          currentStock: 20,
+          committedQuantity: 6,
+          reservedQuantity: 6,
+          availableQuantity: 8,
+        ),
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '02',
+          currentStock: 50,
+          committedQuantity: 5,
+          reservedQuantity: 0,
+          availableQuantity: 45,
+        ),
+      ],
+    );
+
+    final selected = component.selectWarehouse('02');
+
+    expect(component.availableWarehouses, ['01', '02']);
+    expect(selected.filial, '04');
+    expect(selected.armazem, '02');
+    expect(selected.stockAvailable, 45);
+    expect(selected.requiredQuantityFor(12), 24);
+    expect(selected.requirementSource, 'SD4');
+    expect(selected.sourceOrder, '01595601001');
+    expect(selected.originalQuantity, 20);
+    expect(selected.commitmentQuantity, 10);
+    expect(selected.toProductionComponent().armazem, '02');
+    expect(selected.toProductionComponent().filial, '04');
+    expect(selected.toProductionComponent().sourceOrder, '01595601001');
+  });
+
+  test(
+    'component defaults to warehouse with real stock when preferred is zero',
+    () {
+      const balances = [
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '01',
+          currentStock: 0,
+          committedQuantity: 0,
+          reservedQuantity: 0,
+          availableQuantity: 0,
+        ),
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '03',
+          currentStock: 3796,
+          committedQuantity: 1700,
+          reservedQuantity: 0,
+          availableQuantity: 3796,
+        ),
+      ];
+
+      final selected = ProtheusProductComponent.selectBestWarehouseBalance(
+        balances,
+        '01',
+      );
+
+      expect(selected?.armazem, '03');
+      expect(selected?.currentStock, 3796);
+    },
+  );
+
+  test('MOD components can have negative stock without creating shortage', () {
+    const component = ProtheusProductComponent(
+      code: 'MOD-0001',
+      description: 'MAO DE OBRA',
+      quantityPerUnit: 1,
+      unit: 'HR',
+      stockAvailable: -999,
+      currentStock: -999,
+    );
+
+    const lookup = ProtheusProductLookup(
+      product: ProtheusProduct(
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [component],
+    );
+
+    expect(component.shouldValidateStock, isFalse);
+    expect(component.hasEnoughStockFor(10), isTrue);
+    expect(component.missingQuantityFor(10), 0);
+    expect(lookup.stockShortagesFor(10), isEmpty);
+  });
+
+  test('blocked SB1 products are hidden from final app repository', () async {
+    final store = ProductionFlowStore();
+    final repository = FlowOpRepository(
+      store,
+      protheusProducts: const _BlockedProductProtheusRepository(),
+    );
+
+    final products = await repository.searchProdutos('');
+    final labels = await repository.fetchProdutos();
+    final blockedLookup = await repository.lookupProdutoPorCodigo('730-BLOCK');
+    final availableLookup = await repository.lookupProdutoPorCodigo('730-OK');
+
+    expect(products.map((product) => product.code), ['730-OK']);
+    expect(labels, ['730-OK - PRODUTO LIBERADO']);
+    expect(blockedLookup, isNull);
+    expect(availableLookup?.product.code, '730-OK');
+  });
+
+  test('Protheus product lookup does not read SD4 as component fallback', () {
+    final source = File(
+      'lib/data/repositories/protheus_product_repository.dart',
+    ).readAsStringSync();
+
+    expect(source, isNot(contains('vw_sd4_commitments')));
+    expect(source, isNot(contains('_commitmentsFor')));
+    expect(source, isNot(contains("'SD4' AS requirement_source")));
+  });
+
+  test('product lookup exposes components and child OPs for a code', () {
+    const lookup = ProtheusProductLookup(
+      product: ProtheusProduct(
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [
+        ProtheusProductComponent(
+          code: '575-0863',
+          description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 10,
+          childOrders: [
+            ProtheusChildOrder(
+              number: '015958-01-001',
+              productCode: '575-0863',
+              productDescription: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              plannedQuantity: 10,
+              producedQuantity: 0,
+              status: 'N',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(lookup.label, '730-0863 - SMART ALARM - MONITORADA CENTRAL');
+    expect(lookup.hasRamifications, isTrue);
+    expect(lookup.components.single.hasChildOrders, isTrue);
+    expect(lookup.toProductionComponents().single.code, '575-0863');
+  });
+
+  test(
+    'flow repository creates a local OP using a Protheus product lookup',
+    () async {
+      final store = ProductionFlowStore();
+      final repository = FlowOpRepository(
+        store,
+        protheusProducts: const _FakeProtheusProductRepository(),
+      );
+
+      final created = await repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: '730-0863',
+          productCode: '730-0863',
+          productName: 'SMART ALARM - MONITORADA CENTRAL',
+          operatorPin: '2001',
+          components: [
+            ProtheusProductComponent(
+              code: '575-0863',
+              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              quantityPerUnit: 1,
+              unit: 'PC',
+              stockAvailable: 20,
+            ),
+          ],
+          smdReleaseOrders: [
+            ProtheusChildOrder(
+              number: '015957-01-001',
+              productCode: '500-0863',
+              productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+              plannedQuantity: 10,
+              producedQuantity: 10,
+              status: 'N',
+            ),
+          ],
+          qtd: 12,
+          responsavel: 'Tatiane',
+          prazo: '31/07/2026',
+        ),
+      );
+
+      final flowOrder = store.orders.firstWhere(
+        (order) => order.number == created.numero,
+      );
+
+      expect(flowOrder.productCode, '730-0863');
+      expect(flowOrder.productName, 'SMART ALARM - MONITORADA CENTRAL');
+      expect(store.catalogItem('730-0863').components.single.code, '575-0863');
+      expect(
+        created.materiais.single.$1,
+        'SUB MEC SMART ALARM MONITORADA CENTRAL',
+      );
+    },
+  );
+
+  test('flow repository requires PIN for Protheus stock movements', () async {
+    final store = ProductionFlowStore();
+    final repository = FlowOpRepository(
+      store,
+      protheusProducts: const _FakeProtheusProductRepository(),
+    );
+
+    expect(
+      () => repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: '730-0863',
+          productCode: '730-0863',
+          productName: 'SMART ALARM - MONITORADA CENTRAL',
+          components: [
+            ProtheusProductComponent(
+              code: '575-0863',
+              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              quantityPerUnit: 1,
+              unit: 'PC',
+              stockAvailable: 20,
+            ),
+          ],
+          qtd: 12,
+          responsavel: 'Tatiane',
+        ),
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  testWidgets('new OP dialog auto-fills product from Protheus code', (
+    tester,
+  ) async {
+    NovaOrdemDTO? created;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const ['CR4 - Modulo de 4 zonas com fio'],
+            responsaveis: const ['Tatiane'],
+            onLookupProduto:
+                const _FakeProtheusProductRepository().lookupByCode,
+            onSearchProdutos:
+                const _FakeProtheusProductRepository().searchProducts,
+            onCreate: (dto) => created = dto,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      '730-0863',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('730-0863 - SMART ALARM - MONITORADA CENTRAL'),
+      findsWidgets,
+    );
+    expect(find.textContaining('SUB MEC SMART ALARM'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-due-date')),
+      '31/07/2026',
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Estoque insuficiente'), findsNothing);
+    expect(find.textContaining('Produto sem OP SMD'), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
+    await tester.enterText(
+      find.byKey(const Key('nova-op-operator-pin')),
+      '2001',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar OP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Criar OP'));
+    await tester.pumpAndSettle();
+
+    expect(created, isNotNull);
+    expect(created!.productCode, '730-0863');
+    expect(created!.productName, 'SMART ALARM - MONITORADA CENTRAL');
+    expect(created!.components.single.code, '575-0863');
+  });
+
+  test('flow repository creates Protheus OP without SMD release', () async {
+    final store = ProductionFlowStore();
+    final repository = FlowOpRepository(
+      store,
+      protheusProducts: const _FakeProtheusProductRepository(),
+    );
+
+    final created = await repository.criarOrdem(
+      const NovaOrdemDTO(
+        produto: '730-0863',
+        productCode: '730-0863',
+        productName: 'SMART ALARM - MONITORADA CENTRAL',
+        operatorPin: '2001',
+        components: [
+          ProtheusProductComponent(
+            code: '575-0863',
+            description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+            quantityPerUnit: 1,
+            unit: 'PC',
+            stockAvailable: 20,
+          ),
+        ],
+        qtd: 12,
+        responsavel: 'Tatiane',
+        prazo: '31/07/2026',
+      ),
+    );
+
+    expect(created.numero, startsWith('OP-'));
+  });
+
+  test(
+    'flow repository blocks OP creation outside operator warehouses',
+    () async {
+      final store = ProductionFlowStore();
+      final repository = FlowOpRepository(
+        store,
+        protheusProducts: const _FakeProtheusProductRepository(),
+      );
+
+      const blockedDto = NovaOrdemDTO(
+        produto: '730-0863',
+        productCode: '730-0863',
+        productName: 'SMART ALARM - MONITORADA CENTRAL',
+        openedBy: 'Vera',
+        operatorPin: '4003',
+        armazem: '05',
+        components: [
+          ProtheusProductComponent(
+            code: '575-0863',
+            description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+            quantityPerUnit: 1,
+            unit: 'PC',
+            filial: '04',
+            armazem: '05',
+            stockAvailable: 20,
+          ),
+        ],
+        smdReleaseOrders: [
+          ProtheusChildOrder(
+            number: '015957-01-001',
+            productCode: '500-0863',
+            productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+            plannedQuantity: 10,
+            producedQuantity: 10,
+            status: 'N',
+          ),
+        ],
+        qtd: 12,
+        responsavel: 'Vera',
+        prazo: '31/07/2026',
+      );
+
+      expect(
+        () => repository.criarOrdem(blockedDto),
+        throwsA(isA<StateError>()),
+      );
+
+      final created = await repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: '730-0863',
+          productCode: '730-0863',
+          productName: 'SMART ALARM - MONITORADA CENTRAL',
+          openedBy: 'Tatiane',
+          operatorPin: '2001',
+          armazem: '05',
+          components: [
+            ProtheusProductComponent(
+              code: '575-0863',
+              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              quantityPerUnit: 1,
+              unit: 'PC',
+              filial: '04',
+              armazem: '05',
+              stockAvailable: 20,
+            ),
+          ],
+          smdReleaseOrders: [
+            ProtheusChildOrder(
+              number: '015957-01-001',
+              productCode: '500-0863',
+              productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+              plannedQuantity: 10,
+              producedQuantity: 10,
+              status: 'N',
+            ),
+          ],
+          qtd: 12,
+          responsavel: 'Tatiane',
+          prazo: '31/07/2026',
+        ),
+      );
+
+      expect(created.responsavel, '—');
+      expect(created.stage, ProductionStage.firmware);
+    },
+  );
+
+  test(
+    'flow repository creates warehouse confirmation for external component',
+    () async {
+      final store = ProductionFlowStore();
+      final requests = WarehouseRequestStore();
+      final repository = FlowOpRepository(
+        store,
+        protheusProducts: const _FakeProtheusProductRepository(),
+        warehouseRequests: requests,
+      );
+
+      final created = await repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: '730-0863',
+          productCode: '730-0863',
+          productName: 'SMART ALARM - MONITORADA CENTRAL',
+          openedBy: 'Tatiane',
+          operatorPin: '2001',
+          armazem: '05',
+          components: [
+            ProtheusProductComponent(
+              code: '575-0863',
+              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              quantityPerUnit: 2,
+              unit: 'PC',
+              filial: '04',
+              armazem: '01',
+              stockAvailable: 80,
+            ),
+            ProtheusProductComponent(
+              code: 'MOD-001',
+              description: 'MAO DE OBRA SMD',
+              quantityPerUnit: 1,
+              unit: 'HR',
+              filial: '04',
+              armazem: '01',
+              stockAvailable: -999,
+            ),
+          ],
+          smdReleaseOrders: [
+            ProtheusChildOrder(
+              number: '015957-01-001',
+              productCode: '500-0863',
+              productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+              plannedQuantity: 10,
+              producedQuantity: 10,
+              status: 'N',
+            ),
+          ],
+          qtd: 12,
+          responsavel: 'Tatiane',
+          prazo: '31/07/2026',
+        ),
+      );
+
+      expect(created.stage, ProductionStage.firmware);
+      expect(requests.requests, hasLength(1));
+      expect(requests.requests.single.orderNumber, created.numero);
+      expect(requests.requests.single.componentCode, '575-0863');
+      expect(requests.requests.single.requestedWarehouse, '01');
+      expect(requests.requests.single.orderWarehouse, '05');
+      expect(requests.requests.single.quantity, 24);
+    },
+  );
+
+  test('flow repository blocks Paula from creating SMD orders', () async {
+    final store = ProductionFlowStore();
+    final repository = FlowOpRepository(
+      store,
+      protheusProducts: const _FakeProtheusProductRepository(),
+    );
+
+    expect(
+      () => repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: '730-0863',
+          productCode: '730-0863',
+          productName: 'SMART ALARM - MONITORADA CENTRAL',
+          openedBy: 'Paula',
+          operatorPin: '4001',
+          armazem: '03',
+          components: [
+            ProtheusProductComponent(
+              code: '575-0863',
+              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              quantityPerUnit: 1,
+              unit: 'PC',
+              filial: '04',
+              armazem: '03',
+              stockAvailable: 20,
+            ),
+          ],
+          smdReleaseOrders: [
+            ProtheusChildOrder(
+              number: '015957-01-001',
+              productCode: '500-0863',
+              productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+              plannedQuantity: 10,
+              producedQuantity: 10,
+              status: 'N',
+            ),
+          ],
+          qtd: 12,
+          responsavel: 'Paula',
+          prazo: '31/07/2026',
+        ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('pode apontar, mas não pode abrir OP'),
+        ),
+      ),
+    );
+  });
+
+  test('flow repository creates Protheus OP above stock', () async {
+    final store = ProductionFlowStore();
+    final repository = FlowOpRepository(
+      store,
+      protheusProducts: const _FakeProtheusProductRepository(),
+    );
+
+    final created = await repository.criarOrdem(
+      const NovaOrdemDTO(
+        produto: '730-0863',
+        productCode: '730-0863',
+        productName: 'SMART ALARM - MONITORADA CENTRAL',
+        operatorPin: '2001',
+        components: [
+          ProtheusProductComponent(
+            code: '575-0863',
+            description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+            quantityPerUnit: 1,
+            unit: 'PC',
+            stockAvailable: 5,
+          ),
+        ],
+        smdReleaseOrders: [
+          ProtheusChildOrder(
+            number: '015957-01-001',
+            productCode: '500-0863',
+            productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+            plannedQuantity: 10,
+            producedQuantity: 10,
+            status: 'N',
+          ),
+        ],
+        qtd: 12,
+        responsavel: 'Tatiane',
+        prazo: '31/07/2026',
+      ),
+    );
+
+    expect(created.numero, startsWith('OP-'));
+  });
+
+  testWidgets('new OP dialog offers autocomplete by product description', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            onLookupProduto:
+                const _FakeProtheusProductRepository().lookupByCode,
+            onSearchProdutos:
+                const _FakeProtheusProductRepository().searchProducts,
+            onCreate: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      'central',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('730-0863'), findsOneWidget);
+    expect(find.text('SMART ALARM - MONITORADA CENTRAL'), findsOneWidget);
+
+    await tester.tap(find.text('SMART ALARM - MONITORADA CENTRAL'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('730-0863 - SMART ALARM - MONITORADA CENTRAL'),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('new OP dialog shows all commitments and lets warehouse change', (
+    tester,
+  ) async {
+    NovaOrdemDTO? created;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            onLookupProduto:
+                const _WarehouseProtheusProductRepository().lookupByCode,
+            onSearchProdutos:
+                const _WarehouseProtheusProductRepository().searchProducts,
+            onCreate: (dto) => created = dto,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      '730-0863',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Filial 04 - VT'), findsWidgets);
+    expect(find.text('Armazém'), findsOneWidget);
+    expect(find.text('Estrutura do produto (SG1)'), findsOneWidget);
+    expect(find.textContaining('COMP-005'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('nova-op-warehouse')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nova-op-warehouse')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Armazém 02').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('emp.'), findsNothing);
+    expect(find.textContaining('res.'), findsNothing);
+    expect(find.textContaining('disp.'), findsNothing);
+    expect(find.textContaining('arm.'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('nova-op-quantity')), '5');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('disponível 45'), findsWidgets);
+    await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
+    await tester.enterText(
+      find.byKey(const Key('nova-op-operator-pin')),
+      '2001',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar OP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Criar OP'));
+    await tester.pumpAndSettle();
+
+    expect(created, isNotNull);
+    expect(created!.filial, '04');
+    expect(created!.armazem, '02');
+    expect(created!.prazo, isNull);
+    expect(created!.components, hasLength(5));
+    expect(created!.components.first.armazem, '01');
+  });
+
+  testWidgets(
+    'new OP dialog lets Tatiane create product stocked only in warehouse 01',
+    (tester) async {
+      NovaOrdemDTO? created;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: NovaOpDialog(
+              produtos: const [],
+              responsaveis: const ['Tatiane'],
+              currentOperatorName: 'Tatiane',
+              onLookupProduto:
+                  const _OnlyWarehouseOneProtheusProductRepository()
+                      .lookupByCode,
+              onSearchProdutos:
+                  const _OnlyWarehouseOneProtheusProductRepository()
+                      .searchProducts,
+              onCreate: (dto) => created = dto,
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('nova-op-product-code')),
+        '730-0779S',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('não tem armazém liberado'), findsNothing);
+      expect(find.textContaining('Armazém 05 - Produção'), findsWidgets);
+      expect(find.textContaining('Aviso:'), findsWidgets);
+
+      await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
+      await tester.enterText(
+        find.byKey(const Key('nova-op-operator-pin')),
+        '2001',
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Criar OP'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Criar OP'));
+      await tester.pumpAndSettle();
+
+      expect(created, isNotNull);
+      expect(created!.armazem, '05');
+      expect(created!.components.single.armazem, '01');
+    },
+  );
+
+  testWidgets('new OP dialog filters warehouses by current operator', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            currentOperatorName: 'Tatiane',
+            onLookupProduto:
+                const _RestrictedWarehouseProtheusProductRepository()
+                    .lookupByCode,
+            onSearchProdutos:
+                const _RestrictedWarehouseProtheusProductRepository()
+                    .searchProducts,
+            onCreate: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      '730-0863',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Armazém 05 - Produção'), findsWidgets);
+    expect(find.textContaining('Armazém 01 - Almoxarifado'), findsWidgets);
+
+    tester.binding.focusManager.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('nova-op-warehouse')));
+    await tester.tap(find.byKey(const Key('nova-op-warehouse')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Armazém 10 - Expedição'), findsOneWidget);
+  });
+
+  testWidgets('new OP dialog opens a future-only calendar for due date', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            onLookupProduto:
+                const _WarehouseProtheusProductRepository().lookupByCode,
+            onSearchProdutos:
+                const _WarehouseProtheusProductRepository().searchProducts,
+            onCreate: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('nova-op-due-date')));
+    await tester.tap(find.byKey(const Key('nova-op-due-date')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CalendarDatePicker), findsOneWidget);
+  });
+
+  testWidgets('new OP dialog lets a missing component use another warehouse', (
+    tester,
+  ) async {
+    NovaOrdemDTO? created;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            onLookupProduto:
+                const _WarehouseProtheusProductRepository().lookupByCode,
+            onSearchProdutos:
+                const _WarehouseProtheusProductRepository().searchProducts,
+            onCreate: (dto) => created = dto,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      '730-0863',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('nova-op-quantity')), '5');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Falta'), findsWidgets);
+    expect(find.text('Escolher armazém para atender'), findsOneWidget);
+    expect(find.text('Armazém 02'), findsOneWidget);
+    expect(find.textContaining('disponível 45'), findsOneWidget);
+
+    await tester.ensureVisible(
+      find.byKey(const Key('nova-op-component-warehouse-option-COMP-001-02')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('nova-op-component-warehouse-option-COMP-001-02')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Escolher armazém para atender'), findsOneWidget);
+    expect(find.text('Armazém 02'), findsOneWidget);
+    expect(find.text('Atendido pelo Armazém 02.'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
+    await tester.enterText(
+      find.byKey(const Key('nova-op-operator-pin')),
+      '2001',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar OP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Criar OP'));
+    await tester.pumpAndSettle();
+
+    expect(created, isNotNull);
+    expect(created!.components.first.armazem, '02');
+    expect(created!.components[1].armazem, '01');
+  });
+}
+
+class _RestrictedWarehouseProtheusProductRepository
+    implements ProtheusProductRepository {
+  const _RestrictedWarehouseProtheusProductRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['730-0863 - SMART ALARM - MONITORADA CENTRAL'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    return const [
+      ProtheusProduct(
+        filial: '04',
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code != '730-0863') return null;
+    return const ProtheusProductLookup(
+      filial: '04',
+      armazem: '01',
+      product: ProtheusProduct(
+        filial: '04',
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-RESTRITO',
+          description: 'Componente com varios armazens',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 20,
+          warehouseBalances: [
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '01',
+              currentStock: 20,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 20,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '05',
+              currentStock: 30,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 30,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '10',
+              currentStock: 40,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 40,
+            ),
+          ],
+        ),
+      ],
+      smdReleaseOrders: [
+        ProtheusChildOrder(
+          number: '015957-01-001',
+          productCode: '500-0863',
+          productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+          plannedQuantity: 10,
+          producedQuantity: 10,
+          status: 'N',
+        ),
+      ],
+    );
+  }
+}
+
+class _OnlyWarehouseOneProtheusProductRepository
+    implements ProtheusProductRepository {
+  const _OnlyWarehouseOneProtheusProductRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['730-0779S - SMART SENSOR ABERTURA LR SHOX PRO S'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    return const [
+      ProtheusProduct(
+        filial: '04',
+        code: '730-0779S',
+        description: 'SMART SENSOR ABERTURA LR SHOX PRO S',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code != '730-0779S') return null;
+    return const ProtheusProductLookup(
+      filial: '04',
+      armazem: '01',
+      product: ProtheusProduct(
+        filial: '04',
+        code: '730-0779S',
+        description: 'SMART SENSOR ABERTURA LR SHOX PRO S',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: '100-010',
+          description: 'PARAFUSO 2,9 X 6,5 MM ZI',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 0,
+          warehouseBalances: [
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '01',
+              currentStock: 0,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 0,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BlockedProductProtheusRepository implements ProtheusProductRepository {
+  const _BlockedProductProtheusRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['730-BLOCK - PRODUTO BLOQUEADO', '730-OK - PRODUTO LIBERADO'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    return const [
+      ProtheusProduct(
+        filial: '04',
+        code: '730-BLOCK',
+        description: 'PRODUTO BLOQUEADO',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+        screenBlock: '1',
+      ),
+      ProtheusProduct(
+        filial: '04',
+        code: '730-OK',
+        description: 'PRODUTO LIBERADO',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+        screenBlock: '2',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code == '730-BLOCK') {
+      return const ProtheusProductLookup(
+        product: ProtheusProduct(
+          filial: '04',
+          code: '730-BLOCK',
+          description: 'PRODUTO BLOQUEADO',
+          type: 'PA',
+          unit: 'PC',
+          group: '730',
+          screenBlock: '1',
+        ),
+      );
+    }
+    if (code == '730-OK') {
+      return const ProtheusProductLookup(
+        product: ProtheusProduct(
+          filial: '04',
+          code: '730-OK',
+          description: 'PRODUTO LIBERADO',
+          type: 'PA',
+          unit: 'PC',
+          group: '730',
+          screenBlock: '2',
+        ),
+      );
+    }
+    return null;
+  }
+}
+
+class _FakeProtheusProductRepository implements ProtheusProductRepository {
+  const _FakeProtheusProductRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['730-0863 - SMART ALARM - MONITORADA CENTRAL'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    if (!'730-0863 SMART ALARM - MONITORADA CENTRAL'.toLowerCase().contains(
+      query.toLowerCase(),
+    )) {
+      return const [];
+    }
+    return const [
+      ProtheusProduct(
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code != '730-0863') return null;
+    return const ProtheusProductLookup(
+      product: ProtheusProduct(
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [
+        ProtheusProductComponent(
+          code: '575-0863',
+          description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 80,
+        ),
+      ],
+      smdReleaseOrders: [
+        ProtheusChildOrder(
+          number: '015957-01-001',
+          productCode: '500-0863',
+          productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+          plannedQuantity: 10,
+          producedQuantity: 10,
+          status: 'N',
+        ),
+      ],
+    );
+  }
+}
+
+class _WarehouseProtheusProductRepository implements ProtheusProductRepository {
+  const _WarehouseProtheusProductRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['730-0863 - SMART ALARM - MONITORADA CENTRAL'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    return const [
+      ProtheusProduct(
+        filial: '04',
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code != '730-0863') return null;
+    return const ProtheusProductLookup(
+      filial: '04',
+      armazem: '01',
+      product: ProtheusProduct(
+        filial: '04',
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-001',
+          description: 'Empenho 1',
+          quantityPerUnit: 2,
+          unit: 'PC',
+          stockAvailable: 8,
+          warehouseBalances: [
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '01',
+              currentStock: 20,
+              committedQuantity: 6,
+              reservedQuantity: 6,
+              availableQuantity: 8,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '02',
+              currentStock: 50,
+              committedQuantity: 5,
+              reservedQuantity: 0,
+              availableQuantity: 45,
+            ),
+          ],
+        ),
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-002',
+          description: 'Empenho 2',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 8,
+        ),
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-003',
+          description: 'Empenho 3',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 8,
+        ),
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-004',
+          description: 'Empenho 4',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 8,
+        ),
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-005',
+          description: 'Empenho 5',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 8,
+        ),
+      ],
+      smdReleaseOrders: [
+        ProtheusChildOrder(
+          number: '015957-01-001',
+          productCode: '500-0863',
+          productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+          plannedQuantity: 10,
+          producedQuantity: 10,
+          status: 'N',
+        ),
+      ],
+    );
+  }
+}

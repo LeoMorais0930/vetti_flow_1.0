@@ -83,12 +83,20 @@ class OrdemProducao {
   final String mes;
   final bool atrasada;
   final String prioridade;
+  final String armazem;
 
   /// Etapa real da OP no fluxo de produção (fonte: ProductionFlowStore).
   final ProductionStage stage;
 
   /// Materiais (BOM) do produto: (descrição, quantidade por unidade).
   final List<(String, int)> materiais;
+  final List<MaterialOpDetalhe> materiaisDetalhados;
+  final List<ResumoPausaOp> pausas;
+  final String tempoTotal;
+  final String tempoEtapaAtual;
+  final String? observacao;
+  final List<ProductionStage> plannedStages;
+  final List<ResumoAssinaturaOp> assinaturas;
 
   const OrdemProducao({
     required this.numero,
@@ -102,8 +110,16 @@ class OrdemProducao {
     required this.mes,
     this.atrasada = false,
     this.prioridade = 'Media',
+    this.armazem = '',
     this.stage = ProductionStage.warehouse,
     this.materiais = const [],
+    this.materiaisDetalhados = const [],
+    this.pausas = const [],
+    this.tempoTotal = '0min',
+    this.tempoEtapaAtual = '0min',
+    this.observacao,
+    this.plannedStages = const [],
+    this.assinaturas = const [],
   });
 
   String get qtdLabel => '$qtd un';
@@ -129,8 +145,16 @@ class OrdemProducao {
     String? mes,
     bool? atrasada,
     String? prioridade,
+    String? armazem,
     ProductionStage? stage,
     List<(String, int)>? materiais,
+    List<MaterialOpDetalhe>? materiaisDetalhados,
+    List<ResumoPausaOp>? pausas,
+    String? tempoTotal,
+    String? tempoEtapaAtual,
+    String? Function()? observacao,
+    List<ProductionStage>? plannedStages,
+    List<ResumoAssinaturaOp>? assinaturas,
   }) {
     return OrdemProducao(
       numero: numero ?? this.numero,
@@ -144,10 +168,78 @@ class OrdemProducao {
       mes: mes ?? this.mes,
       atrasada: atrasada ?? this.atrasada,
       prioridade: prioridade ?? this.prioridade,
+      armazem: armazem ?? this.armazem,
       stage: stage ?? this.stage,
       materiais: materiais ?? this.materiais,
+      materiaisDetalhados: materiaisDetalhados ?? this.materiaisDetalhados,
+      pausas: pausas ?? this.pausas,
+      tempoTotal: tempoTotal ?? this.tempoTotal,
+      tempoEtapaAtual: tempoEtapaAtual ?? this.tempoEtapaAtual,
+      observacao: observacao != null ? observacao() : this.observacao,
+      plannedStages: plannedStages ?? this.plannedStages,
+      assinaturas: assinaturas ?? this.assinaturas,
     );
   }
+}
+
+class ResumoAssinaturaOp {
+  const ResumoAssinaturaOp({
+    required this.tipo,
+    required this.etapa,
+    required this.operador,
+    required this.pin,
+    required this.quando,
+    required this.detalhe,
+  });
+
+  final String tipo;
+  final String etapa;
+  final String operador;
+  final String pin;
+  final String quando;
+  final String detalhe;
+}
+
+class MaterialOpDetalhe {
+  const MaterialOpDetalhe({
+    required this.codigo,
+    required this.descricao,
+    required this.quantidadePorUnidade,
+    required this.quantidadeTotal,
+    required this.filial,
+    required this.armazem,
+    required this.movimentaEstoque,
+  });
+
+  final String codigo;
+  final String descricao;
+  final int quantidadePorUnidade;
+  final int quantidadeTotal;
+  final String filial;
+  final String armazem;
+  final bool movimentaEstoque;
+
+  String get label => '$codigo - $descricao';
+}
+
+class ResumoPausaOp {
+  const ResumoPausaOp({
+    required this.etapa,
+    required this.motivo,
+    required this.operador,
+    required this.tempo,
+    required this.iniciadaEm,
+    required this.status,
+    this.quantidadeProduzida = 0,
+  });
+
+  final String etapa;
+  final String motivo;
+  final String operador;
+  final String tempo;
+  final String iniciadaEm;
+  final String status;
+  final int quantidadeProduzida;
 }
 
 class OrdemArmazenada {

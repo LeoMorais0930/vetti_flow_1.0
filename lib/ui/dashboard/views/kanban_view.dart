@@ -9,6 +9,7 @@ import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_card.dart';
 Color stageAccent(ProductionStage stage) {
   return switch (stage) {
     ProductionStage.warehouse => const Color(0xFF0077BD),
+    ProductionStage.smd => const Color(0xFF0E9C8A),
     ProductionStage.firmware => const Color(0xFF6D5BD0),
     ProductionStage.soldering => const Color(0xFFD97706),
     ProductionStage.testing => const Color(0xFF0E9C8A),
@@ -27,21 +28,43 @@ class KanbanView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const flow = ProductionStage.productionFlow;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: flow.map((stage) {
-        final items = ordens.where((op) => op.stage == stage).toList();
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: stage != flow.last ? 14 : 0),
-            child: _KanbanColumn(
-              stage: stage,
-              items: items,
-              onOpenOP: onOpenOP,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 14.0;
+        const minColumnWidth = 170.0;
+        final available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : flow.length * minColumnWidth;
+        final totalGap = gap * (flow.length - 1);
+        final contentWidth = available.clamp(
+          flow.length * minColumnWidth + totalGap,
+          double.infinity,
+        );
+        final columnWidth = (contentWidth - totalGap) / flow.length;
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: contentWidth,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < flow.length; i++) ...[
+                  SizedBox(
+                    width: columnWidth,
+                    child: _KanbanColumn(
+                      stage: flow[i],
+                      items: ordens.where((op) => op.stage == flow[i]).toList(),
+                      onOpenOP: onOpenOP,
+                    ),
+                  ),
+                  if (i < flow.length - 1) const SizedBox(width: gap),
+                ],
+              ],
             ),
           ),
         );
-      }).toList(),
+      },
     );
   }
 }

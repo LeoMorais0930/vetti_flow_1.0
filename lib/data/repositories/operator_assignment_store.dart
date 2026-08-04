@@ -9,6 +9,7 @@ class OperatorAssignmentStore extends ChangeNotifier {
       };
 
   static const assignableStages = [
+    WorkStage.smd,
     WorkStage.firmware,
     WorkStage.soldering,
     WorkStage.testing,
@@ -26,7 +27,7 @@ class OperatorAssignmentStore extends ChangeNotifier {
     WorkStage.expedition,
   ];
 
-  static const smdStages = [WorkStage.firmware, WorkStage.soldering];
+  static const smdStages = [WorkStage.smd];
 
   static const warehouseStages = [WorkStage.warehouse];
 

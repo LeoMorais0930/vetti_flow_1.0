@@ -1063,6 +1063,7 @@ BoxDecoration _cardDecoration(
 Color _stageAccent(ProductionStage stage) {
   return switch (stage) {
     ProductionStage.warehouse => const Color(0xFF0077BD),
+    ProductionStage.smd => const Color(0xFF0E9C8A),
     ProductionStage.firmware => const Color(0xFF6D5BD0),
     ProductionStage.soldering => const Color(0xFFD97706),
     ProductionStage.testing => const Color(0xFF0E9C8A),
@@ -1076,6 +1077,7 @@ Color _stageAccent(ProductionStage stage) {
 IconData _stageIcon(ProductionStage stage) {
   return switch (stage) {
     ProductionStage.warehouse => Icons.warehouse_rounded,
+    ProductionStage.smd => Icons.developer_board_rounded,
     ProductionStage.firmware => Icons.memory_rounded,
     ProductionStage.soldering => Icons.construction_rounded,
     ProductionStage.testing => Icons.fact_check_rounded,

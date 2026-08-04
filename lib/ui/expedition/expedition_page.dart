@@ -156,16 +156,7 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
   var _selectedIndex = 0;
   var _showStored = false;
   final _dispatchSummaries = <String, ExpeditionDispatchSummary>{};
-  final _dispatchedOrders = <ExpeditionDispatchedOrder>[
-    const ExpeditionDispatchedOrder(
-      number: 'OP-00563-984',
-      product: 'Controle Vetti Slim',
-      quantity: 320,
-      orderCode: 'PED-77372',
-      dispatchedAt: '11:42',
-      origin: 'Despacho direto',
-    ),
-  ];
+  final _dispatchedOrders = <ExpeditionDispatchedOrder>[];
 
   List<ProductionOrderFlow> _readyFlowOrders() => context
       .read<ProductionFlowStore>()
@@ -227,11 +218,11 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
     setState(() => _selectedIndex = index);
   }
 
-  void _startExpedition() {
+  Future<void> _startExpedition() async {
     final order = _selectedFlowOrder();
     if (order == null) return;
     final operator = context.read<OperatorAssignmentStore>().currentOperator;
-    context.read<ProductionFlowStore>().startStage(
+    await context.read<ProductionFlowStore>().startStage(
       order.number,
       operatorName: operator?.name ?? 'Expedicao',
       operatorPin: operator?.pin,
@@ -247,7 +238,7 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
       maxQuantity: order.quantity,
     );
     if (!mounted || request == null) return;
-    context.read<ProductionFlowStore>().pauseStage(
+    await context.read<ProductionFlowStore>().pauseStage(
       order.number,
       operatorName: request.operatorName,
       operatorPin: request.operatorPin,
@@ -265,10 +256,11 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
     if (!mounted || storedQuantity == null) return;
 
     final dispatchedQuantity = order.quantityValue - storedQuantity;
-    context.read<ProductionFlowStore>().completeExpedition(
+    await context.read<ProductionFlowStore>().completeExpedition(
       flowOrder.number,
       storedQuantity: storedQuantity,
     );
+    if (!mounted) return;
     setState(() {
       _dispatchSummaries[order.number] = ExpeditionDispatchSummary(
         dispatchedQuantity: dispatchedQuantity,
@@ -328,10 +320,11 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
     );
     if (!mounted || quantityToDispatch == null) return;
 
-    context.read<ProductionFlowStore>().dispatchStored(
+    await context.read<ProductionFlowStore>().dispatchStored(
       storedOrder.number,
       quantity: quantityToDispatch,
     );
+    if (!mounted) return;
     setState(() {
       _recordDispatched(
         number: storedOrder.number,

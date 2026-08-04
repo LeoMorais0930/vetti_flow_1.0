@@ -1,5 +1,6 @@
 enum ProductionStage {
   warehouse,
+  smd,
   firmware,
   soldering,
   testing,
@@ -10,6 +11,7 @@ enum ProductionStage {
 
   String get label => switch (this) {
     warehouse => 'Almoxarifado',
+    smd => 'SMD',
     firmware => 'Gravacao',
     soldering => 'Soldagem',
     testing => 'Teste',
@@ -21,6 +23,7 @@ enum ProductionStage {
 
   String get route => switch (this) {
     warehouse => '/almoxarifado',
+    smd => '/smd',
     firmware => '/firmware',
     soldering => '/soldagem',
     testing => '/teste',
@@ -32,16 +35,18 @@ enum ProductionStage {
 
   int get progressIndex => switch (this) {
     warehouse => 0,
-    firmware => 1,
-    soldering => 2,
-    testing => 3,
-    closing => 4,
-    expedition => 5,
-    storage || completed => 6,
+    smd => 1,
+    firmware => 2,
+    soldering => 3,
+    testing => 4,
+    closing => 5,
+    expedition => 6,
+    storage || completed => 7,
   };
 
   static const productionFlow = [
     warehouse,
+    smd,
     firmware,
     soldering,
     testing,
@@ -355,8 +360,10 @@ class ProductionOrderFlow {
     required this.createdAt,
     required this.updatedAt,
     this.operatorName,
+    this.operatorPin,
     this.responsavel,
     this.prazo,
+    this.orderWarehouse = '',
     this.closedQuantity = 0,
     this.lastObservation,
     this.storedQuantity = 0,
@@ -365,6 +372,7 @@ class ProductionOrderFlow {
     this.testDefects = const [],
     this.operatorSessions = const [],
     this.pauseEvents = const [],
+    this.plannedStages = const [],
   });
 
   final String number;
@@ -377,8 +385,10 @@ class ProductionOrderFlow {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? operatorName;
+  final String? operatorPin;
   final String? responsavel;
   final String? prazo;
+  final String orderWarehouse;
   final int closedQuantity;
   final String? lastObservation;
   final int storedQuantity;
@@ -387,6 +397,7 @@ class ProductionOrderFlow {
   final List<DefectRecord> testDefects;
   final List<ProductionOperatorSession> operatorSessions;
   final List<ProductionPauseEvent> pauseEvents;
+  final List<ProductionStage> plannedStages;
 
   /// Total de dispositivos marcados como defeito no teste.
   int get totalDefects =>
@@ -425,8 +436,10 @@ class ProductionOrderFlow {
     String? priority,
     DateTime? updatedAt,
     String? Function()? operatorName,
-    String? responsavel,
+    String? Function()? operatorPin,
+    String? Function()? responsavel,
     String? prazo,
+    String? orderWarehouse,
     int? closedQuantity,
     String? Function()? lastObservation,
     int? storedQuantity,
@@ -435,6 +448,7 @@ class ProductionOrderFlow {
     List<DefectRecord>? testDefects,
     List<ProductionOperatorSession>? operatorSessions,
     List<ProductionPauseEvent>? pauseEvents,
+    List<ProductionStage>? plannedStages,
   }) {
     return ProductionOrderFlow(
       number: number,
@@ -447,8 +461,10 @@ class ProductionOrderFlow {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       operatorName: operatorName != null ? operatorName() : this.operatorName,
-      responsavel: responsavel ?? this.responsavel,
+      operatorPin: operatorPin != null ? operatorPin() : this.operatorPin,
+      responsavel: responsavel != null ? responsavel() : this.responsavel,
       prazo: prazo ?? this.prazo,
+      orderWarehouse: orderWarehouse ?? this.orderWarehouse,
       closedQuantity: closedQuantity ?? this.closedQuantity,
       lastObservation: lastObservation != null
           ? lastObservation()
@@ -459,6 +475,7 @@ class ProductionOrderFlow {
       testDefects: testDefects ?? this.testDefects,
       operatorSessions: operatorSessions ?? this.operatorSessions,
       pauseEvents: pauseEvents ?? this.pauseEvents,
+      plannedStages: plannedStages ?? this.plannedStages,
     );
   }
 }
@@ -485,12 +502,32 @@ class ProductionComponent {
     required this.description,
     required this.quantity,
     required this.stock,
+    this.filial = '',
+    this.armazem = '',
+    this.currentStock = 0,
+    this.committedQuantity = 0,
+    this.reservedQuantity = 0,
+    this.requirementSource = 'SG1',
+    this.sourceOrder = '',
+    this.commitmentDate = '',
+    this.originalQuantity = 0,
+    this.commitmentQuantity = 0,
   });
 
   final String code;
   final String description;
   final int quantity;
   final int stock;
+  final String filial;
+  final String armazem;
+  final int currentStock;
+  final int committedQuantity;
+  final int reservedQuantity;
+  final String requirementSource;
+  final String sourceOrder;
+  final String commitmentDate;
+  final int originalQuantity;
+  final int commitmentQuantity;
 
   String get quantityLabel => '$quantity un';
   String get stockLabel => '$stock un';
