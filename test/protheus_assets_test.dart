@@ -65,6 +65,84 @@ void main() {
     expect(all.where((o) => o.closed), isNotEmpty);
   });
 
+  test('produto sem OP em aberto também traz a estrutura', () {
+    // A extração da SG1 já foi restrita aos produtos que tinham OP em aberto,
+    // que é o inverso do que a abertura de OP nova precisa: o produto para o
+    // qual se vai abrir a OP normalmente ainda não tem nenhuma. A tela
+    // explodia zero componente e o operador pedia a OP sem empenho nenhum.
+    final catalog = AssetProductCatalogRepository(
+      AssetProductCatalogRepository.parse(produtos.readAsStringSync()),
+    );
+    final repo = AssetProtheusOrderRepository(
+      AssetProtheusOrderRepository.parseOrders(ordens.readAsStringSync()),
+    );
+
+    final comOpAberta = repo.open.map((o) => o.productCode).toSet();
+    final semOpMasComEstrutura = catalog.items
+        .where((i) => i.components.isNotEmpty)
+        .where((i) => !comOpAberta.contains(i.code))
+        .toList();
+
+    expect(
+      semOpMasComEstrutura,
+      isNotEmpty,
+      reason:
+          'nenhum produto sem OP em aberto tem estrutura — sinal de que a '
+          'extração da SG1 voltou a ser filtrada por OP em aberto',
+    );
+  });
+
+  test('a estrutura não repete componente', () {
+    // A SG1 traz o mesmo componente em linhas separadas quando ele aparece em
+    // posições diferentes da montagem. EmpenhoEditor usa produto+almoxarifado
+    // como chave de widget e como Set de "já presentes": linha repetida faz o
+    // Flutter derrubar a lista inteira com "Duplicate keys found", e a área de
+    // empenhos da OP nova aparece vazia para o operador.
+    final catalog = AssetProductCatalogRepository(
+      AssetProductCatalogRepository.parse(produtos.readAsStringSync()),
+    );
+
+    for (final item in catalog.items) {
+      final codigos = item.components.map((c) => c.code).toList();
+      expect(
+        codigos.toSet().length,
+        codigos.length,
+        reason: 'produto ${item.code} repete componente na estrutura',
+      );
+    }
+  });
+
+  test('componente repetido na SG1 vira uma linha com a soma', () {
+    // O 441-062 aparece duas vezes na estrutura do 500-0001, como 4 e como 1.
+    // Para empenhar valem 5 numa linha só.
+    final catalog = AssetProductCatalogRepository(
+      AssetProductCatalogRepository.parse(produtos.readAsStringSync()),
+    );
+
+    final item = catalog.findByCode('500-0001');
+    expect(item, isNotNull, reason: '500-0001 saiu do catálogo');
+
+    final repetido = item!.components.where((c) => c.code == '441-062');
+    expect(repetido, hasLength(1));
+    expect(repetido.single.quantity, 5);
+  });
+
+  test('todo componente da estrutura tem cadastro no catálogo', () {
+    // Sem o cadastro do componente o app cai no fallback do parser: mostra o
+    // código no lugar da descrição e saldo zero, sem nada indicar que faltou.
+    final catalog = AssetProductCatalogRepository(
+      AssetProductCatalogRepository.parse(produtos.readAsStringSync()),
+    );
+
+    final orfaos = <String>{
+      for (final item in catalog.items)
+        for (final c in item.components)
+          if (catalog.findByCode(c.code) == null) c.code,
+    };
+
+    expect(orfaos, isEmpty, reason: 'componentes fora do catálogo: $orfaos');
+  });
+
   test('toda OP tem chave completa e número de 11 caracteres', () {
     final all = AssetProtheusOrderRepository.parseOrders(
       ordens.readAsStringSync(),

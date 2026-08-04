@@ -39,7 +39,14 @@ class NovaOpDialog extends StatefulWidget {
 
   final VoidCallback onClose;
   final bool isDesktop;
-  final double? Function(String produto, String local)? saldoDisponivel;
+  final List<SaldoArmazem> Function(String produto)? saldosPorArmazem;
+
+  /// Pedir transferência de outro armazém para cobrir a falta de uma linha
+  /// de empenho, no modo "solicitar nova". Recebe também o responsável
+  /// escolhido no formulário, já que é este diálogo que guarda esse estado —
+  /// quem chama não precisa saber sobre `_responsavel`.
+  final void Function(String produto, String localDestino, String autor)?
+  onSolicitarTransferencia;
 
   /// A busca ao vivo de OPs abertas falhou — mostra o aviso na aba "trazer
   /// existente".
@@ -55,7 +62,8 @@ class NovaOpDialog extends StatefulWidget {
     required this.onSolicitar,
     required this.onClose,
     this.isDesktop = true,
-    this.saldoDisponivel,
+    this.saldosPorArmazem,
+    this.onSolicitarTransferencia,
     this.retratoDesatualizado = false,
   });
 
@@ -183,7 +191,15 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                     SolicitacaoOpForm(
                       catalogo: widget.catalogo,
                       armazens: widget.armazens,
-                      saldoDisponivel: widget.saldoDisponivel,
+                      saldosPorArmazem: widget.saldosPorArmazem,
+                      onSolicitarTransferencia:
+                          widget.onSolicitarTransferencia == null
+                          ? null
+                          : (produto, local) => widget.onSolicitarTransferencia!(
+                              produto,
+                              local,
+                              _responsavel,
+                            ),
                       onMudar: (pedido) => setState(() => _pedido = pedido),
                     ),
                   const SizedBox(height: 15),

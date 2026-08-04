@@ -331,6 +331,46 @@ void main() {
     expect(adotada!.prioridade, 'Alta');
   });
 
+  testWidgets(
+    'solicitar OP nova sugere o armazem 05 (producao) por padrao',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: NovaOpDialog(
+              ordensDisponiveis: const [],
+              catalogo: TestCatalog(),
+              armazens: testArmazens(),
+              responsaveis: const ['Tatiane'],
+              onCreate: (_) {},
+              onSolicitar: (_, _, _) {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Solicitar OP nova'));
+      await tester.pumpAndSettle();
+
+      // 203-002 é o único produto do catálogo de teste com estrutura (2
+      // componentes) — os outros explodiriam em zero linhas de empenho. Como
+      // o código digitado já bate exato, o produto é reconhecido na hora, sem
+      // precisar tocar numa sugestão — a explosão da estrutura já acontece
+      // aqui, então nem precisa digitar quantidade para ver o armazém padrão.
+      await tester.enterText(find.byType(TextFormField).first, '203-002');
+      await tester.pumpAndSettle();
+
+      // A OP nasce no armazém de produção...
+      expect(find.text('05 - PRODUCAO MEC'), findsOneWidget);
+      // ...e cada linha de empenho explodida da estrutura sugere o mesmo
+      // armazém, não mais o `01` (ALMOXARIFADO) de antes.
+      expect(find.text('05'), findsNWidgets(2));
+      expect(find.text('01'), findsNothing);
+    },
+  );
+
   test('flow repository adopts dashboard OPs with selected priority', () async {
     final store = ProductionFlowStore(catalog: TestCatalog());
     final repository = FlowOpRepository(

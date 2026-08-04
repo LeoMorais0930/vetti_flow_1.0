@@ -44,7 +44,8 @@ class SolicitacaoOpForm extends StatefulWidget {
     required this.catalogo,
     required this.armazens,
     required this.onMudar,
-    this.saldoDisponivel,
+    this.saldosPorArmazem,
+    this.onSolicitarTransferencia,
     this.localPadrao = almoxarifadoPadrao,
   });
 
@@ -54,9 +55,14 @@ class SolicitacaoOpForm extends StatefulWidget {
   /// Chamado a cada mudança: o pedido, ou `null` enquanto faltar algo.
   final ValueChanged<SolicitacaoOp?> onMudar;
 
-  final double? Function(String produto, String local)? saldoDisponivel;
+  final List<SaldoArmazem> Function(String produto)? saldosPorArmazem;
 
-  /// Almoxarifado sugerido para a produção — `01` (ALMOXARIFADO) na Vetti.
+  /// Pedir transferência de outro armazém para cobrir a falta de uma linha
+  /// de empenho — repassado direto para o [EmpenhoEditor].
+  final void Function(String produto, String localDestino)?
+  onSolicitarTransferencia;
+
+  /// Almoxarifado sugerido para a produção — `05` (PRODUCAO MEC) na Vetti.
   final String localPadrao;
 
   @override
@@ -219,7 +225,9 @@ class _SolicitacaoOpFormState extends State<SolicitacaoOpForm> {
             linhas: _empenhos,
             armazens: widget.armazens,
             catalogo: widget.catalogo,
-            saldoDisponivel: widget.saldoDisponivel,
+            saldosPorArmazem: widget.saldosPorArmazem,
+            onSolicitarTransferencia: widget.onSolicitarTransferencia,
+            localInicialComponenteNovo: _local,
             onAlterar: (i, nova) =>
                 _mexerNosEmpenhos(() => _empenhos[i] = nova),
             onRemover: (i) => _mexerNosEmpenhos(() => _empenhos.removeAt(i)),

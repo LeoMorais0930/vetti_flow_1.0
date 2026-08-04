@@ -405,4 +405,151 @@ void main() {
       expect(m.filial, '04');
     });
   });
+
+  group('disponivelPorArmazem devolve o disponível por armazém de uma vez', () {
+    test(
+      'cada armazém sai com a mesma conta de disponivelPara, sem contar a própria OP duas vezes',
+      () {
+        final store = _store();
+
+        final porArmazem = store.disponivelPorArmazem(
+          produto: _produto,
+          filial: '04',
+          baseCatalogo: _baseCatalogo,
+          op: _op,
+          baseOp: _baseOp,
+        );
+
+        final aqui = porArmazem.firstWhere((s) => s.local == _local);
+        // Mesma conta do teste equivalente de disponivelPara: 3796 - 1700 +
+        // 1500 (reserva desta OP, somada de volta) = 3596.
+        expect(aqui.disponivel, 3596);
+      },
+    );
+
+    test('sem op informada, comporta-se como saldosEfetivos puro', () {
+      final store = _store();
+
+      final porArmazem = store.disponivelPorArmazem(
+        produto: _produto,
+        filial: '04',
+        baseCatalogo: _baseCatalogo,
+      );
+
+      final aqui = porArmazem.firstWhere((s) => s.local == _local);
+      expect(aqui.disponivel, 2096);
+    });
+
+    test(
+      'armazém sem posição na base e sem mutação simplesmente não aparece na lista',
+      () {
+        final store = _store();
+
+        final porArmazem = store.disponivelPorArmazem(
+          produto: _produto,
+          filial: '04',
+          baseCatalogo: _baseCatalogo,
+        );
+
+        expect(porArmazem.any((s) => s.local == '99'), isFalse);
+      },
+    );
+
+    test(
+      'reserva da própria OP num armazém fora da base ainda aparece, nascendo do zero',
+      () {
+        final store = _store();
+        const baseOpForaDaBase = [
+          ProtheusEmpenho(
+            filial: '04',
+            op: _op,
+            produto: _produto,
+            local: '99',
+            quantidade: 250,
+          ),
+        ];
+
+        final porArmazem = store.disponivelPorArmazem(
+          produto: _produto,
+          filial: '04',
+          baseCatalogo: _baseCatalogo,
+          op: _op,
+          baseOp: baseOpForaDaBase,
+        );
+
+        final la = porArmazem.firstWhere((s) => s.local == '99');
+        // Nasce zerado (sem posição na SB2) e ganha de volta a reserva da
+        // própria OP — igual disponivelPara faria para este armazém.
+        expect(la.disponivel, 250);
+      },
+    );
+  });
+
+  group(
+    'saldoFisicoPorArmazem mostra o saldo físico, sem descontar empenhado',
+    () {
+      test('disponível é o saldo bruto (B2_QATU), não saldo menos empenhado', () {
+        final store = _store();
+
+        final fisico = store.saldoFisicoPorArmazem(_produto, '04', _baseCatalogo);
+        final aqui = fisico.firstWhere((s) => s.local == _local);
+
+        // _baseCatalogo tem saldo 3796 e empenhado 1700 — aqui o empenhado
+        // não entra na conta: disponível == saldo bruto, 3796.
+        expect(aqui.empenhado, 0);
+        expect(aqui.disponivel, 3796);
+      });
+
+      test('empenho pendente de OUTRA OP não reduz o saldo físico', () {
+        final store = _store();
+        store.enqueue(
+          (id, agora) => EmpenhoMutation(
+            id: id,
+            filial: '04',
+            criadoEm: agora,
+            autor: 'Vera',
+            op: '01427401001',
+            operacao: EmpenhoOperacao.incluir,
+            produto: _produto,
+            produtoDescricao: 'TAMPA',
+            local: _local,
+            quantidade: 400,
+          ),
+        );
+
+        final fisico = store.saldoFisicoPorArmazem(_produto, '04', _baseCatalogo);
+        final aqui = fisico.firstWhere((s) => s.local == _local);
+
+        // disponivelPara mostraria 3396 aqui (3796 - 400 reservados por
+        // outra OP) — o saldo físico ignora isso de propósito.
+        expect(aqui.disponivel, 3796);
+      });
+
+      test('transferência pendente ainda move o saldo físico entre armazéns', () {
+        final store = _store();
+        store.enqueue(
+          (id, agora) => TransferenciaMutation(
+            id: id,
+            filial: '04',
+            criadoEm: agora,
+            autor: 'Bryan',
+            produto: _produto,
+            produtoDescricao: 'TAMPA',
+            quantidade: 500,
+            localOrigem: _local,
+            localDestino: '10',
+          ),
+        );
+
+        final fisico = store.saldoFisicoPorArmazem(_produto, '04', _baseCatalogo);
+        final origem = fisico.firstWhere((s) => s.local == _local);
+        final destino = fisico.firstWhere((s) => s.local == '10');
+
+        // O material muda de lugar de verdade antes de chegar ao Protheus —
+        // só o desconto de empenho é que fica de fora.
+        expect(origem.disponivel, 3296);
+        expect(destino.disponivel, 500);
+      });
+    },
+  );
 }

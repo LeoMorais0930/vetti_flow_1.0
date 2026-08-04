@@ -9,6 +9,7 @@ import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_repository.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/protheus/transferencia_dialog.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/empenho_editor.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/produto_busca.dart';
 
@@ -234,6 +235,22 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
     Navigator.of(context).pop(mutacoes.length);
   }
 
+  Future<void> _transferir(String produto, String localDestino) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final gravou = await TransferenciaDialog.mostrar(
+      context,
+      filial: widget.filial,
+      autor: widget.autor,
+      produtoInicial: produto,
+      localDestinoInicial: localDestino,
+      op: widget.op,
+    );
+    if (gravou != true) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Transferência na fila do Protheus.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_carregando) {
@@ -347,18 +364,18 @@ class _EmpenhosOpDialogState extends State<EmpenhosOpDialog> {
                       // dentro do B2_QEMP. Passar op/baseOp soma essa reserva
                       // de volta — senão o disponível descontaria a própria
                       // OP duas vezes.
-                      saldoDisponivel: (produto, local) {
+                      saldosPorArmazem: (produto) {
                         final item = catalogo.findByCode(produto);
-                        if (item == null) return null;
-                        return fila.disponivelPara(
+                        if (item == null) return const [];
+                        return fila.disponivelPorArmazem(
                           produto: produto,
                           filial: widget.filial,
-                          local: local,
                           baseCatalogo: item.saldos,
                           op: widget.op,
                           baseOp: _base,
                         );
                       },
+                      onSolicitarTransferencia: _transferir,
                       onAlterar: (i, nova) =>
                           setState(() => _linhas[i] = nova),
                       onRemover: (i) => setState(() => _linhas.removeAt(i)),

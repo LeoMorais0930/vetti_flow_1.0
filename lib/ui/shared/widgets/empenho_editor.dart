@@ -27,7 +27,9 @@ class EmpenhoEditor extends StatelessWidget {
     required this.onAlterar,
     required this.onRemover,
     required this.onIncluir,
-    this.saldoDisponivel,
+    this.saldosPorArmazem,
+    this.onSolicitarTransferencia,
+    this.localInicialComponenteNovo,
     this.somenteLeitura = false,
   });
 
@@ -39,14 +41,26 @@ class EmpenhoEditor extends StatelessWidget {
   final void Function(int index) onRemover;
   final void Function(EmpenhoLinha nova) onIncluir;
 
-  /// Saldo disponível de um componente num almoxarifado, para a linha avisar
-  /// quando o empenho passa do que há.
+  /// Saldo de um componente em cada almoxarifado onde ele tem posição (ou
+  /// alguma mutação pendente mexendo nele), para a linha mostrar "quanto tem
+  /// aqui e nos outros" — e não só avisar quando o empenho passa do que há.
   ///
-  /// `null` no retorno (com a função presente) diz "este produto não tem
-  /// posição neste armazém nesta filial" — diferente de saldo zero, que é uma
-  /// posição real só que vazia. A função ausente (`saldoDisponivel == null`)
-  /// desliga o aviso inteiro, para quem chama sem essa informação disponível.
-  final double? Function(String produto, String local)? saldoDisponivel;
+  /// Um armazém ausente da lista diz "este produto não tem posição ali nesta
+  /// filial" — diferente de saldo zero, que é uma posição real só que vazia.
+  /// A função ausente (`saldosPorArmazem == null`) desliga o recurso inteiro,
+  /// para quem chama sem essa informação disponível.
+  final List<SaldoArmazem> Function(String produto)? saldosPorArmazem;
+
+  /// Chamado quando o operador pede transferência de outro armazém para
+  /// cobrir a falta de uma linha. `null` desliga o atalho — a linha continua
+  /// mostrando o aviso de falta, só sem o botão.
+  final void Function(String produto, String localDestino)?
+  onSolicitarTransferencia;
+
+  /// Armazém sugerido para um componente acrescentado manualmente, em vez de
+  /// cair sempre no primeiro da lista global. `null` mantém o comportamento
+  /// de sempre.
+  final String? localInicialComponenteNovo;
 
   final bool somenteLeitura;
 
@@ -106,9 +120,13 @@ class EmpenhoEditor extends StatelessWidget {
                   armazens: armazens,
                   ultima: i == linhas.length - 1,
                   somenteLeitura: somenteLeitura,
-                  disponivelNoArmazem: saldoDisponivel == null
+                  saldos: saldosPorArmazem?.call(linhas[i].produto),
+                  onSolicitarTransferencia: onSolicitarTransferencia == null
                       ? null
-                      : (local) => saldoDisponivel!(linhas[i].produto, local),
+                      : () => onSolicitarTransferencia!(
+                          linhas[i].produto,
+                          linhas[i].local,
+                        ),
                   onAlterar: (nova) => onAlterar(i, nova),
                   onRemover: () => onRemover(i),
                 ),
@@ -121,7 +139,8 @@ class EmpenhoEditor extends StatelessWidget {
             catalogo: catalogo,
             armazens: armazens,
             jaPresentes: {for (final l in linhas) '${l.produto}|${l.local}'},
-            saldoDisponivel: saldoDisponivel,
+            saldosPorArmazem: saldosPorArmazem,
+            localInicial: localInicialComponenteNovo,
             onIncluir: onIncluir,
           ),
         ],
@@ -139,7 +158,8 @@ class _LinhaEmpenho extends StatefulWidget {
     required this.somenteLeitura,
     required this.onAlterar,
     required this.onRemover,
-    this.disponivelNoArmazem,
+    this.saldos,
+    this.onSolicitarTransferencia,
   });
 
   final EmpenhoLinha linha;
@@ -147,10 +167,16 @@ class _LinhaEmpenho extends StatefulWidget {
   final bool ultima;
   final bool somenteLeitura;
 
-  /// Disponível deste componente, num armazém qualquer da lista — usada tanto
-  /// para o aviso da linha (no armazém escolhido) quanto para separar, no
-  /// dropdown, os armazéns onde o produto tem posição dos que não têm.
-  final double? Function(String local)? disponivelNoArmazem;
+  /// Saldo deste componente em cada armazém onde ele tem posição — usada
+  /// tanto para o aviso da linha (no armazém escolhido) quanto para separar,
+  /// no dropdown, os armazéns onde o produto tem posição dos que não têm, e
+  /// para listar "os outros" quando falta no armazém escolhido.
+  final List<SaldoArmazem>? saldos;
+
+  /// Pedir transferência de outro armazém para cobrir a falta desta linha.
+  /// `null` esconde o botão — a linha continua avisando a falta, só sem o
+  /// atalho.
+  final VoidCallback? onSolicitarTransferencia;
 
   final ValueChanged<EmpenhoLinha> onAlterar;
   final VoidCallback onRemover;
@@ -199,20 +225,37 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
 
   @override
   Widget build(BuildContext context) {
-    final temInfoSaldo = widget.disponivelNoArmazem != null;
-    final disponivel = widget.disponivelNoArmazem?.call(widget.linha.local);
-    // `temInfoSaldo` e `disponivel == null` juntos dizem "este produto não tem
-    // posição neste armazém" — diferente de `disponivel == 0`, que é uma
-    // posição real e vazia.
-    final semPosicao = temInfoSaldo && disponivel == null;
+    final saldos = widget.saldos;
+    SaldoArmazem? aqui;
+    if (saldos != null) {
+      for (final s in saldos) {
+        if (s.local == widget.linha.local) {
+          aqui = s;
+          break;
+        }
+      }
+    }
+    // `saldos != null` e `aqui == null` juntos dizem "este produto não tem
+    // posição neste armazém" — diferente de `aqui.disponivel == 0`, que é
+    // uma posição real e vazia.
+    final semPosicao = saldos != null && aqui == null;
+    final disponivel = aqui?.disponivel;
     final falta = disponivel != null && widget.linha.quantidade > disponivel;
+    // Os demais armazéns com posição, do maior disponível para o menor — é
+    // o que responde "e nos outros, tem quanto?" sem o operador precisar
+    // trocar o armazém da linha só para descobrir.
+    final outros = saldos == null
+        ? const <SaldoArmazem>[]
+        : (saldos.where((s) => s.local != widget.linha.local).toList()
+            ..sort((a, b) => b.disponivel.compareTo(a.disponivel)));
+    final disponivelPorLocal = _disponivelPorLocal(saldos);
     // D4_QUANT (o que a linha mostra e edita) é o que **resta** do empenho —
     // não o pedido original. Sem este aviso, "418" parece um número errado
     // para quem espera ver os 500 da estrutura padrão do produto.
     final consumido = widget.linha.consumido;
     final armazensOrdenados = _ordenarArmazensPorPosicao(
       widget.armazens,
-      widget.disponivelNoArmazem,
+      disponivelPorLocal,
     );
 
     return Container(
@@ -304,16 +347,10 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
                             DropdownMenuItem(
                               value: a.codigo,
                               child: Text(
-                                _rotuloArmazem(
-                                  a.codigo,
-                                  widget.disponivelNoArmazem,
-                                ),
+                                _rotuloArmazem(a.codigo, disponivelPorLocal),
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: temPosicao(
-                                    a.codigo,
-                                    widget.disponivelNoArmazem,
-                                  )
+                                  color: temPosicao(a.codigo, disponivelPorLocal)
                                       ? null
                                       : AppColors.muted,
                                 ),
@@ -338,25 +375,114 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
           if (semPosicao)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Este produto não tem posição no almox. ${widget.linha.local} '
-                'nesta filial.',
-                style: TextStyle(fontSize: 11, color: AppColors.orangeText),
+              child: Text.rich(
+                TextSpan(
+                  text:
+                      'Este produto não tem posição no almox. '
+                      '${widget.linha.local} nesta filial.',
+                  style: TextStyle(fontSize: 11, color: AppColors.orangeText),
+                  children: _outrosSpans(outros),
+                ),
               ),
             )
-          else if (falta)
+          else if (falta) ...[
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Almox. ${widget.linha.local} tem '
-                '${formatProductionQuantity(disponivel)} disponível',
-                style: TextStyle(fontSize: 11, color: AppColors.danger),
+              child: Text.rich(
+                TextSpan(
+                  text:
+                      'Almox. ${widget.linha.local} tem '
+                      '${formatProductionQuantity(disponivel)} disponível.',
+                  style: TextStyle(fontSize: 11, color: AppColors.danger),
+                  children: _outrosSpans(outros),
+                ),
+              ),
+            ),
+            if (outros.isNotEmpty && widget.onSolicitarTransferencia != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: TextButton(
+                  onPressed: widget.onSolicitarTransferencia,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: GoogleFonts.ibmPlexSans(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: const Text('Solicitar transferência'),
+                ),
+              ),
+          ] else if (saldos != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text.rich(
+                TextSpan(
+                  text: 'Disponível: ${formatProductionQuantity(disponivel ?? 0)} '
+                      'aqui.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: (disponivel ?? 0) > 0
+                        ? AppColors.green
+                        : AppColors.muted,
+                  ),
+                  children: _outrosSpans(outros),
+                ),
               ),
             ),
         ],
       ),
     );
   }
+}
+
+/// " Outros: 01: 430, 10: 60." como spans — cada armazém em verde quando tem
+/// saldo de verdade disponível, para não afogar a alternativa que resolve o
+/// problema no mesmo vermelho do aviso de falta. Vazio quando não há outro
+/// armazém com posição, para não anunciar "outros" para nada.
+List<InlineSpan> _outrosSpans(List<SaldoArmazem> outros) {
+  if (outros.isEmpty) return const [];
+  final visiveis = outros.take(5).toList();
+  final spans = <InlineSpan>[
+    TextSpan(text: ' Outros: ', style: TextStyle(color: AppColors.muted)),
+  ];
+  for (var i = 0; i < visiveis.length; i++) {
+    final s = visiveis[i];
+    spans.add(
+      TextSpan(
+        text: '${s.local}: ${formatProductionQuantity(s.disponivel)}',
+        style: TextStyle(
+          color: s.disponivel > 0 ? AppColors.green : AppColors.muted,
+          fontWeight: s.disponivel > 0 ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+    );
+    if (i < visiveis.length - 1) {
+      spans.add(TextSpan(text: ', ', style: TextStyle(color: AppColors.muted)));
+    }
+  }
+  spans.add(TextSpan(text: '.', style: TextStyle(color: AppColors.muted)));
+  return spans;
+}
+
+/// Converte a lista de [SaldoArmazem] no formato que
+/// [_ordenarArmazensPorPosicao], [temPosicao] e [_rotuloArmazem] já esperavam
+/// — elas só precisam saber "tem posição aqui, e quanto?", não a lista
+/// inteira.
+double? Function(String local)? _disponivelPorLocal(
+  List<SaldoArmazem>? saldos,
+) {
+  if (saldos == null) return null;
+  return (local) {
+    for (final s in saldos) {
+      if (s.local == local) return s.disponivel;
+    }
+    return null;
+  };
 }
 
 /// Separa os armazéns onde [disponivelNoArmazem] acha posição dos que não
@@ -400,7 +526,8 @@ class _AdicionarComponente extends StatefulWidget {
     required this.armazens,
     required this.jaPresentes,
     required this.onIncluir,
-    this.saldoDisponivel,
+    this.saldosPorArmazem,
+    this.localInicial,
   });
 
   final ProductCatalogRepository catalogo;
@@ -410,7 +537,11 @@ class _AdicionarComponente extends StatefulWidget {
 
   /// Mesma função da [EmpenhoEditor] — usada aqui só para separar, no
   /// dropdown, os armazéns onde o produto escolhido tem posição.
-  final double? Function(String produto, String local)? saldoDisponivel;
+  final List<SaldoArmazem> Function(String produto)? saldosPorArmazem;
+
+  /// Armazém sugerido para o novo componente — o mesmo que o resto da OP já
+  /// está usando, em vez de cair sempre no primeiro armazém cadastrado.
+  final String? localInicial;
 
   @override
   State<_AdicionarComponente> createState() => _AdicionarComponenteState();
@@ -425,7 +556,9 @@ class _AdicionarComponenteState extends State<_AdicionarComponente> {
   @override
   void initState() {
     super.initState();
-    _local = widget.armazens.isNotEmpty ? widget.armazens.first.codigo : '';
+    _local =
+        widget.localInicial ??
+        (widget.armazens.isNotEmpty ? widget.armazens.first.codigo : '');
   }
 
   @override
@@ -482,9 +615,9 @@ class _AdicionarComponenteState extends State<_AdicionarComponente> {
     }
 
     final produto = _produto;
-    final disponivelNoArmazem = produto == null || widget.saldoDisponivel == null
+    final disponivelNoArmazem = produto == null || widget.saldosPorArmazem == null
         ? null
-        : (String local) => widget.saldoDisponivel!(produto.code, local);
+        : _disponivelPorLocal(widget.saldosPorArmazem!(produto.code));
     final armazensOrdenados = _ordenarArmazensPorPosicao(
       widget.armazens,
       disponivelNoArmazem,

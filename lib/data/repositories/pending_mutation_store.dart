@@ -364,6 +364,86 @@ class PendingMutationStore extends ChangeNotifier {
     return linha.disponivel + reservadoPelaPropriaOp;
   }
 
+  /// O disponível de um produto em **todo** armazém de uma vez, para quem
+  /// está mexendo na OP [op] — mesma conta de [disponivelPara], linha a linha
+  /// em vez de um armazém por chamada. Serve para mostrar "tem X aqui, Y no
+  /// outro armazém" sem repetir [saldosEfetivos] uma vez por armazém.
+  ///
+  /// Mesma regra de [disponivelPara] para não contar a reserva da própria OP
+  /// em dobro: [baseOp] é somado de volta ao `empenhado` de cada local antes
+  /// de devolver, porque o `B2_QEMP` do Protheus já inclui essa reserva.
+  ///
+  /// Quando [op] é `null` (abertura de OP nova), cai no comportamento de
+  /// [saldosEfetivos] puro — mesma regra de [disponivelPara].
+  List<SaldoArmazem> disponivelPorArmazem({
+    required String produto,
+    required String filial,
+    required List<SaldoArmazem> baseCatalogo,
+    String? op,
+    List<ProtheusEmpenho> baseOp = const [],
+  }) {
+    final efetivo = saldosEfetivos(
+      produto,
+      filial,
+      baseCatalogo,
+      excluirOp: op,
+    );
+    if (baseOp.isEmpty) return efetivo;
+
+    final reservadoPorLocal = <String, double>{};
+    for (final e in baseOp) {
+      if (e.produto != produto) continue;
+      reservadoPorLocal[e.local] =
+          (reservadoPorLocal[e.local] ?? 0) + e.quantidade;
+    }
+    if (reservadoPorLocal.isEmpty) return efetivo;
+
+    final porLocal = {for (final s in efetivo) s.local: s};
+    for (final local in reservadoPorLocal.keys) {
+      porLocal.putIfAbsent(
+        local,
+        () =>
+            SaldoArmazem(filial: filial, local: local, saldo: 0, empenhado: 0),
+      );
+    }
+
+    return [
+      for (final s in porLocal.values)
+        SaldoArmazem(
+          filial: s.filial,
+          local: s.local,
+          saldo: s.saldo,
+          empenhado: s.empenhado - (reservadoPorLocal[s.local] ?? 0),
+        ),
+    ]..sort((a, b) => a.local.compareTo(b.local));
+  }
+
+  /// O saldo **físico** de um produto em cada armazém — `B2_QATU` puro, sem
+  /// descontar `B2_QEMP`.
+  ///
+  /// Decisão explícita do usuário (03/08/2026): a abertura de OP nova mostra
+  /// só o que existe fisicamente no armazém, não o que sobra depois de
+  /// descontar o que outras OPs já empenharam. Ainda projeta transferências
+  /// pendentes (o material muda de lugar de verdade antes de chegar ao
+  /// Protheus — ver [saldosEfetivos]), só não desconta empenho de nenhuma OP.
+  ///
+  /// **Risco aceito conscientemente:** o número pode mostrar mais material
+  /// livre do que realmente sobra, porque o que já foi reservado para outra
+  /// OP em aberto não aparece descontado aqui. Quem edita o empenho de uma OP
+  /// que já existe continua vendo o disponível de verdade — essa função só
+  /// vale para [disponivelPorArmazem]/[disponivelPara], não os substitui.
+  List<SaldoArmazem> saldoFisicoPorArmazem(
+    String produto,
+    String filial,
+    List<SaldoArmazem> baseCatalogo,
+  ) {
+    final efetivo = saldosEfetivos(produto, filial, baseCatalogo);
+    return [
+      for (final s in efetivo)
+        SaldoArmazem(filial: s.filial, local: s.local, saldo: s.saldo, empenhado: 0),
+    ];
+  }
+
   /// As OPs pedidas mas ainda não abertas no Protheus.
   ///
   /// Elas não têm número — quem numera é o ERP —, então não entram no fluxo de

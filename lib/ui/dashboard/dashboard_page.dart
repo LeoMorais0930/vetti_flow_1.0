@@ -25,6 +25,7 @@ import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/product_catalog_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_order_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_repository.dart';
+import 'package:vetti_flow_1_0/ui/protheus/transferencia_dialog.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_detail_panel.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/sidebar.dart';
@@ -58,17 +59,28 @@ Widget buildNovaOpDialog(
     onClose: cubit.closeNovaOP,
     isDesktop: isDesktop,
     retratoDesatualizado: protheusOrders.usandoRetratoDesatualizado,
-    // OP ainda não existe no Protheus: não há reserva própria para somar de
-    // volta (por isso `op` e `baseOp` ficam de fora), diferente da edição de
-    // uma OP já aberta em EmpenhosOpDialog.
-    saldoDisponivel: (produto, local) {
+    // Abertura de OP nova mostra o saldo FÍSICO (B2_QATU), sem descontar o
+    // que outras OPs já empenharam — decisão explícita do usuário em
+    // 03/08/2026, diferente de EmpenhosOpDialog (que edita uma OP que já
+    // existe e usa `disponivelPorArmazem`, o disponível de verdade). Ver
+    // PendingMutationStore.saldoFisicoPorArmazem.
+    saldosPorArmazem: (produto) {
       final item = catalogo.findByCode(produto);
-      if (item == null) return null;
-      return fila.disponivelPara(
-        produto: produto,
+      if (item == null) return const [];
+      return fila.saldoFisicoPorArmazem(produto, filial, item.saldos);
+    },
+    onSolicitarTransferencia: (produto, localDestino, autor) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final gravou = await TransferenciaDialog.mostrar(
+        context,
         filial: filial,
-        local: local,
-        baseCatalogo: item.saldos,
+        autor: autor,
+        produtoInicial: produto,
+        localDestinoInicial: localDestino,
+      );
+      if (gravou != true) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transferência na fila do Protheus.')),
       );
     },
     onSolicitar: (pedido, responsavel, prioridade) {

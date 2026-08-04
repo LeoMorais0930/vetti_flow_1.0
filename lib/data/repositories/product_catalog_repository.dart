@@ -64,21 +64,33 @@ class AssetProductCatalogRepository implements ProductCatalogRepository {
 
     final items = <ProductionCatalogItem>[];
     for (final map in base.values) {
+      // A SG1 traz o mesmo componente em mais de uma linha quando ele aparece
+      // em posições diferentes da montagem (o 441-062 do 500-0001 vem como 4 e
+      // depois 1). Para empenhar, o que vale é o total por componente: 5.
+      //
+      // Consolidar aqui, e não em quem consome, é o que mantém o contrato de
+      // que o par produto+almoxarifado é único numa lista de empenho —
+      // EmpenhoEditor usa esse par como chave de widget e como Set de
+      // "já presentes", e linha repetida derruba a lista inteira em runtime.
       final rawComponents = (map['componentes'] as List<dynamic>?) ?? const [];
-      final components = rawComponents
-          .map((c) {
-            final comp = c as Map<String, dynamic>;
-            final code = comp['componente'] as String? ?? '';
-            final ref = base[code];
-            return ProductionComponent(
-              code: code,
-              description: ref?['descricao'] as String? ?? code,
-              quantity: (comp['quantidade'] as num?)?.toDouble() ?? 0,
-              stock: (ref?['saldo'] as num?)?.toInt() ?? 0,
-              unit: ref?['unidade'] as String? ?? '',
-            );
-          })
-          .toList(growable: false);
+      final quantidadePorCodigo = <String, double>{};
+      for (final c in rawComponents) {
+        final comp = c as Map<String, dynamic>;
+        final code = comp['componente'] as String? ?? '';
+        quantidadePorCodigo[code] =
+            (quantidadePorCodigo[code] ?? 0) +
+            ((comp['quantidade'] as num?)?.toDouble() ?? 0);
+      }
+      final components = [
+        for (final entry in quantidadePorCodigo.entries)
+          ProductionComponent(
+            code: entry.key,
+            description: base[entry.key]?['descricao'] as String? ?? entry.key,
+            quantity: entry.value,
+            stock: (base[entry.key]?['saldo'] as num?)?.toInt() ?? 0,
+            unit: base[entry.key]?['unidade'] as String? ?? '',
+          ),
+      ];
 
       final rawSaldos = (map['saldos'] as List<dynamic>?) ?? const [];
       final saldos = rawSaldos
