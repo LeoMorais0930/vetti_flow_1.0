@@ -30,6 +30,12 @@ class ExpeditionOrder {
   final String product;
   final String quantity;
   final String origin;
+
+  /// O número como aparece na tela: `015961-01-001`.
+  ///
+  /// [number] segue colado porque é identidade — vai para o
+  /// ProductionFlowStore e é chave dos mapas desta tela.
+  String get numeroLegivel => formatOpNumber(number);
   final String readyAt;
   final String readyAgo;
   final String orderCode;
@@ -58,6 +64,12 @@ class ExpeditionStoredOrder {
   final String product;
   final int quantity;
   final int originalQuantity;
+
+  /// O número como aparece na tela: `015961-01-001`.
+  ///
+  /// [number] segue colado porque é identidade — vai para o
+  /// ProductionFlowStore e é chave dos mapas desta tela.
+  String get numeroLegivel => formatOpNumber(number);
   final String orderCode;
   final String storedAt;
 
@@ -93,6 +105,12 @@ class ExpeditionDispatchedOrder {
   final int quantity;
   final String orderCode;
   final String dispatchedAt;
+
+  /// O número como aparece na tela: `015961-01-001`.
+  ///
+  /// [number] segue colado porque é identidade — vai para o
+  /// ProductionFlowStore e é chave dos mapas desta tela.
+  String get numeroLegivel => formatOpNumber(number);
   final String origin;
 
   String get quantityLabel => '$quantity un';
@@ -289,8 +307,8 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
       SnackBar(
         content: Text(
           storedQuantity > 0
-              ? '${order.number} finalizada com $storedQuantity un armazenadas.'
-              : '${order.number} despachada.',
+              ? '${order.numeroLegivel} finalizada com $storedQuantity un armazenadas.'
+              : '${order.numeroLegivel} despachada.',
         ),
       ),
     );
@@ -346,7 +364,7 @@ class _ExpeditionPageState extends State<ExpeditionPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '$quantityToDispatch un de ${storedOrder.number} expedidas do armazenamento.',
+          '$quantityToDispatch un de ${storedOrder.numeroLegivel} expedidas do armazenamento.',
         ),
       ),
     );
@@ -505,7 +523,7 @@ class _MobileExpeditionActionSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        order.number,
+                        order.numeroLegivel,
                         style: const TextStyle(
                           color: AppColors.text,
                           fontSize: 18,
@@ -926,7 +944,7 @@ class _DesktopExpeditionDetail extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order.number,
+                      order.numeroLegivel,
                       style: const TextStyle(
                         color: AppColors.text,
                         fontSize: 24,
@@ -1305,7 +1323,7 @@ class _DispatchedOrderCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        order.number,
+                        order.numeroLegivel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1385,7 +1403,7 @@ class _StoredOrderCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  order.number,
+                  order.numeroLegivel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -1578,7 +1596,7 @@ class _ExpeditionCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              order.number,
+                              order.numeroLegivel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -2410,7 +2428,7 @@ class _StoredDispatchSheetState extends State<_StoredDispatchSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            '${widget.order.number} possui $maxQuantity un armazenadas.',
+            '${widget.order.numeroLegivel} possui $maxQuantity un armazenadas.',
             style: const TextStyle(color: AppColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 14),
@@ -2635,7 +2653,7 @@ class _ExpeditionPinSheetState extends State<_ExpeditionPinSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Digite o PIN para finalizar o despacho da ${widget.order.number}.',
+            'Digite o PIN para finalizar o despacho da ${widget.order.numeroLegivel}.',
             style: const TextStyle(color: AppColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 14),

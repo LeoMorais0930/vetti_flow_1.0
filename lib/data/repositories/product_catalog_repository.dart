@@ -108,6 +108,9 @@ class AssetProductCatalogRepository implements ProductCatalogRepository {
           committed: (map['empenhado'] as num?)?.toInt() ?? 0,
           components: components,
           saldos: saldos,
+          // Retrato antigo não tem o campo: sem informação, o produto continua
+          // buscável. Bloquear por omissão sumiria com o catálogo inteiro.
+          blocked: map['bloqueado'] as bool? ?? false,
         ),
       );
     }

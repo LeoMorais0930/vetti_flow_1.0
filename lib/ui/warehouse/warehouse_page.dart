@@ -74,7 +74,7 @@ class _WarehousePageState extends State<WarehousePage> {
     final filial = context.read<FilialStore>().filial;
     return WarehouseRequest(
       number: 'REQ-${order.number.substring(order.number.length - 5)}',
-      operation: order.number,
+      operation: order.numeroLegivel,
       product: order.productLabel,
       requestedBy: order.operatorName ?? 'Almoxarifado',
       priority: order.priority,
@@ -132,7 +132,7 @@ class _WarehousePageState extends State<WarehousePage> {
       _showCreate = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${order.number} liberada para Firmware.')),
+      SnackBar(content: Text('${order.numeroLegivel} liberada para Firmware.')),
     );
   }
 
@@ -161,7 +161,7 @@ class _WarehousePageState extends State<WarehousePage> {
       _selectedIndex = 0;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${order.number} trazida para o Almoxarifado.')),
+      SnackBar(content: Text('${order.numeroLegivel} trazida para o Almoxarifado.')),
     );
   }
 

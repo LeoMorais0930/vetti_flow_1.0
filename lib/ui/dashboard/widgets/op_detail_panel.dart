@@ -133,7 +133,7 @@ class _DetailContent extends StatelessWidget {
                     const SizedBox(width: 12),
                   ],
                   Text(
-                    op.numero,
+                    op.numeroLegivel,
                     style: GoogleFonts.ibmPlexMono(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
@@ -1005,7 +1005,7 @@ class _StorageDecisionDialogState extends State<_StorageDecisionDialog> {
             ),
             const SizedBox(height: 6),
             Text(
-              '${widget.op.numero} · ${widget.op.qtdLabel}',
+              '${widget.op.numeroLegivel} · ${widget.op.qtdLabel}',
               style: const TextStyle(fontSize: 13, color: AppColors.muted),
             ),
             const SizedBox(height: 18),

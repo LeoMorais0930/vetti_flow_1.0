@@ -47,7 +47,7 @@ class OpCard extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        op.numero,
+                        op.numeroLegivel,
                         style: GoogleFonts.ibmPlexMono(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,

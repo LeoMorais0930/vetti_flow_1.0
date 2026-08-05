@@ -640,7 +640,7 @@ class _MobileOpCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      op.numero,
+                      op.numeroLegivel,
                       style: GoogleFonts.ibmPlexMono(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,

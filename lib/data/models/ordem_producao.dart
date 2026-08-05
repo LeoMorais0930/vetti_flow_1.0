@@ -108,6 +108,13 @@ class OrdemProducao {
     this.materiais = const [],
   });
 
+  /// O número como o Protheus o escreve: `015961-01-001`.
+  ///
+  /// [numero] continua sendo a identidade — é por ele que a tela pede a OP ao
+  /// repositório, e ele casa com o formato colado do banco. Este aqui é só
+  /// para mostrar.
+  String get numeroLegivel => formatOpNumber(numero);
+
   String get qtdLabel => '$qtd un';
 
   String get prazoLabel => 'Prazo $prazo';
@@ -168,6 +175,10 @@ class OrdemArmazenada {
     required this.responsavel,
     required this.data,
   });
+
+  /// O número como o Protheus o escreve: `015961-01-001`. Ver
+  /// [OrdemProducao.numeroLegivel].
+  String get numeroLegivel => formatOpNumber(numero);
 
   String get qtdOriginalLabel => '$quantidadeOriginal un';
 

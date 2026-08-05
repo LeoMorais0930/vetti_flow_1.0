@@ -507,7 +507,7 @@ class _OutputSlide extends StatelessWidget {
               big: true,
               label: 'Prioridade alta',
               value: '${highPriority.length}',
-              helper: highPriority.firstOrNull?.number ?? 'Sem pendencias',
+              helper: highPriority.firstOrNull?.numeroLegivel ?? 'Sem pendencias',
               icon: Icons.priority_high_rounded,
               color: highPriority.isEmpty ? AppColors.green : AppColors.danger,
             ),
@@ -533,7 +533,7 @@ class _OutputSlide extends StatelessWidget {
               value: '$dispatchedPieces',
               helper: lastCompleted == null
                   ? 'Nenhuma finalizada'
-                  : 'Ultima: ${lastCompleted!.number}',
+                  : 'Ultima: ${lastCompleted!.numeroLegivel}',
               icon: Icons.local_shipping_rounded,
               color: AppColors.green,
             ),
@@ -830,7 +830,7 @@ class _AttentionCard extends StatelessWidget {
               ),
               SizedBox(height: 8 * s),
               Text(
-                order.number,
+                order.numeroLegivel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

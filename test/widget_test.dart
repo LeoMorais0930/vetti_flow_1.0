@@ -514,7 +514,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Gravacao de Firmware'), findsOneWidget);
-    expect(find.text(opFirmware), findsWidgets);
+    expect(find.text(opFirmwareLegivel), findsWidgets);
   });
 
   testWidgets('navigates from login to tv dashboard', (tester) async {
@@ -544,7 +544,7 @@ void main() {
 
     expect(find.text('OPs disponiveis'), findsOneWidget);
     // Mobile: cards aparecem, acoes so no bottom sheet ao tocar.
-    expect(find.text(opFirmware), findsOneWidget);
+    expect(find.text(opFirmwareLegivel), findsOneWidget);
   });
 
   testWidgets('firmware screen renders on desktop viewport', (tester) async {
@@ -625,7 +625,9 @@ void main() {
       store.completeStage(adotada.number);
     }
     store.completeExpedition(adotada.number, storedQuantity: 25);
-    final numeroArmazenado = adotada.number;
+    // A tela mostra o número como o Protheus o escreve; `number` segue colado
+    // porque é identidade.
+    final numeroArmazenado = adotada.numeroLegivel;
     final repository = FlowOpRepository(
       store,
       catalog: TestCatalog(),
@@ -765,7 +767,7 @@ void main() {
 
     expect(find.text('OPs armazenadas'), findsOneWidget);
     expect(find.text('Expedidas'), findsOneWidget);
-    expect(find.text(opArmazenada), findsWidgets);
+    expect(find.text(opArmazenadaLegivel), findsWidgets);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'Expedir').first);
     await tester.pumpAndSettle();
@@ -827,7 +829,7 @@ void main() {
     await tester.tap(find.text('Armazenadas'));
     await tester.pumpAndSettle();
 
-    expect(find.text(opExpedicao), findsWidgets);
+    expect(find.text(opExpedicaoLegivel), findsWidgets);
     expect(find.textContaining('100 un'), findsWidgets);
     expect(find.textContaining('200 un'), findsWidgets);
   });

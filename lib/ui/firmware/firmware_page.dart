@@ -38,7 +38,7 @@ class _FirmwarePageState extends State<FirmwarePage> {
   FirmwareOperation _operationFromFlow(ProductionOrderFlow order) {
     final elapsed = order.activeElapsed(DateTime.now());
     return FirmwareOperation(
-      number: order.number,
+      number: order.numeroLegivel,
       product: order.productLabel,
       quantity: order.quantityLabel,
       origin: 'Almoxarifado',
@@ -119,7 +119,9 @@ class _FirmwarePageState extends State<FirmwarePage> {
     );
     setState(() => _selectedIndex = 0);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${flowOrder.number} liberada para Soldagem.')),
+      SnackBar(
+        content: Text('${flowOrder.numeroLegivel} liberada para Soldagem.'),
+      ),
     );
   }
 

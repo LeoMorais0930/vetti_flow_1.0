@@ -59,7 +59,7 @@ class _ClosingPageState extends State<ClosingPage> {
   ClosingOperation _operationFromFlow(ProductionOrderFlow order) {
     final elapsed = order.activeElapsed(DateTime.now());
     return ClosingOperation(
-      number: order.number,
+      number: order.numeroLegivel,
       product: order.productLabel,
       quantity: order.quantityLabel,
       origin: 'Teste',

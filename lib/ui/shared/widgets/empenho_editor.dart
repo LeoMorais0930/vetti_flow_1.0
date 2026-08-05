@@ -196,6 +196,27 @@ class _LinhaEmpenhoState extends State<_LinhaEmpenho> {
     super.dispose();
   }
 
+  /// Traz para o campo a quantidade que veio de fora.
+  ///
+  /// A chave da linha é produto+almoxarifado, então mudar só a quantidade
+  /// reaproveita este estado — e o controller, criado uma vez, seguia mostrando
+  /// o número velho. Era o que fazia a estrutura não reagir quando o operador
+  /// digitava o produto primeiro e a quantidade depois: o pedido saía com o
+  /// valor certo, mas a tela mostrava o anterior.
+  @override
+  void didUpdateWidget(_LinhaEmpenho anterior) {
+    super.didUpdateWidget(anterior);
+    if (widget.linha.quantidade == anterior.linha.quantidade) return;
+    // Não sobrescrever o que o operador está digitando: quando a mudança veio
+    // do próprio campo, o texto já representa o novo valor. Comparar pelo
+    // número, e não pelo texto, evita apagar um "2," no meio da digitação.
+    final digitado = double.tryParse(
+      _quantidade.text.trim().replaceAll(',', '.'),
+    );
+    if (digitado == widget.linha.quantidade) return;
+    _quantidade.text = formatProductionQuantity(widget.linha.quantidade);
+  }
+
   void _aoMudarQuantidade(String texto) {
     // Vírgula é o separador decimal em pt-BR, e é o que o teclado do chão de
     // fábrica oferece.

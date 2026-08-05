@@ -67,7 +67,7 @@ class TableView extends StatelessWidget {
                 cells: [
                   DataCell(
                     Text(
-                      op.numero,
+                      op.numeroLegivel,
                       style: GoogleFonts.ibmPlexMono(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,

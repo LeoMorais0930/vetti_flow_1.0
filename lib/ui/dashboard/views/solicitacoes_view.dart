@@ -142,6 +142,34 @@ class _SolicitacaoCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: AppColors.textMuted, fontSize: 12.5),
           ),
+          // O número que o Protheus deu ao pedido, quando já deu. É o que a
+          // Gestora leva para procurar a OP no ERP — antes disso ele não
+          // existe, e o card não tem o que mostrar.
+          if (pedido.protheusRef != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.tag_rounded,
+                  size: 15,
+                  color: AppColors.iconMuted,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'OP ${pedido.protheusRef}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textCode,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (pedido.erro != null) ...[
             const SizedBox(height: 8),
             Container(

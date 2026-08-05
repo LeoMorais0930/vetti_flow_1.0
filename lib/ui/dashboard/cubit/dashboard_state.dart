@@ -67,6 +67,7 @@ class DashboardState {
       if (busca.isNotEmpty) {
         final q = busca.toLowerCase();
         if (!op.numero.toLowerCase().contains(q) &&
+            !op.numeroLegivel.toLowerCase().contains(q) &&
             !op.produto.toLowerCase().contains(q)) {
           return false;
         }
@@ -95,6 +96,7 @@ class DashboardState {
       if (busca.isNotEmpty) {
         final q = busca.toLowerCase();
         if (!op.numero.toLowerCase().contains(q) &&
+            !op.numeroLegivel.toLowerCase().contains(q) &&
             !op.produto.toLowerCase().contains(q)) {
           return false;
         }

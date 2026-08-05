@@ -139,7 +139,7 @@ class _TestingPageState extends State<TestingPage> {
             'Inspecao visual final',
           ];
     return TestOperation(
-      number: order.number,
+      number: order.numeroLegivel,
       product: order.productLabel,
       quantity: order.quantityLabel,
       quantityValue: order.quantity,

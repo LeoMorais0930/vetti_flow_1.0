@@ -166,7 +166,23 @@ class _SolicitacaoOpFormState extends State<SolicitacaoOpForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ProdutoBusca(catalogo: widget.catalogo, onProduto: _aoMudarProduto),
+        ProdutoBusca(
+          catalogo: widget.catalogo,
+          onProduto: _aoMudarProduto,
+          somenteLiberados: true,
+        ),
+        const SizedBox(height: 15),
+        // O campo existe vazio de propósito, no mesmo lugar em que aparece do
+        // outro lado do diálogo: quem pede a OP procura o número, e a ausência
+        // do campo lia como "o VettiFlow perdeu o número". Quem numera é o
+        // Protheus, e só ao aplicar o pedido — o número real chega depois, no
+        // card da aba "Solicitações".
+        FormFieldLabel(
+          label: 'Número da OP',
+          child: const ReadOnlyValue(
+            value: 'O Protheus numera ao aplicar o pedido',
+          ),
+        ),
         const SizedBox(height: 15),
         Row(
           children: [
@@ -197,7 +213,7 @@ class _SolicitacaoOpFormState extends State<SolicitacaoOpForm> {
         ),
         const SizedBox(height: 15),
         FormFieldLabel(
-          label: 'Almoxarifado de produção',
+          label: 'Armazéns',
           child: DropdownButtonFormField<String>(
             isExpanded: true,
             initialValue: _local.isNotEmpty ? _local : null,

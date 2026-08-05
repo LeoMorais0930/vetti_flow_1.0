@@ -19,6 +19,7 @@ class ProdutoBusca extends StatefulWidget {
     required this.onProduto,
     this.opsPorProduto = const {},
     this.mostrarCartao = true,
+    this.somenteLiberados = false,
   });
 
   final ProductCatalogRepository catalogo;
@@ -34,6 +35,14 @@ class ProdutoBusca extends StatefulWidget {
 
   final bool mostrarCartao;
 
+  /// Esconde produto com bloqueio de tela na SB1 (B1_MSBLQL = '1').
+  ///
+  /// Ligado onde se **pede OP nova**: o Protheus recusa movimentar item
+  /// bloqueado, então oferecê-lo só produziria um pedido que morre na API.
+  /// Desligado onde se traz uma OP que já existe — 4 produtos com OP em aberto
+  /// estão bloqueados hoje, e escondê-los travaria trabalho em andamento.
+  final bool somenteLiberados;
+
   @override
   State<ProdutoBusca> createState() => _ProdutoBuscaState();
 }
@@ -47,10 +56,18 @@ class _ProdutoBuscaState extends State<ProdutoBusca> {
     super.dispose();
   }
 
+  /// O produto do código digitado.
+  ///
+  /// Com [ProdutoBusca.somenteLiberados], produto bloqueado no Protheus é
+  /// tratado como inexistente: nem o código exato o traz de volta. Foi a
+  /// decisão do gestor em 04/08/2026 — quem pede a OP não deve nem ver o item,
+  /// e um cartão dizendo "existe, mas está bloqueado" já é ver.
   ProductionCatalogItem? get _produto {
     final codigo = _controller.text.trim();
     if (codigo.isEmpty) return null;
-    return widget.catalogo.findByCode(codigo);
+    final item = widget.catalogo.findByCode(codigo);
+    if (item == null) return null;
+    return widget.somenteLiberados && item.blocked ? null : item;
   }
 
   /// Produtos que casam com o que já foi digitado.
@@ -64,6 +81,7 @@ class _ProdutoBuscaState extends State<ProdutoBusca> {
     final porCodigo = <ProductionCatalogItem>[];
     final porDescricao = <ProductionCatalogItem>[];
     for (final item in widget.catalogo.items) {
+      if (widget.somenteLiberados && item.blocked) continue;
       if (item.code.toUpperCase().startsWith(termo)) {
         porCodigo.add(item);
       } else if (item.name.toUpperCase().contains(termo)) {
@@ -192,6 +210,40 @@ class FormFieldLabel extends StatelessWidget {
   }
 }
 
+/// Valor vindo do Protheus: mostrado, nunca editável.
+///
+/// Compartilhado pelas duas metades do diálogo de OP — a que traz uma OP que
+/// já existe e a que pede uma nova —, para quantidade, prazo e número da OP
+/// terem a mesma cara nos dois lados.
+class ReadOnlyValue extends StatelessWidget {
+  const ReadOnlyValue({super.key, required this.value, this.mono = false});
+
+  final String value;
+
+  /// Fonte monoespaçada, para código e número de OP.
+  final bool mono;
+
+  @override
+  Widget build(BuildContext context) {
+    final estilo = TextStyle(fontSize: 14, color: AppColors.muted);
+    return Container(
+      height: 44,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.bgHeader,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Text(
+        value,
+        style: mono ? GoogleFonts.ibmPlexMono(textStyle: estilo) : estilo,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 /// Cartão do produto encontrado: identificação, estrutura e OPs em aberto.
 class _ProdutoCard extends StatelessWidget {
   const _ProdutoCard({
@@ -203,8 +255,6 @@ class _ProdutoCard extends StatelessWidget {
   final ProductionCatalogItem? produto;
   final int opsEmAberto;
   final bool mostrarOps;
-
-  static const _maxComponentes = 5;
 
   @override
   Widget build(BuildContext context) {
@@ -218,9 +268,11 @@ class _ProdutoCard extends StatelessWidget {
       );
     }
 
+    // A estrutura inteira, sem corte: o operador confere componente por
+    // componente antes de pedir a OP, e "e mais 3 componentes" escondia
+    // justamente o que ele precisava olhar. O maior produto da Vetti tem 78
+    // linhas — o cartão vive dentro de rolagem, então cresce à vontade.
     final componentes = item.components;
-    final visiveis = componentes.take(_maxComponentes).toList();
-    final restantes = componentes.length - visiveis.length;
 
     return _Caixa(
       child: Column(
@@ -243,9 +295,9 @@ class _ProdutoCard extends StatelessWidget {
             ].where((p) => p.isNotEmpty).join(' · '),
             style: TextStyle(fontSize: 12, color: AppColors.muted),
           ),
-          if (visiveis.isNotEmpty) ...[
+          if (componentes.isNotEmpty) ...[
             const SizedBox(height: 10),
-            for (final c in visiveis)
+            for (final c in componentes)
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
@@ -254,11 +306,6 @@ class _ProdutoCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
-              ),
-            if (restantes > 0)
-              Text(
-                'e mais $restantes componente${restantes > 1 ? 's' : ''}',
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
               ),
           ],
           const SizedBox(height: 8),

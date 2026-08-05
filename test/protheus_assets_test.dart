@@ -143,6 +143,39 @@ void main() {
     expect(orfaos, isEmpty, reason: 'componentes fora do catálogo: $orfaos');
   });
 
+  test('o catálogo real traz o bloqueio de tela da SB1', () {
+    // B1_MSBLQL = '1' é o que impede a OP nova. Se o gerador parar de trazer o
+    // campo, o parser assume "liberado" para todo mundo e o filtro da busca
+    // some sem nenhum sinal na tela.
+    final catalog = AssetProductCatalogRepository(
+      AssetProductCatalogRepository.parse(produtos.readAsStringSync()),
+    );
+
+    final bloqueados = catalog.items.where((i) => i.blocked).toList();
+    expect(
+      bloqueados,
+      isNotEmpty,
+      reason: 'nenhum produto bloqueado — o campo bloqueado sumiu da extração',
+    );
+    expect(
+      bloqueados.length,
+      lessThan(catalog.items.length),
+      reason: 'todo o catálogo bloqueado — a busca de OP nova ficaria vazia',
+    );
+
+    // Bloqueado continua no catálogo de propósito: parte deles é componente de
+    // estrutura vigente, e sumir daqui tiraria descrição e saldo do empenho.
+    final componentes = {
+      for (final item in catalog.items)
+        for (final c in item.components) c.code,
+    };
+    expect(
+      bloqueados.where((i) => componentes.contains(i.code)),
+      isNotEmpty,
+      reason: 'produto bloqueado que é componente precisa seguir no catálogo',
+    );
+  });
+
   test('toda OP tem chave completa e número de 11 caracteres', () {
     final all = AssetProtheusOrderRepository.parseOrders(
       ordens.readAsStringSync(),

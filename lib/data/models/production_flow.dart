@@ -445,7 +445,12 @@ class ProductionOrderFlow {
     this.pauseEvents = const [],
   });
 
+  /// Identidade da OP no app, no formato colado do banco (`01596101001`).
+  ///
+  /// É o que vai nas mutações como `D3_OP`/`D4_OP` e o que casa esta OP com a
+  /// do Protheus. Para mostrar na tela, use [numeroLegivel].
   final String number;
+
   final String productCode;
   final String productName;
   final int quantity;
@@ -470,6 +475,13 @@ class ProductionOrderFlow {
   final List<DefectRecord> testDefects;
   final List<ProductionOperatorSession> operatorSessions;
   final List<ProductionPauseEvent> pauseEvents;
+
+  /// O número como o Protheus o escreve: `015961-01-001`.
+  ///
+  /// É este que vai para a tela. A chave do Protheus, quando existe, já traz o
+  /// formato pronto; sem ela ([number] de OP local), formata o que dá.
+  String get numeroLegivel =>
+      protheusKey?.numeroLegivel ?? formatOpNumber(number);
 
   /// Total de dispositivos marcados como defeito no teste.
   int get totalDefects =>
@@ -548,6 +560,23 @@ class ProductionOrderFlow {
   }
 }
 
+/// `01596101001` → `015961-01-001`, para mostrar a quem opera.
+///
+/// Os 11 dígitos colados são o formato do banco (`D3_OP`, `D4_OP`) e seguem
+/// sendo a identidade da OP no app — o que muda aqui é só como ela aparece na
+/// tela. Qualquer coisa fora desse formato volta intacta: OP local do tempo do
+/// mock (`OP-2026-0188`) e códigos derivados (`REQ-`, `PED-`) não são chave do
+/// Protheus e não devem ganhar traço nenhum.
+String formatOpNumber(String numero) {
+  if (numero.length != 11) return numero;
+  for (var i = 0; i < 11; i++) {
+    final c = numero.codeUnitAt(i);
+    if (c < 0x30 || c > 0x39) return numero;
+  }
+  return '${numero.substring(0, 6)}-${numero.substring(6, 8)}-'
+      '${numero.substring(8)}';
+}
+
 /// Formata quantidade do Protheus, que pode ser fracionária.
 ///
 /// A estrutura de produto usa frações para itens rateados (`0.001348` de um
@@ -573,6 +602,7 @@ class ProductionCatalogItem {
     this.committed = 0,
     this.components = const [],
     this.saldos = const [],
+    this.blocked = false,
   });
 
   /// B1_COD
@@ -611,6 +641,15 @@ class ProductionCatalogItem {
   ///
   /// Vazia para produto sem posição de estoque em lugar nenhum.
   final List<SaldoArmazem> saldos;
+
+  /// B1_MSBLQL = '1': bloqueio de tela ligado no Protheus.
+  ///
+  /// O ERP recusa movimentar o item — abrir OP dele daria erro lá, então a
+  /// busca de produto para OP nova não o oferece. Note que ele **continua no
+  /// catálogo**: 278 componentes de estruturas vigentes estão bloqueados, e
+  /// sumir com eles daqui tiraria a descrição e o saldo do empenho de quem os
+  /// consome.
+  final bool blocked;
 
   String get label => '$code - $name';
 
@@ -676,6 +715,7 @@ class ProductionCatalogItem {
         committed: committed,
         components: components,
         saldos: saldos ?? this.saldos,
+        blocked: blocked,
       );
 }
 

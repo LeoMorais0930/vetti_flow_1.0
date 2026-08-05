@@ -58,6 +58,18 @@ class TestCatalog implements ProductCatalogRepository {
       stock: 300,
       committed: 12,
     ),
+    // Bloqueado no Protheus (B1_MSBLQL = '1'): existe no cadastro, mas o ERP
+    // recusa movimentar. Compartilha o prefixo `730-0` com o liberado acima,
+    // para o teste do filtro exercitar uma busca que casa com os dois.
+    ProductionCatalogItem(
+      code: '730-0500',
+      name: 'SMART CENTRAL VETTI GERACAO ANTERIOR',
+      unit: 'PC',
+      type: 'PA',
+      group: '730',
+      stock: 8,
+      blocked: true,
+    ),
   ];
 
   @override
@@ -162,11 +174,19 @@ AssetProtheusOrderRepository testProtheusRepository([
   );
 }
 
-/// Números das OPs de teste, no formato do Protheus.
+/// Números das OPs de teste, no formato colado do banco — é a **identidade**
+/// da OP no app, o que vai nas chamadas ao store e nas mutações.
 const opFirmware = '01596101001';
 const opSoldagem = '01596001001';
 const opExpedicao = '01595801001';
 const opArmazenada = '01595001001';
+
+/// Os mesmos números como a **tela** os mostra, com os traços do Protheus.
+/// Ver `formatOpNumber`.
+const opFirmwareLegivel = '015961-01-001';
+const opSoldagemLegivel = '015960-01-001';
+const opExpedicaoLegivel = '015958-01-001';
+const opArmazenadaLegivel = '015950-01-001';
 
 /// Avança uma OP pelo fluxo real até a etapa pedida.
 void avancarAte(

@@ -100,7 +100,7 @@ class _SolderingPageState extends State<SolderingPage> {
         : catalog.components.first.code;
     final elapsed = order.activeElapsed(DateTime.now());
     return SolderingOperation(
-      number: order.number,
+      number: order.numeroLegivel,
       product: order.productLabel,
       quantity: order.quantityLabel,
       origin: 'Firmware',
@@ -109,7 +109,7 @@ class _SolderingPageState extends State<SolderingPage> {
           ? 'Aguardando inicio'
           : 'Tempo na etapa: ${formatProductionDuration(elapsed)}',
       board: board,
-      lot: 'OP ${order.number}',
+      lot: 'OP ${order.numeroLegivel}',
       profile: order.productCode.contains('SMART')
           ? 'SMD complementar'
           : 'Manual fino',

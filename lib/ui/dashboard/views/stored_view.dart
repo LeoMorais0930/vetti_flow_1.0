@@ -77,7 +77,7 @@ class _StoredCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  item.numero,
+                  item.numeroLegivel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.ibmPlexMono(

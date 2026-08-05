@@ -126,6 +126,17 @@ class _ProtheusOpPickerState extends State<ProtheusOpPicker> {
           ),
         ],
         const SizedBox(height: 15),
+        // O número da OP escolhida, em campo próprio: na lista acima ele
+        // divide espaço com quantidade e prazo de várias OPs, e depois de
+        // escolher é este o dado que a pessoa leva para o Protheus.
+        FormFieldLabel(
+          label: 'Número da OP',
+          child: ReadOnlyValue(
+            value: escolhida?.numeroLegivel ?? '—',
+            mono: true,
+          ),
+        ),
+        const SizedBox(height: 15),
         // Quantidade e prazo são da OP no Protheus: exibidos, não editáveis.
         // Para digitá-los é preciso pedir uma OP nova — ali eles são entrada.
         Row(
@@ -133,7 +144,7 @@ class _ProtheusOpPickerState extends State<ProtheusOpPicker> {
             Expanded(
               child: FormFieldLabel(
                 label: 'Quantidade',
-                child: _ReadOnlyValue(
+                child: ReadOnlyValue(
                   value: escolhida == null ? '—' : '${escolhida.quantidade}',
                 ),
               ),
@@ -142,7 +153,7 @@ class _ProtheusOpPickerState extends State<ProtheusOpPicker> {
             Expanded(
               child: FormFieldLabel(
                 label: 'Prazo',
-                child: _ReadOnlyValue(
+                child: ReadOnlyValue(
                   value: escolhida?.previsao ?? 'dd/mm/aaaa',
                 ),
               ),
@@ -150,32 +161,6 @@ class _ProtheusOpPickerState extends State<ProtheusOpPicker> {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Valor vindo do Protheus: mostrado, nunca editável.
-class _ReadOnlyValue extends StatelessWidget {
-  const _ReadOnlyValue({required this.value});
-
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.bgHeader,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Text(
-        value,
-        style: TextStyle(fontSize: 14, color: AppColors.muted),
-        overflow: TextOverflow.ellipsis,
-      ),
     );
   }
 }
