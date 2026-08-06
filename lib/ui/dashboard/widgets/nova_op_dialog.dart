@@ -98,6 +98,7 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         produto: _lookup?.label ?? _produto,
         productCode: _lookup?.product.code,
         productName: _lookup?.product.description,
+        productUnit: _lookup?.product.unit,
         components: _lookup?.components ?? const [],
         smdReleaseOrders: _lookup?.smdReleaseOrders ?? const [],
         filial: _filial,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/protheus/protheus_queue_button.dart';
 
 class AppHeader extends StatelessWidget {
   final VoidCallback onNovaOP;
@@ -38,6 +39,8 @@ class AppHeader extends StatelessWidget {
               ],
             ),
           ),
+          const ProtheusQueueButton(),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: 'Sair',
             onPressed: () =>

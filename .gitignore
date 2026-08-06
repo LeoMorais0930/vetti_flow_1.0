@@ -15,6 +15,17 @@ desktop.ini
 migrate_working_dir/
 .local_pg/
 
+# Local database exports and credentials
+export-protheus-*/
+**/export-protheus-*/
+*.dump
+*.backup
+*.sql.gz
+*.psql
+.env
+.env.*
+!.env.example
+
 # IntelliJ related
 *.iml
 *.ipr

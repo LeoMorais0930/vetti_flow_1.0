@@ -1,10 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_stock_movement.dart';
 
 void main() {
   test(
-    'plans SB2, SD3 and SD4 movements for stock components on OP creation',
+    'plans SC2, SB2 and SD4 records for OP creation without SD3 consumption',
     () {
       final createdAt = DateTime(2026, 8, 3, 14, 30, 5);
       final order = ProductionOrderFlow(
@@ -20,6 +22,7 @@ void main() {
         operatorName: 'Tatiane',
         operatorPin: '2001',
         responsavel: 'Tatiane',
+        orderWarehouse: '05',
       );
       const catalogItem = ProductionCatalogItem(
         code: '730-0863',
@@ -48,7 +51,41 @@ void main() {
         ],
       );
 
+      final sc2 = ProtheusProductionOrder.fromOrder(order).sc2Payload;
       final plan = ProtheusStockMovementPlan.fromOrder(order, catalogItem);
+      final sc2ProtheusColumns = sc2.keys.where(
+        (key) =>
+            key.startsWith('c2_') ||
+            key == 'd_e_l_e_t_' ||
+            key == 'r_e_c_d_e_l_' ||
+            key == 'r_e_c_n_o_',
+      );
+
+      expect(sc2.keys.where((key) => key.startsWith('c2_')), hasLength(148));
+      expect(sc2ProtheusColumns, hasLength(151));
+      expect(sc2['c2_filial'], '04');
+      expect(sc2['c2_num'], '564351');
+      expect(sc2['c2_item'], '01');
+      expect(sc2['c2_sequen'], '001');
+      expect(sc2['c2_op'], '56435101001');
+      expect(sc2['c2_produto'], '730-0863');
+      expect(sc2['c2_quant'], 5);
+      expect(sc2['c2_quje'], 0);
+      expect(sc2['c2_um'], 'PC');
+      expect(sc2['c2_local'], '05');
+      expect(sc2['c2_status'], 'N');
+      expect(sc2['c2_tpop'], 'F');
+      expect(sc2['c2_tppr'], 'I');
+      expect(sc2['c2_prior'], '500');
+      expect(sc2['c2_blqapon'], '2');
+      expect(sc2['c2_prodaut'], '2');
+      expect(sc2['c2_opterce'], '2');
+      expect(sc2['c2_diasoci'], 99);
+      expect(sc2['c2_emissao'], '20260803');
+      expect(sc2['c2_datpri'], '20260803');
+      expect(sc2['c2_datprf'], '20260803');
+      expect(sc2['vettiflow_order_number'], 'OP-2026-564351');
+      expect(sc2['vettiflow_origin'], 'op_creation');
 
       expect(plan.movements, hasLength(2));
       expect(plan.totalCommittedByBalanceKey[('04', '100-010', '05')], 10);
@@ -65,7 +102,7 @@ void main() {
       expect(movement.emissionDate, '20260803');
 
       expect(movement.sd4Payload['d4_filial'], '04');
-      expect(movement.sd4Payload['d4_op'], 'OP-2026-564351');
+      expect(movement.sd4Payload['d4_op'], '56435101001');
       expect(movement.sd4Payload['d4_produto'], '730-0863');
       expect(movement.sd4Payload['d4_cod'], '100-010');
       expect(movement.sd4Payload['d4_local'], '05');
@@ -74,16 +111,6 @@ void main() {
       expect(movement.sd4Payload['vettiflow_order_number'], 'OP-2026-564351');
       expect(movement.sd4Payload['vettiflow_operator_name'], 'Tatiane');
       expect(movement.sd4Payload['vettiflow_operator_pin'], '2001');
-
-      expect(movement.sd3Payload['d3_filial'], '04');
-      expect(movement.sd3Payload['d3_op'], 'OP-2026-564351');
-      expect(movement.sd3Payload['d3_cod'], '100-010');
-      expect(movement.sd3Payload['d3_local'], '05');
-      expect(movement.sd3Payload['d3_quant'], 10);
-      expect(movement.sd3Payload['d3_cf'], 'RE0');
-      expect(movement.sd3Payload['d3_doc'], 'OP-2026-564351');
-      expect(movement.sd3Payload['d3_usuario'], 'Tatiane');
-      expect(movement.sd3Payload['vettiflow_operator_pin'], '2001');
 
       final modMovement = plan.movements.firstWhere(
         (item) => item.componentCode == 'MOD-001',
@@ -95,134 +122,82 @@ void main() {
     },
   );
 
-  test(
-    'uses the selected component warehouse in SB2, SD3 and SD4 movements',
-    () {
-      final createdAt = DateTime(2026, 8, 4, 9, 10);
-      final order = ProductionOrderFlow(
-        number: 'OP-2026-564999',
-        productCode: '730-0863',
-        productName: 'SMART ALARM - MONITORADA CENTRAL',
-        quantity: 4,
-        currentStage: ProductionStage.warehouse,
-        status: ProductionRunStatus.waiting,
-        priority: 'Media',
-        createdAt: createdAt,
-        updatedAt: createdAt,
-        responsavel: 'Tatiane',
-      );
-      const catalogItem = ProductionCatalogItem(
-        code: '730-0863',
-        name: 'SMART ALARM - MONITORADA CENTRAL',
-        defaultQuantity: 4,
-        components: [
-          ProductionComponent(
-            code: '100-010',
-            description: 'PARAFUSO 2,9 X 6,5 MM ZI',
-            quantity: 3,
-            stock: 7514,
-            filial: '04',
-            armazem: '01',
-            currentStock: 7514,
-            requirementSource: 'SG1',
-          ),
-        ],
-      );
-
-      final plan = ProtheusStockMovementPlan.fromOrder(order, catalogItem);
-      final movement = plan.movements.single;
-
-      expect(plan.totalCommittedByBalanceKey[('04', '100-010', '01')], 12);
-      expect(
-        plan.totalCommittedByBalanceKey.containsKey(('04', '100-010', '05')),
-        isFalse,
-      );
-      expect(movement.sd4Payload['d4_local'], '01');
-      expect(movement.sd3Payload['d3_local'], '01');
-      expect(movement.newSb2Payload['b2_local'], '01');
-    },
-  );
-
-  test('plans SD3 audit movement for stage transfer signature', () {
-    final updatedAt = DateTime(2026, 8, 4, 10, 45);
+  test('uses the selected component warehouse in SB2 and SD4 commitments', () {
+    final createdAt = DateTime(2026, 8, 4, 9, 10);
     final order = ProductionOrderFlow(
-      number: 'OP-2026-565000',
+      number: 'OP-2026-564999',
       productCode: '730-0863',
       productName: 'SMART ALARM - MONITORADA CENTRAL',
-      quantity: 5,
-      currentStage: ProductionStage.smd,
+      quantity: 4,
+      currentStage: ProductionStage.warehouse,
       status: ProductionRunStatus.waiting,
       priority: 'Media',
-      createdAt: DateTime(2026, 8, 4, 9),
-      updatedAt: updatedAt,
-      operatorSessions: [
-        ProductionOperatorSession(
-          stage: ProductionStage.warehouse,
-          operatorName: 'Vera',
-          operatorPin: '4003',
-          startedAt: DateTime(2026, 8, 4, 10),
-          completedAt: updatedAt,
+      createdAt: createdAt,
+      updatedAt: createdAt,
+      responsavel: 'Tatiane',
+    );
+    const catalogItem = ProductionCatalogItem(
+      code: '730-0863',
+      name: 'SMART ALARM - MONITORADA CENTRAL',
+      defaultQuantity: 4,
+      components: [
+        ProductionComponent(
+          code: '100-010',
+          description: 'PARAFUSO 2,9 X 6,5 MM ZI',
+          quantity: 3,
+          stock: 7514,
+          filial: '04',
+          armazem: '01',
+          currentStock: 7514,
+          requirementSource: 'SG1',
         ),
       ],
     );
 
-    final movement = ProtheusStageTransferMovement.fromOrder(order);
+    final plan = ProtheusStockMovementPlan.fromOrder(order, catalogItem);
+    final movement = plan.movements.single;
 
-    expect(movement.transferId, 'OP-2026-565000-warehouse-smd-4003');
-    expect(movement.fromWarehouse, '01');
-    expect(movement.toWarehouse, '03');
-    expect(movement.movesWarehouseStock, isTrue);
-    expect(movement.sd3Payload['d3_filial'], '04');
-    expect(movement.sd3Payload['d3_op'], 'OP-2026-565000');
-    expect(movement.sd3Payload['d3_cod'], '730-0863');
-    expect(movement.sd3Payload['d3_cf'], 'VFT');
-    expect(movement.sd3Payload['d3_local'], '01');
-    expect(movement.sd3Payload['d3_localdest'], '03');
-    expect(movement.sd3Payload['d3_usuario'], 'Vera');
-    expect(movement.sd3Payload['vettiflow_origin'], 'stage_transfer');
-    expect(movement.sd3Payload['vettiflow_from_stage'], 'warehouse');
-    expect(movement.sd3Payload['vettiflow_to_stage'], 'smd');
-    expect(movement.sd3Payload['vettiflow_from_warehouse'], '01');
-    expect(movement.sd3Payload['vettiflow_to_warehouse'], '03');
-    expect(movement.sd3Payload['vettiflow_operator_pin'], '4003');
+    expect(plan.totalCommittedByBalanceKey[('04', '100-010', '01')], 12);
+    expect(
+      plan.totalCommittedByBalanceKey.containsKey(('04', '100-010', '05')),
+      isFalse,
+    );
+    expect(movement.sd4Payload['d4_local'], '01');
+    expect(movement.newSb2Payload['b2_local'], '01');
   });
 
-  test(
-    'does not move SB2 stock between production stages in same warehouse',
-    () {
-      final updatedAt = DateTime(2026, 8, 4, 13, 20);
-      final order = ProductionOrderFlow(
-        number: 'OP-2026-565001',
-        productCode: '730-0863',
-        productName: 'SMART ALARM - MONITORADA CENTRAL',
-        quantity: 5,
-        currentStage: ProductionStage.soldering,
-        status: ProductionRunStatus.waiting,
-        priority: 'Media',
-        createdAt: DateTime(2026, 8, 4, 9),
-        updatedAt: updatedAt,
-        operatorSessions: [
-          ProductionOperatorSession(
-            stage: ProductionStage.firmware,
-            operatorName: 'Tatiane',
-            operatorPin: '2001',
-            startedAt: DateTime(2026, 8, 4, 12),
-            completedAt: updatedAt,
-          ),
-        ],
-      );
+  test('OP creation and stage advance do not write SD3 Protheus movements', () {
+    final source = File(
+      'lib/data/repositories/production_flow_database.dart',
+    ).readAsStringSync();
 
-      final movement = ProtheusStageTransferMovement.fromOrder(order);
+    expect(source, isNot(contains('await _insertSd3Movement(tx, movement);')));
+    expect(
+      source,
+      isNot(contains('await _insertSd3StageTransfer(tx, order);')),
+    );
+  });
 
-      expect(movement.fromWarehouse, '05');
-      expect(movement.toWarehouse, '05');
-      expect(movement.movesWarehouseStock, isFalse);
-      expect(movement.sd3Payload['d3_local'], '05');
-      expect(movement.sd3Payload['d3_localdest'], '05');
-    },
-  );
+  test('fills SC2 product unit from the Protheus lookup', () {
+    final createdAt = DateTime(2026, 8, 5, 8, 15);
+    final order = ProductionOrderFlow(
+      number: 'OP-2026-565010',
+      productCode: '800-001',
+      productName: 'PRODUTO EM METROS',
+      quantity: 2,
+      currentStage: ProductionStage.warehouse,
+      status: ProductionRunStatus.waiting,
+      priority: 'Media',
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
 
-  test('plans SB2, SD3 and SD4 reversal movements for OP cancelation', () {
+    final sc2 = ProtheusProductionOrder.fromOrder(order, unit: 'MT').sc2Payload;
+
+    expect(sc2['c2_um'], 'MT');
+  });
+
+  test('plans SB2 and SD4 reversal records for OP cancelation', () {
     final createdAt = DateTime(2026, 8, 4, 9, 10);
     final canceledAt = DateTime(2026, 8, 4, 11, 20);
     final order = ProductionOrderFlow(
@@ -287,16 +262,82 @@ void main() {
     expect(movement.returnWarehouse, '05');
     expect(movement.emissionDate, '20260804');
     expect(movement.sd4CancelPayload['d4_sldemp'], 0);
+    expect(movement.sd4CancelPayload['d4_op'], '56511101001');
     expect(movement.sd4CancelPayload['d_e_l_e_t_'], '*');
     expect(movement.sd4CancelPayload['vettiflow_origin'], 'op_cancel');
     expect(movement.sd4CancelPayload['vettiflow_operator_name'], 'Vera');
     expect(movement.sd4CancelPayload['vettiflow_operator_pin'], '4003');
-    expect(movement.sd3Payload['d3_cf'], 'DE0');
-    expect(movement.sd3Payload['d3_estorno'], 'S');
-    expect(movement.sd3Payload['d3_local'], '01');
-    expect(movement.sd3Payload['d3_usuario'], 'Vera');
-    expect(movement.sd3Payload['vettiflow_return_warehouse'], '05');
-    expect(movement.sd3Payload['vettiflow_origin'], 'op_cancel');
-    expect(movement.sd3Payload['vettiflow_operator_pin'], '4003');
+  });
+
+  test('plans PR0 and RE1 only when production is completed', () {
+    final createdAt = DateTime(2026, 8, 5, 8, 15);
+    final completedAt = DateTime(2026, 8, 5, 16, 40);
+    final order = ProductionOrderFlow(
+      number: 'OP-2026-565222',
+      productCode: '730-0863',
+      productName: 'SMART ALARM - MONITORADA CENTRAL',
+      quantity: 6,
+      currentStage: ProductionStage.completed,
+      status: ProductionRunStatus.completed,
+      priority: 'Media',
+      createdAt: createdAt,
+      updatedAt: completedAt,
+      operatorName: 'Tatiane',
+      operatorPin: '2001',
+      orderWarehouse: '05',
+      closedQuantity: 4,
+    );
+    const catalogItem = ProductionCatalogItem(
+      code: '730-0863',
+      name: 'SMART ALARM - MONITORADA CENTRAL',
+      defaultQuantity: 6,
+      unit: 'PC',
+      components: [
+        ProductionComponent(
+          code: '100-010',
+          description: 'PARAFUSO 2,9 X 6,5 MM ZI',
+          quantity: 2,
+          stock: 3803,
+          filial: '04',
+          armazem: '01',
+        ),
+        ProductionComponent(
+          code: 'MOD-001',
+          description: 'MAO DE OBRA',
+          quantity: 1,
+          stock: -999,
+          filial: '04',
+          armazem: '05',
+        ),
+      ],
+    );
+
+    final completion = ProtheusProductionCompletionPlan.fromOrder(
+      order,
+      catalogItem,
+    );
+
+    expect(completion.finishedProduct.quantity, 4);
+    expect(completion.finishedProduct.sd3Payload['d3_cf'], 'PR0');
+    expect(completion.finishedProduct.sd3Payload['d3_op'], '56522201001');
+    expect(completion.finishedProduct.sd3Payload['d3_cod'], '730-0863');
+    expect(completion.finishedProduct.sd3Payload['d3_local'], '05');
+    expect(completion.consumptions, hasLength(2));
+
+    final physicalConsumption = completion.consumptions.firstWhere(
+      (item) => item.componentCode == '100-010',
+    );
+    expect(physicalConsumption.quantity, 8);
+    expect(physicalConsumption.affectsStockBalance, isTrue);
+    expect(physicalConsumption.sd3Payload['d3_cf'], 'RE1');
+    expect(physicalConsumption.sd3Payload['d3_op'], '56522201001');
+    expect(physicalConsumption.sd3Payload['d3_cod'], '100-010');
+    expect(physicalConsumption.sd3Payload['d3_local'], '01');
+
+    final modConsumption = completion.consumptions.firstWhere(
+      (item) => item.componentCode == 'MOD-001',
+    );
+    expect(modConsumption.quantity, 4);
+    expect(modConsumption.affectsStockBalance, isFalse);
   });
 }

@@ -87,6 +87,11 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
   final String username;
   final String password;
 
+  static const _protheusSc2 = 'protheus_raw.sc2_orders';
+  static const _protheusSd3 = 'protheus_raw.sd3_movements';
+  static const _protheusSd4 = 'protheus_raw.sd4_commitments';
+  static const _protheusSb2 = 'protheus_raw.sb2_balances';
+
   Connection? _connection;
   bool _schemaChecked = false;
 
@@ -188,6 +193,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
         code: order.productCode,
         name: order.productName,
         defaultQuantity: order.quantity,
+        unit: 'PC',
         components: componentsByOrder[order.number] ?? const [],
       );
     }).toList();
@@ -358,8 +364,8 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
       await _insertEvent(tx, order, eventType);
       if (eventType == 'created') {
         await _applyProtheusMovements(tx, order, catalogItem);
-      } else {
-        await _insertSd3StageTransfer(tx, order);
+      } else if (order.isDone) {
+        await _applyProtheusCompletion(tx, order, catalogItem);
       }
     });
   }
@@ -601,6 +607,11 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     ProductionOrderFlow order,
     ProductionCatalogItem catalogItem,
   ) async {
+    await _insertSc2Order(
+      tx,
+      ProtheusProductionOrder.fromOrder(order, unit: catalogItem.unit),
+    );
+
     final existing = await tx.execute(
       Sql.named('''
         SELECT 1
@@ -617,9 +628,43 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
       await _insertSd4Commitment(tx, movement);
       if (movement.affectsStockBalance) {
         await _increaseSb2Commitment(tx, movement);
-        await _insertSd3Movement(tx, movement);
       }
     }
+  }
+
+  Future<void> _insertSc2Order(
+    Session tx,
+    ProtheusProductionOrder order,
+  ) async {
+    final payload = await _withNextRecno(tx, _protheusSc2, order.sc2Payload);
+    await tx.execute(
+      Sql.named('''
+        INSERT INTO protheus_raw.sc2_orders (payload)
+        SELECT CAST(@payload AS jsonb)
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM protheus_raw.sc2_orders
+          WHERE (
+              payload ->> 'vettiflow_order_number' = @order_number
+              OR (
+                c2_filial = @filial
+                AND c2_num = @numero
+                AND c2_item = @item
+                AND c2_sequen = @sequencia
+              )
+            )
+            AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
+        )
+      '''),
+      parameters: {
+        'payload': jsonEncode(payload),
+        'order_number': order.orderNumber,
+        'filial': payload['c2_filial'],
+        'numero': payload['c2_num'],
+        'item': payload['c2_item'],
+        'sequencia': payload['c2_sequen'],
+      },
+    );
   }
 
   Future<void> _increaseSb2Commitment(
@@ -665,12 +710,17 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     );
     if (updated.isNotEmpty) return;
 
+    final payload = await _withNextRecno(
+      tx,
+      _protheusSb2,
+      movement.newSb2Payload,
+    );
     await tx.execute(
       Sql.named('''
         INSERT INTO protheus_raw.sb2_balances (payload)
         VALUES (CAST(@payload AS jsonb))
       '''),
-      parameters: {'payload': jsonEncode(movement.newSb2Payload)},
+      parameters: {'payload': jsonEncode(payload)},
     );
   }
 
@@ -678,6 +728,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     Session tx,
     ProtheusStockMovement movement,
   ) async {
+    final payload = await _withNextRecno(tx, _protheusSd4, movement.sd4Payload);
     await tx.execute(
       Sql.named('''
         INSERT INTO protheus_raw.sd4_commitments (payload)
@@ -692,7 +743,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
         )
       '''),
       parameters: {
-        'payload': jsonEncode(movement.sd4Payload),
+        'payload': jsonEncode(payload),
         'order_number': movement.orderNumber,
         'component_code': movement.componentCode,
         'armazem': movement.armazem,
@@ -700,10 +751,112 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     );
   }
 
+  Future<Map<String, dynamic>> _withNextRecno(
+    Session tx,
+    String table,
+    Map<String, dynamic> payload,
+  ) async {
+    if (_int(payload['r_e_c_n_o_']) > 0) return payload;
+    final tableName = switch (table) {
+      _protheusSc2 => _protheusSc2,
+      _protheusSd3 => _protheusSd3,
+      _protheusSd4 => _protheusSd4,
+      _protheusSb2 => _protheusSb2,
+      _ => throw ArgumentError.value(table, 'table', 'Tabela nao permitida'),
+    };
+    await tx.execute(
+      'LOCK TABLE $tableName IN SHARE ROW EXCLUSIVE MODE',
+      timeout: const Duration(seconds: 8),
+    );
+    final rows = await tx.execute('''
+        SELECT COALESCE(MAX(id), 0)::int + 1 AS next_recno
+        FROM $tableName
+      ''', timeout: const Duration(seconds: 8));
+    return {
+      ...payload,
+      'r_e_c_n_o_': _int(rows.single.toColumnMap()['next_recno']),
+    };
+  }
+
+  Future<void> _applyProtheusCompletion(
+    Session tx,
+    ProductionOrderFlow order,
+    ProductionCatalogItem catalogItem,
+  ) async {
+    final existing = await tx.execute(
+      Sql.named('''
+        SELECT 1
+        FROM protheus_raw.sd3_movements
+        WHERE payload ->> 'vettiflow_order_number' = @order_number
+          AND payload ->> 'vettiflow_origin' = 'op_completion'
+        LIMIT 1
+      '''),
+      parameters: {'order_number': order.number},
+    );
+    if (existing.isNotEmpty) return;
+
+    final plan = ProtheusProductionCompletionPlan.fromOrder(order, catalogItem);
+    await _finishSc2Order(tx, plan.finishedProduct);
+    await _insertSd3Movement(tx, plan.finishedProduct.sd3Payload, sequence: '');
+    await _increaseSb2CurrentStock(tx, plan.finishedProduct);
+
+    for (final movement in plan.consumptions) {
+      await _closeSd4Commitment(tx, movement);
+      if (!movement.affectsStockBalance) continue;
+      await _insertSd3Movement(
+        tx,
+        movement.sd3Payload,
+        sequence: movement.structureSequence,
+      );
+      await _decreaseSb2CurrentAndCommitment(tx, movement);
+    }
+  }
+
+  Future<void> _finishSc2Order(
+    Session tx,
+    ProtheusFinishedProductMovement movement,
+  ) async {
+    await tx.execute(
+      Sql.named('''
+        UPDATE protheus_raw.sc2_orders
+        SET payload = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                payload,
+                '{c2_quje}',
+                to_jsonb(CAST(@quantity AS numeric)),
+                true
+              ),
+              '{c2_datrf}',
+              to_jsonb(CAST(@emission_date AS text)),
+              true
+            ),
+            '{c2_status}',
+            to_jsonb('F'::text),
+            true
+          ),
+          '{vettiflow_finished_at}',
+          to_jsonb(CAST(@emission_date AS text)),
+          true
+        )
+        WHERE payload ->> 'vettiflow_order_number' = @order_number
+          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
+      '''),
+      parameters: {
+        'quantity': movement.quantity,
+        'emission_date': movement.emissionDate,
+        'order_number': movement.orderNumber,
+      },
+    );
+  }
+
   Future<void> _insertSd3Movement(
     Session tx,
-    ProtheusStockMovement movement,
-  ) async {
+    Map<String, dynamic> payload, {
+    required String sequence,
+  }) async {
+    final movementPayload = await _withNextRecno(tx, _protheusSd3, payload);
     await tx.execute(
       Sql.named('''
         INSERT INTO protheus_raw.sd3_movements (payload)
@@ -712,14 +865,173 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
           SELECT 1
           FROM protheus_raw.sd3_movements
           WHERE payload ->> 'vettiflow_order_number' = @order_number
-            AND d3_cod = @component_code
-            AND d3_local = @armazem
-            AND d3_cf = 'RE0'
+            AND payload ->> 'vettiflow_origin' = 'op_completion'
+            AND d3_cod = @code
+            AND d3_local = @warehouse
+            AND d3_cf = @movement_type
+            AND COALESCE(payload ->> 'd3_numseq', '') = @sequence
             AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
         )
       '''),
       parameters: {
-        'payload': jsonEncode(movement.sd3Payload),
+        'payload': jsonEncode(movementPayload),
+        'order_number': movementPayload['vettiflow_order_number'],
+        'code': movementPayload['d3_cod'],
+        'warehouse': movementPayload['d3_local'],
+        'movement_type': movementPayload['d3_cf'],
+        'sequence': sequence,
+      },
+    );
+  }
+
+  Future<void> _increaseSb2CurrentStock(
+    Session tx,
+    ProtheusFinishedProductMovement movement,
+  ) async {
+    final updated = await tx.execute(
+      Sql.named('''
+        UPDATE protheus_raw.sb2_balances
+        SET payload = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              payload,
+              '{b2_qatu}',
+              to_jsonb(
+                COALESCE(NULLIF(trim(payload ->> 'b2_qatu'), '')::numeric, 0)
+                + CAST(@quantity AS numeric)
+              ),
+              true
+            ),
+            '{b2_dmov}',
+            to_jsonb(CAST(@emission_date AS text)),
+            true
+          ),
+          '{vettiflow_last_completion_order_number}',
+          to_jsonb(CAST(@order_number AS text)),
+          true
+        )
+        WHERE b2_filial = @filial
+          AND b2_cod = @product_code
+          AND b2_local = @warehouse
+          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
+        RETURNING id
+      '''),
+      parameters: {
+        'quantity': movement.quantity,
+        'emission_date': movement.emissionDate,
+        'order_number': movement.orderNumber,
+        'filial': movement.filial,
+        'product_code': movement.productCode,
+        'warehouse': movement.warehouse,
+      },
+    );
+    if (updated.isNotEmpty) return;
+
+    final payload = await _withNextRecno(
+      tx,
+      _protheusSb2,
+      movement.newSb2Payload,
+    );
+    await tx.execute(
+      Sql.named('''
+        INSERT INTO protheus_raw.sb2_balances (payload)
+        VALUES (CAST(@payload AS jsonb))
+      '''),
+      parameters: {'payload': jsonEncode(payload)},
+    );
+  }
+
+  Future<void> _decreaseSb2CurrentAndCommitment(
+    Session tx,
+    ProtheusComponentConsumptionMovement movement,
+  ) async {
+    await tx.execute(
+      Sql.named('''
+        UPDATE protheus_raw.sb2_balances
+        SET payload = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                payload,
+                '{b2_qatu}',
+                to_jsonb(
+                  GREATEST(
+                    COALESCE(NULLIF(trim(payload ->> 'b2_qatu'), '')::numeric, 0)
+                    - CAST(@quantity AS numeric),
+                    0
+                  )
+                ),
+                true
+              ),
+              '{b2_qemp}',
+              to_jsonb(
+                GREATEST(
+                  COALESCE(NULLIF(trim(payload ->> 'b2_qemp'), '')::numeric, 0)
+                  - CAST(@quantity AS numeric),
+                  0
+                )
+              ),
+              true
+            ),
+            '{b2_dmov}',
+            to_jsonb(CAST(@emission_date AS text)),
+            true
+          ),
+          '{vettiflow_last_completion_order_number}',
+          to_jsonb(CAST(@order_number AS text)),
+          true
+        )
+        WHERE b2_filial = @filial
+          AND b2_cod = @component_code
+          AND b2_local = @armazem
+          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
+      '''),
+      parameters: {
+        'quantity': movement.quantity,
+        'emission_date': movement.emissionDate,
+        'order_number': movement.orderNumber,
+        'filial': movement.filial,
+        'component_code': movement.componentCode,
+        'armazem': movement.armazem,
+      },
+    );
+  }
+
+  Future<void> _closeSd4Commitment(
+    Session tx,
+    ProtheusComponentConsumptionMovement movement,
+  ) async {
+    await tx.execute(
+      Sql.named('''
+        UPDATE protheus_raw.sd4_commitments
+        SET payload = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                payload,
+                '{d4_quant}',
+                to_jsonb(0),
+                true
+              ),
+              '{d4_sldemp}',
+              to_jsonb(0),
+              true
+            ),
+            '{d4_sldemp2}',
+            to_jsonb(0),
+            true
+          ),
+          '{vettiflow_consumed_at}',
+          to_jsonb(CAST(@emission_date AS text)),
+          true
+        )
+        WHERE payload ->> 'vettiflow_order_number' = @order_number
+          AND d4_cod = @component_code
+          AND d4_local = @armazem
+          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
+      '''),
+      parameters: {
+        'emission_date': movement.emissionDate,
         'order_number': movement.orderNumber,
         'component_code': movement.componentCode,
         'armazem': movement.armazem,
@@ -735,10 +1047,17 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     String? operatorName,
     String? operatorPin,
   }) async {
+    await _cancelSc2Order(
+      tx,
+      order,
+      operatorName: operatorName,
+      operatorPin: operatorPin,
+    );
+
     final existing = await tx.execute(
       Sql.named('''
         SELECT 1
-        FROM protheus_raw.sd3_movements
+        FROM protheus_raw.sd4_commitments
         WHERE payload ->> 'vettiflow_order_number' = @order_number
           AND payload ->> 'vettiflow_origin' = 'op_cancel'
         LIMIT 1
@@ -759,9 +1078,55 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
       await _insertSd4CancelAudit(tx, movement);
       if (movement.affectsStockBalance) {
         await _decreaseSb2Commitment(tx, movement);
-        await _insertSd3CancelMovement(tx, movement);
       }
     }
+  }
+
+  Future<void> _cancelSc2Order(
+    Session tx,
+    ProductionOrderFlow order, {
+    String? operatorName,
+    String? operatorPin,
+  }) async {
+    await tx.execute(
+      Sql.named('''
+        UPDATE protheus_raw.sc2_orders
+        SET payload = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                jsonb_set(
+                  payload,
+                  '{c2_status}',
+                  to_jsonb('C'::text),
+                  true
+                ),
+                '{d_e_l_e_t_}',
+                to_jsonb('*'::text),
+                true
+              ),
+              '{vettiflow_cancelled_at}',
+              to_jsonb(CAST(@cancelled_at AS text)),
+              true
+            ),
+            '{vettiflow_cancel_operator_name}',
+            to_jsonb(CAST(@operator_name AS text)),
+            true
+          ),
+          '{vettiflow_cancel_operator_pin}',
+          to_jsonb(CAST(@operator_pin AS text)),
+          true
+        )
+        WHERE payload ->> 'vettiflow_order_number' = @order_number
+          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
+      '''),
+      parameters: {
+        'cancelled_at': _yyyymmdd(order.updatedAt),
+        'operator_name': _operatorName(operatorName ?? order.operatorName),
+        'operator_pin': _operatorPin(operatorPin ?? order.operatorPin),
+        'order_number': order.number,
+      },
+    );
   }
 
   Future<void> _decreaseSb2Commitment(
@@ -860,6 +1225,11 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     Session tx,
     ProtheusStockCancelationMovement movement,
   ) async {
+    final payload = await _withNextRecno(
+      tx,
+      _protheusSd4,
+      movement.sd4CancelPayload,
+    );
     await tx.execute(
       Sql.named('''
         INSERT INTO protheus_raw.sd4_commitments (payload)
@@ -874,221 +1244,10 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
         )
       '''),
       parameters: {
-        'payload': jsonEncode(movement.sd4CancelPayload),
+        'payload': jsonEncode(payload),
         'order_number': movement.orderNumber,
         'component_code': movement.componentCode,
         'armazem': movement.armazem,
-      },
-    );
-  }
-
-  Future<void> _insertSd3CancelMovement(
-    Session tx,
-    ProtheusStockCancelationMovement movement,
-  ) async {
-    await tx.execute(
-      Sql.named('''
-        INSERT INTO protheus_raw.sd3_movements (payload)
-        SELECT CAST(@payload AS jsonb)
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM protheus_raw.sd3_movements
-          WHERE payload ->> 'vettiflow_order_number' = @order_number
-            AND payload ->> 'vettiflow_origin' = 'op_cancel'
-            AND d3_cod = @component_code
-            AND d3_local = @armazem
-            AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
-        )
-      '''),
-      parameters: {
-        'payload': jsonEncode(movement.sd3Payload),
-        'order_number': movement.orderNumber,
-        'component_code': movement.componentCode,
-        'armazem': movement.armazem,
-      },
-    );
-  }
-
-  Future<void> _insertSd3StageTransfer(
-    Session tx,
-    ProductionOrderFlow order,
-  ) async {
-    if (order.operatorSessions.every(
-      (session) => session.completedAt == null,
-    )) {
-      return;
-    }
-    final movement = ProtheusStageTransferMovement.fromOrder(order);
-    final existing = await tx.execute(
-      Sql.named('''
-        SELECT 1
-        FROM protheus_raw.sd3_movements
-        WHERE d3_filial = @filial
-          AND d3_op = @order_number
-          AND payload ->> 'vettiflow_stage_transfer_id' = @transfer_id
-          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
-        LIMIT 1
-      '''),
-      parameters: {
-        'filial': movement.filial,
-        'order_number': movement.orderNumber,
-        'transfer_id': movement.transferId,
-      },
-    );
-    if (existing.isNotEmpty) return;
-
-    if (movement.movesWarehouseStock) {
-      await _applySb2StageTransfer(tx, movement);
-    }
-    await tx.execute(
-      Sql.named('''
-        INSERT INTO protheus_raw.sd3_movements (payload)
-        VALUES (CAST(@payload AS jsonb))
-      '''),
-      parameters: {'payload': jsonEncode(movement.sd3Payload)},
-    );
-  }
-
-  Future<void> _applySb2StageTransfer(
-    Session tx,
-    ProtheusStageTransferMovement movement,
-  ) async {
-    await _decreaseSb2CurrentStock(tx, movement);
-    await _increaseSb2CurrentStock(tx, movement);
-  }
-
-  Future<void> _decreaseSb2CurrentStock(
-    Session tx,
-    ProtheusStageTransferMovement movement,
-  ) async {
-    await tx.execute(
-      Sql.named('''
-        UPDATE protheus_raw.sb2_balances
-        SET payload = jsonb_set(
-          jsonb_set(
-            jsonb_set(
-              jsonb_set(
-                jsonb_set(
-                  payload,
-                  '{b2_qatu}',
-                  to_jsonb(
-                    GREATEST(
-                      COALESCE(NULLIF(trim(payload ->> 'b2_qatu'), '')::numeric, 0)
-                      - CAST(@quantity AS numeric),
-                      0
-                    )
-                  ),
-                  true
-                ),
-                '{b2_dmov}',
-                to_jsonb(CAST(@emission_date AS text)),
-                true
-              ),
-              '{vettiflow_last_stage_transfer_order_number}',
-              to_jsonb(CAST(@order_number AS text)),
-              true
-            ),
-            '{vettiflow_last_stage_transfer_direction}',
-            to_jsonb('out'::text),
-            true
-          ),
-          '{vettiflow_last_stage_transfer_to_warehouse}',
-          to_jsonb(CAST(@to_warehouse AS text)),
-          true
-        )
-        WHERE b2_filial = @filial
-          AND b2_cod = @product_code
-          AND b2_local = @from_warehouse
-          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
-      '''),
-      parameters: {
-        'quantity': movement.quantity,
-        'emission_date': movement.emissionDate,
-        'order_number': movement.orderNumber,
-        'filial': movement.filial,
-        'product_code': movement.productCode,
-        'from_warehouse': movement.fromWarehouse,
-        'to_warehouse': movement.toWarehouse,
-      },
-    );
-  }
-
-  Future<void> _increaseSb2CurrentStock(
-    Session tx,
-    ProtheusStageTransferMovement movement,
-  ) async {
-    final updated = await tx.execute(
-      Sql.named('''
-        UPDATE protheus_raw.sb2_balances
-        SET payload = jsonb_set(
-          jsonb_set(
-            jsonb_set(
-              jsonb_set(
-                jsonb_set(
-                  payload,
-                  '{b2_qatu}',
-                  to_jsonb(
-                    COALESCE(NULLIF(trim(payload ->> 'b2_qatu'), '')::numeric, 0)
-                    + CAST(@quantity AS numeric)
-                  ),
-                  true
-                ),
-                '{b2_dmov}',
-                to_jsonb(CAST(@emission_date AS text)),
-                true
-              ),
-              '{vettiflow_last_stage_transfer_order_number}',
-              to_jsonb(CAST(@order_number AS text)),
-              true
-            ),
-            '{vettiflow_last_stage_transfer_direction}',
-            to_jsonb('in'::text),
-            true
-          ),
-          '{vettiflow_last_stage_transfer_from_warehouse}',
-          to_jsonb(CAST(@from_warehouse AS text)),
-          true
-        )
-        WHERE b2_filial = @filial
-          AND b2_cod = @product_code
-          AND b2_local = @to_warehouse
-          AND COALESCE(payload ->> 'd_e_l_e_t_', '') <> '*'
-        RETURNING id
-      '''),
-      parameters: {
-        'quantity': movement.quantity,
-        'emission_date': movement.emissionDate,
-        'order_number': movement.orderNumber,
-        'filial': movement.filial,
-        'product_code': movement.productCode,
-        'from_warehouse': movement.fromWarehouse,
-        'to_warehouse': movement.toWarehouse,
-      },
-    );
-    if (updated.isNotEmpty) return;
-
-    await tx.execute(
-      Sql.named('''
-        INSERT INTO protheus_raw.sb2_balances (payload)
-        VALUES (CAST(@payload AS jsonb))
-      '''),
-      parameters: {
-        'payload': jsonEncode({
-          'b2_filial': movement.filial,
-          'b2_cod': movement.productCode,
-          'b2_local': movement.toWarehouse,
-          'b2_qatu': movement.quantity,
-          'b2_qemp': 0,
-          'b2_reserva': 0,
-          'b2_qfim': 0,
-          'b2_dmov': movement.emissionDate,
-          'd_e_l_e_t_': '',
-          'vettiflow_origin': 'stage_transfer',
-          'vettiflow_last_stage_transfer_order_number': movement.orderNumber,
-          'vettiflow_last_stage_transfer_direction': 'in',
-          'vettiflow_last_stage_transfer_from_warehouse':
-              movement.fromWarehouse,
-        }),
       },
     );
   }
@@ -1111,7 +1270,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
         applicationName: 'vettiflow-production-flow',
         sslMode: SslMode.disable,
         connectTimeout: Duration(seconds: 4),
-        queryTimeout: Duration(seconds: 8),
+        queryTimeout: Duration(seconds: 30),
       ),
     );
     _connection = conn;
@@ -1326,6 +1485,20 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
   int _int(Object? value) {
     if (value is num) return value.round();
     return num.tryParse(value?.toString() ?? '')?.round() ?? 0;
+  }
+
+  String _operatorName(String? value) {
+    final name = value?.trim();
+    return name == null || name.isEmpty ? 'VettiFlow' : name;
+  }
+
+  String _operatorPin(String? value) => value?.trim() ?? '';
+
+  String _yyyymmdd(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year$month$day';
   }
 
   DateTime? _date(Object? value) {

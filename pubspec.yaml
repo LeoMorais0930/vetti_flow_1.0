@@ -36,6 +36,7 @@ dependencies:
   intl: ^0.20.2
   provider: ^6.1.5
   web: ^1.1.1
+  http: ^1.6.0
   postgres: ^3.5.12
 
 dev_dependencies:

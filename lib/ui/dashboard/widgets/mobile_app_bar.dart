@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/protheus/protheus_queue_button.dart';
 
 class MobileAppBar extends StatelessWidget {
   const MobileAppBar({super.key});
@@ -72,6 +73,8 @@ class MobileAppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          const ProtheusQueueButton(compact: true),
+          const SizedBox(width: 6),
           IconButton(
             tooltip: 'Sair',
             onPressed: () => Navigator.pushReplacementNamed(context, '/login'),

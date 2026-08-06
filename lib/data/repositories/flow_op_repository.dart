@@ -127,6 +127,7 @@ class FlowOpRepository implements OpRepository {
     final order = await _store.createOrder(
       productCode: productCode,
       productName: productName,
+      productUnit: dto.productUnit,
       components: productionComponents,
       quantity: dto.qtd,
       priority: dto.prioridade,
@@ -143,6 +144,9 @@ class FlowOpRepository implements OpRepository {
         code: productCode,
         name: productName,
         defaultQuantity: dto.qtd,
+        unit: dto.productUnit?.trim().isNotEmpty == true
+            ? dto.productUnit!.trim()
+            : catalogItem.unit,
         components: productionComponents,
       ),
       orderWarehouse: dto.armazem,

@@ -103,13 +103,17 @@ Future<void> main() async {
       );
     }
     if (sd4 != 2) throw StateError('SD4 esperado 2 registros, veio $sd4.');
-    if (sd3 != 1) throw StateError('SD3 esperado 1 registro, veio $sd3.');
+    if (sd3 != 0) {
+      throw StateError(
+        'Criacao de OP nao deve gerar SD3; foram encontrados $sd3 registros.',
+      );
+    }
     if (modCount != 1) {
       throw StateError('MOD deveria gerar SD4, veio $modCount.');
     }
 
     stdout.writeln(
-      'OK: armazem escolhido $armazem foi usado em SB2, SD3 e SD4; MOD gera SD4 sem mexer saldo fisico.',
+      'OK: criacao usou armazem $armazem em SB2/SD4 sem SD3; MOD gera SD4 sem mexer saldo fisico.',
     );
   } finally {
     await _cleanup(conn, orderNumber, componentCode);

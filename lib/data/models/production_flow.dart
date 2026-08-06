@@ -290,6 +290,17 @@ String formatProductionDuration(Duration duration) {
   return '${normalized.inSeconds}s';
 }
 
+String formatProductionQuantity(num quantity) {
+  final normalized = quantity.toDouble();
+  if (normalized == normalized.truncateToDouble()) {
+    return normalized.toInt().toString();
+  }
+  return normalized
+      .toStringAsFixed(3)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
 class ProductionStageTiming {
   const ProductionStageTiming({
     this.startedAt,
@@ -486,12 +497,14 @@ class ProductionCatalogItem {
     required this.name,
     required this.defaultQuantity,
     required this.components,
+    this.unit = 'PC',
   });
 
   final String code;
   final String name;
   final int defaultQuantity;
   final List<ProductionComponent> components;
+  final String unit;
 
   String get label => '$code - $name';
 }

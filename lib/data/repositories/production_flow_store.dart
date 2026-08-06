@@ -70,6 +70,7 @@ class ProductionFlowStore extends ChangeNotifier {
   Future<ProductionOrderFlow> createOrder({
     required String productCode,
     String? productName,
+    String? productUnit,
     List<ProductionComponent> components = const [],
     required int quantity,
     required String priority,
@@ -89,6 +90,9 @@ class ProductionFlowStore extends ChangeNotifier {
           : existing.name,
       defaultQuantity: quantity,
       components: components.isNotEmpty ? components : existing.components,
+      unit: productUnit?.trim().isNotEmpty == true
+          ? productUnit!.trim()
+          : existing.unit,
     );
     if (_requiresProtheusSignature(product.components) &&
         !_hasPin(operatorPin)) {
@@ -581,6 +585,7 @@ class ProductionFlowStore extends ChangeNotifier {
       'code': item.code,
       'name': item.name,
       'defaultQuantity': item.defaultQuantity,
+      'unit': item.unit,
       'components': item.components.map(_componentToJson).toList(),
     };
   }
@@ -590,6 +595,7 @@ class ProductionFlowStore extends ChangeNotifier {
       code: json['code'] as String? ?? '',
       name: json['name'] as String? ?? '',
       defaultQuantity: (json['defaultQuantity'] as num?)?.toInt() ?? 1,
+      unit: json['unit'] as String? ?? 'PC',
       components:
           (json['components'] as List<dynamic>?)
               ?.map(

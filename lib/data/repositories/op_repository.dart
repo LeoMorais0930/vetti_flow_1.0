@@ -7,6 +7,7 @@ class NovaOrdemDTO {
   final String produto;
   final String? productCode;
   final String? productName;
+  final String? productUnit;
   final List<ProtheusProductComponent> components;
   final List<ProtheusChildOrder> smdReleaseOrders;
   final String filial;
@@ -22,6 +23,7 @@ class NovaOrdemDTO {
     required this.produto,
     this.productCode,
     this.productName,
+    this.productUnit,
     this.components = const [],
     this.smdReleaseOrders = const [],
     this.filial = '04',

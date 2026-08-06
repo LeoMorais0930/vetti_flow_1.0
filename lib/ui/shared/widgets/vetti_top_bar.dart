@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_colors.dart';
+import 'package:vetti_flow_1_0/ui/protheus/protheus_queue_button.dart';
 
 class VettiTopBar extends StatelessWidget {
   const VettiTopBar({
@@ -95,6 +96,8 @@ class _CompactTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          const ProtheusQueueButton(compact: true, dark: true),
+          const SizedBox(width: 4),
           _LogoutButton(compact: true, dark: true, onPressed: onLogout),
         ],
       ),
@@ -148,6 +151,8 @@ class _DesktopTopBar extends StatelessWidget {
           const Spacer(),
           _OperatorBlock(name: operatorName, role: operatorRole, dark: true),
           const SizedBox(width: 16),
+          const ProtheusQueueButton(dark: true),
+          const SizedBox(width: 8),
           _LogoutButton(dark: true, onPressed: onLogout),
         ],
       ),
