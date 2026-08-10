@@ -11,8 +11,9 @@ real nas tabelas antes de encostar em produção.
 import json
 import logging
 from contextlib import asynccontextmanager
+from datetime import date
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db, protheus
@@ -60,6 +61,405 @@ def health() -> Health:
         aplicando=config.APPLY,
         empresa=config.EMPRESA,
     )
+
+
+def _relation_exists(conn, name: str) -> bool:
+    row = conn.execute("SELECT to_regclass(%s) AS rel", (name,)).fetchone()
+    return row is not None and row["rel"] is not None
+
+
+def _layout(conn) -> str:
+    """Detecta se estamos lendo export bruto ou tabelas fisicas Protheus."""
+    if all(
+        _relation_exists(conn, name)
+        for name in (
+            "protheus_raw.vw_sb1_products",
+            "protheus_raw.vw_sg1_product_structures",
+            "protheus_raw.vw_sb2_stock_balances",
+            "protheus_raw.vw_sc2_orders",
+        )
+    ):
+        return "raw"
+    if all(
+        _relation_exists(conn, config.tabela(name))
+        for name in ("SB1", "SG1", "SB2", "SC2")
+    ):
+        return "physical"
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Base Protheus incompleta: esperado protheus_raw.vw_* "
+            "ou tabelas fisicas SB1/SG1/SB2/SC2."
+        ),
+    )
+
+
+def _scalar(value, default=0):
+    if value in (None, ""):
+        return default
+    return value
+
+
+def _json_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+            return decoded if isinstance(decoded, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def _produtos_raw(conn, query: str, filial: str, limit: int) -> list[dict]:
+    normalized = query.strip().upper()
+    return conn.execute(
+        """
+        SELECT
+          filial,
+          codigo AS code,
+          descricao AS description,
+          tipo AS type,
+          unidade AS unit,
+          grupo AS "group",
+          COALESCE(payload ->> 'b1_msblql', payload ->> 'B1_MSBLQL', '') AS "screenBlock"
+        FROM protheus_raw.vw_sb1_products
+        WHERE codigo IS NOT NULL
+          AND descricao IS NOT NULL
+          AND (filial = %s OR filial = '')
+          AND COALESCE(NULLIF(payload ->> 'b1_msblql', ''), NULLIF(payload ->> 'B1_MSBLQL', ''), '2') <> '1'
+          AND (
+            %s = ''
+            OR codigo ILIKE %s
+            OR descricao ILIKE %s
+          )
+        ORDER BY
+          CASE WHEN codigo = %s THEN 0 ELSE 1 END,
+          CASE WHEN codigo ILIKE %s THEN 0 ELSE 1 END,
+          CASE WHEN codigo LIKE '7%%' THEN 0 ELSE 1 END,
+          CASE
+            WHEN tipo IN ('PA', 'PI') THEN 0
+            WHEN tipo IN ('SB', 'SV') THEN 1
+            ELSE 2
+          END,
+          codigo
+        LIMIT %s
+        """,
+        (
+            filial,
+            normalized,
+            f"%{normalized}%",
+            f"%{normalized}%",
+            normalized,
+            f"{normalized}%",
+            limit,
+        ),
+    ).fetchall()
+
+
+def _produto_raw(conn, codigo: str, filial: str) -> dict | None:
+    rows = conn.execute(
+        """
+        SELECT
+          filial,
+          codigo AS code,
+          descricao AS description,
+          tipo AS type,
+          unidade AS unit,
+          grupo AS "group",
+          COALESCE(payload ->> 'b1_msblql', payload ->> 'B1_MSBLQL', '') AS "screenBlock"
+        FROM protheus_raw.vw_sb1_products
+        WHERE codigo = %s
+          AND (filial = %s OR filial = '')
+          AND COALESCE(NULLIF(payload ->> 'b1_msblql', ''), NULLIF(payload ->> 'B1_MSBLQL', ''), '2') <> '1'
+        LIMIT 1
+        """,
+        (codigo, filial),
+    ).fetchone()
+    return rows
+
+
+def _componentes_raw(conn, codigo: str, filial: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        WITH component_orders AS (
+          SELECT
+            produto_codigo,
+            jsonb_agg(
+              jsonb_build_object(
+                'number', op,
+                'productCode', produto_codigo,
+                'productDescription', produto_descricao,
+                'plannedQuantity', quantidade_planejada,
+                'producedQuantity', quantidade_produzida,
+                'status', status_protheus
+              )
+              ORDER BY emissao_aaaammdd DESC NULLS LAST, op DESC
+            ) FILTER (WHERE op IS NOT NULL) AS child_orders
+          FROM protheus_raw.vw_sc2_orders
+          WHERE filial = %s
+          GROUP BY produto_codigo
+        ),
+        stock_summary AS (
+          SELECT
+            produto_codigo,
+            sum(saldo_disponivel_estimado) AS stock_available
+          FROM protheus_raw.vw_sb2_stock_balances
+          WHERE filial = %s
+          GROUP BY produto_codigo
+        ),
+        stock_balances AS (
+          SELECT
+            produto_codigo,
+            jsonb_agg(
+              jsonb_build_object(
+                'filial', filial,
+                'armazem', armazem,
+                'currentStock', saldo_atual,
+                'committedQuantity', quantidade_empenhada,
+                'reservedQuantity', quantidade_reservada,
+                'availableQuantity', saldo_disponivel_estimado
+              )
+              ORDER BY armazem
+            ) AS warehouse_balances
+          FROM protheus_raw.vw_sb2_stock_balances
+          WHERE filial = %s
+          GROUP BY produto_codigo
+        )
+        SELECT
+          s.filial,
+          s.componente_codigo AS code,
+          s.componente_descricao AS description,
+          s.quantidade_por_unidade AS "quantityPerUnit",
+          p.unidade AS unit,
+          COALESCE(stock_summary.stock_available, 0) AS "stockAvailable",
+          COALESCE(stock_balances.warehouse_balances, '[]'::jsonb) AS "warehouseBalances",
+          COALESCE(component_orders.child_orders, '[]'::jsonb) AS "childOrders",
+          'SG1' AS "requirementSource",
+          '' AS "sourceOrder",
+          '' AS "commitmentDate",
+          0 AS "originalQuantity",
+          0 AS "commitmentQuantity"
+        FROM protheus_raw.vw_sg1_product_structures AS s
+        LEFT JOIN protheus_raw.vw_sb1_products AS p
+          ON p.codigo = s.componente_codigo
+         AND (p.filial = %s OR p.filial = '')
+        LEFT JOIN stock_summary ON stock_summary.produto_codigo = s.componente_codigo
+        LEFT JOIN stock_balances ON stock_balances.produto_codigo = s.componente_codigo
+        LEFT JOIN component_orders ON component_orders.produto_codigo = s.componente_codigo
+        WHERE s.produto_codigo = %s
+          AND (s.filial = %s OR s.filial = '')
+          AND COALESCE(NULLIF(p.payload ->> 'b1_msblql', ''), NULLIF(p.payload ->> 'B1_MSBLQL', ''), '2') <> '1'
+        ORDER BY s.componente_codigo
+        """,
+        (filial, filial, filial, filial, codigo, filial),
+    ).fetchall()
+    return [_normalizar_componente(row) for row in rows]
+
+
+def _produtos_fisicos(conn, query: str, filial: str, limit: int) -> list[dict]:
+    normalized = query.strip().upper()
+    sb1 = config.tabela("SB1")
+    return conn.execute(
+        f"""
+        SELECT
+          btrim(b1_filial) AS filial,
+          btrim(b1_cod) AS code,
+          btrim(b1_desc) AS description,
+          btrim(b1_tipo) AS type,
+          btrim(b1_um) AS unit,
+          btrim(b1_grupo) AS "group",
+          btrim(COALESCE(b1_msblql, '')) AS "screenBlock"
+        FROM {sb1}
+        WHERE btrim(b1_cod) <> ''
+          AND btrim(COALESCE(b1_desc, '')) <> ''
+          AND (btrim(b1_filial) = %s OR btrim(b1_filial) = '')
+          AND COALESCE(NULLIF(btrim(COALESCE(b1_msblql, '')), ''), '2') <> '1'
+          AND (
+            %s = ''
+            OR btrim(b1_cod) ILIKE %s
+            OR btrim(b1_desc) ILIKE %s
+          )
+        ORDER BY
+          CASE WHEN btrim(b1_cod) = %s THEN 0 ELSE 1 END,
+          CASE WHEN btrim(b1_cod) ILIKE %s THEN 0 ELSE 1 END,
+          CASE WHEN btrim(b1_cod) LIKE '7%%' THEN 0 ELSE 1 END,
+          btrim(b1_cod)
+        LIMIT %s
+        """,
+        (
+            filial,
+            normalized,
+            f"%{normalized}%",
+            f"%{normalized}%",
+            normalized,
+            f"{normalized}%",
+            limit,
+        ),
+    ).fetchall()
+
+
+def _produto_fisico(conn, codigo: str, filial: str) -> dict | None:
+    sb1 = config.tabela("SB1")
+    return conn.execute(
+        f"""
+        SELECT
+          btrim(b1_filial) AS filial,
+          btrim(b1_cod) AS code,
+          btrim(b1_desc) AS description,
+          btrim(b1_tipo) AS type,
+          btrim(b1_um) AS unit,
+          btrim(b1_grupo) AS "group",
+          btrim(COALESCE(b1_msblql, '')) AS "screenBlock"
+        FROM {sb1}
+        WHERE btrim(b1_cod) = %s
+          AND (btrim(b1_filial) = %s OR btrim(b1_filial) = '')
+          AND COALESCE(NULLIF(btrim(COALESCE(b1_msblql, '')), ''), '2') <> '1'
+        LIMIT 1
+        """,
+        (codigo, filial),
+    ).fetchone()
+
+
+def _saldos_fisicos(conn, codigo: str, filial: str) -> list[dict]:
+    sb2 = config.tabela("SB2")
+    return conn.execute(
+        f"""
+        SELECT
+          btrim(b2_filial) AS filial,
+          btrim(b2_local) AS armazem,
+          b2_qatu AS "currentStock",
+          b2_qemp AS "committedQuantity",
+          COALESCE(b2_reserva, 0) AS "reservedQuantity",
+          b2_qatu AS "availableQuantity"
+        FROM {sb2}
+        WHERE d_e_l_e_t_ <> '*'
+          AND b2_filial = %s
+          AND btrim(b2_cod) = %s
+        ORDER BY armazem
+        """,
+        (filial, codigo),
+    ).fetchall()
+
+
+def _componentes_fisicos(conn, codigo: str, filial: str) -> list[dict]:
+    sg1 = config.tabela("SG1")
+    sb1 = config.tabela("SB1")
+    hoje = date.today().strftime("%Y%m%d")
+    rows = conn.execute(
+        f"""
+        SELECT
+          btrim(s.g1_filial) AS filial,
+          btrim(s.g1_comp) AS code,
+          btrim(COALESCE(p.b1_desc, '')) AS description,
+          s.g1_quant AS "quantityPerUnit",
+          btrim(COALESCE(p.b1_um, '')) AS unit
+        FROM {sg1} s
+        LEFT JOIN {sb1} p
+          ON btrim(p.b1_cod) = btrim(s.g1_comp)
+         AND (btrim(p.b1_filial) = %s OR btrim(p.b1_filial) = '')
+        WHERE s.d_e_l_e_t_ <> '*'
+          AND btrim(s.g1_cod) = %s
+          AND (btrim(s.g1_filial) = %s OR btrim(s.g1_filial) = '')
+          AND btrim(COALESCE(s.g1_ini, '')) <= %s
+          AND (btrim(COALESCE(s.g1_fim, '')) = '' OR btrim(s.g1_fim) >= %s)
+          AND COALESCE(NULLIF(btrim(COALESCE(p.b1_msblql, '')), ''), '2') <> '1'
+        ORDER BY btrim(s.g1_comp)
+        """,
+        (filial, codigo, filial, hoje, hoje),
+    ).fetchall()
+    components = []
+    for row in rows:
+        data = dict(row)
+        balances = _saldos_fisicos(conn, data["code"], filial)
+        best = _melhor_saldo(balances)
+        data["warehouseBalances"] = balances
+        data["childOrders"] = []
+        data["requirementSource"] = "SG1"
+        data["sourceOrder"] = ""
+        data["commitmentDate"] = ""
+        data["originalQuantity"] = 0
+        data["commitmentQuantity"] = 0
+        data["armazem"] = best.get("armazem", "") if best else ""
+        data["stockAvailable"] = best.get("availableQuantity", 0) if best else 0
+        data["currentStock"] = best.get("currentStock", 0) if best else 0
+        data["committedQuantity"] = best.get("committedQuantity", 0) if best else 0
+        data["reservedQuantity"] = best.get("reservedQuantity", 0) if best else 0
+        components.append(data)
+    return components
+
+
+def _melhor_saldo(balances: list[dict]) -> dict | None:
+    positives = [
+        item
+        for item in balances
+        if _scalar(item.get("availableQuantity")) > 0
+        or _scalar(item.get("currentStock")) > 0
+    ]
+    values = positives or balances
+    if not values:
+        return None
+    return sorted(
+        values,
+        key=lambda item: (
+            _scalar(item.get("availableQuantity")),
+            _scalar(item.get("currentStock")),
+        ),
+        reverse=True,
+    )[0]
+
+
+def _normalizar_componente(row: dict) -> dict:
+    data = dict(row)
+    balances = _json_list(data.pop("warehouseBalances", []))
+    children = _json_list(data.pop("childOrders", []))
+    best = _melhor_saldo(balances)
+    data["warehouseBalances"] = balances
+    data["childOrders"] = children
+    data["armazem"] = best.get("armazem", "") if best else ""
+    data["stockAvailable"] = best.get("availableQuantity", 0) if best else 0
+    data["currentStock"] = best.get("currentStock", 0) if best else 0
+    data["committedQuantity"] = best.get("committedQuantity", 0) if best else 0
+    data["reservedQuantity"] = best.get("reservedQuantity", 0) if best else 0
+    return data
+
+
+@app.get("/api/v1/produtos")
+def produtos(
+    query: str = "",
+    limit: int = Query(default=12, ge=1, le=250),
+    filial: str = config.FILIAL_PADRAO,
+) -> list[dict]:
+    with db.conexao() as conn:
+        if _layout(conn) == "raw":
+            return _produtos_raw(conn, query, filial, limit)
+        return _produtos_fisicos(conn, query, filial, limit)
+
+
+@app.get("/api/v1/produtos/{codigo}")
+def produto(codigo: str, filial: str = config.FILIAL_PADRAO) -> dict:
+    code = codigo.strip().upper()
+    with db.conexao() as conn:
+        layout = _layout(conn)
+        if layout == "raw":
+            product = _produto_raw(conn, code, filial)
+            components = _componentes_raw(conn, code, filial) if product else []
+        else:
+            product = _produto_fisico(conn, code, filial)
+            components = _componentes_fisicos(conn, code, filial) if product else []
+
+    if product is None:
+        raise HTTPException(status_code=404, detail="Produto nao encontrado")
+    return {
+        "filial": filial,
+        "armazem": "",
+        "product": product,
+        "components": components,
+        "smdReleaseOrders": [],
+    }
 
 
 def _ja_existe(conn, id_: str) -> dict | None:
@@ -383,6 +783,20 @@ def ops_abertas(filial: str = config.FILIAL_PADRAO) -> list[dict]:
 @app.get("/api/v1/produtos/{codigo}/saldos")
 def saldos(codigo: str, filial: str = config.FILIAL_PADRAO) -> list[dict]:
     with db.conexao() as conn:
+        if _layout(conn) == "raw":
+            rows = conn.execute(
+                """
+                SELECT
+                  armazem AS local,
+                  saldo_atual AS saldo,
+                  quantidade_empenhada AS empenhado
+                FROM protheus_raw.vw_sb2_stock_balances
+                WHERE filial = %s AND produto_codigo = %s
+                ORDER BY local
+                """,
+                (filial, codigo.strip().upper()),
+            ).fetchall()
+            return rows
         return conn.execute(
             f"""
             SELECT btrim(b2_local) AS local, b2_qatu AS saldo,

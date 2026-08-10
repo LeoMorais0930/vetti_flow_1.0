@@ -1,7 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
@@ -148,6 +151,106 @@ void main() {
     expect(source, isNot(contains('_commitmentsFor')));
     expect(source, isNot(contains("'SD4' AS requirement_source")));
   });
+
+  test('API repository decodes product lookup from FastAPI', () async {
+    final repository = ApiProtheusProductRepository(
+      baseUrl: 'http://api.local',
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/produtos/730-0863');
+        return http.Response(
+          jsonEncode({
+            'filial': '04',
+            'armazem': '05',
+            'product': {
+              'filial': '04',
+              'code': '730-0863',
+              'description': 'SMART ALARM - MONITORADA CENTRAL',
+              'type': 'PA',
+              'unit': 'PC',
+              'group': '730',
+              'screenBlock': '2',
+            },
+            'components': [
+              {
+                'filial': '04',
+                'armazem': '01',
+                'code': '100-010',
+                'description': 'PARAFUSO',
+                'quantityPerUnit': 2,
+                'unit': 'PC',
+                'stockAvailable': 7514,
+                'currentStock': 7514,
+                'committedQuantity': 100,
+                'reservedQuantity': 0,
+                'requirementSource': 'SG1',
+                'warehouseBalances': [
+                  {
+                    'filial': '04',
+                    'armazem': '01',
+                    'currentStock': 7514,
+                    'committedQuantity': 100,
+                    'reservedQuantity': 0,
+                    'availableQuantity': 7514,
+                  },
+                  {
+                    'filial': '04',
+                    'armazem': '05',
+                    'currentStock': 3803,
+                    'committedQuantity': 5484,
+                    'reservedQuantity': 0,
+                    'availableQuantity': 3803,
+                  },
+                ],
+                'childOrders': [
+                  {
+                    'number': '01595801001',
+                    'productCode': '575-0863',
+                    'productDescription': 'SUB MEC',
+                    'plannedQuantity': 10,
+                    'producedQuantity': 0,
+                    'status': 'N',
+                  },
+                ],
+              },
+            ],
+            'smdReleaseOrders': [],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final lookup = await repository.lookupByCode('730-0863');
+
+    expect(lookup?.product.code, '730-0863');
+    expect(lookup?.defaultWarehouse, '05');
+    expect(lookup?.components.single.code, '100-010');
+    expect(lookup?.components.single.currentStock, 7514);
+    expect(lookup?.components.single.warehouseBalances.last.armazem, '05');
+    expect(lookup?.components.single.childOrders.single.number, '01595801001');
+  });
+
+  test(
+    'API-first repository falls back to local Postgres repository',
+    () async {
+      final repository = ApiFirstProtheusProductRepository(
+        primary: ApiProtheusProductRepository(
+          baseUrl: 'http://api.local',
+          httpClient: MockClient(
+            (_) async => throw const SocketException('offline'),
+          ),
+        ),
+        fallback: const _FakeProtheusProductRepository(),
+      );
+
+      final lookup = await repository.lookupByCode('730-0863');
+      final products = await repository.searchProducts('smart');
+
+      expect(lookup?.product.code, '730-0863');
+      expect(products.map((product) => product.code), contains('730-0863'));
+    },
+  );
 
   test('product lookup exposes components and child OPs for a code', () {
     const lookup = ProtheusProductLookup(

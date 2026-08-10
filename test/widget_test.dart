@@ -13,6 +13,7 @@ import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_database.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_connection_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_request_store.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
@@ -22,6 +23,7 @@ import 'package:vetti_flow_1_0/ui/dashboard/views/operator_assignments_view.dart
 import 'package:vetti_flow_1_0/ui/dashboard/views/reports_view.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_detail_panel.dart';
+import 'package:vetti_flow_1_0/ui/auth/widgets/login_form_panel.dart';
 import 'package:vetti_flow_1_0/ui/smd/smd_page.dart';
 import 'package:vetti_flow_1_0/ui/shared/widgets/vetti_top_bar.dart';
 import 'package:vetti_flow_1_0/ui/warehouse/warehouse_page.dart';
@@ -843,6 +845,31 @@ void main() {
     expect(find.text('Entrar no sistema'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(find.text('Entrar'), findsOneWidget);
+  });
+
+  testWidgets('login exposes developer connection mode selector', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp());
+
+    expect(find.text('Modo desenvolvedor'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Modo desenvolvedor'));
+    await tester.tap(find.text('Modo desenvolvedor'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Automático'), findsOneWidget);
+    expect(find.text('FastAPI'), findsOneWidget);
+    expect(find.text('Local Postgres'), findsOneWidget);
+
+    await tester.tap(find.text('Local Postgres'));
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.byType(LoginFormPanel));
+    expect(
+      context.read<ProtheusConnectionStore>().mode,
+      ProtheusConnectionMode.localPostgres,
+    );
   });
 
   testWidgets('navigates from login to firmware screen', (tester) async {
@@ -1972,6 +1999,9 @@ Widget _testApp({String initialRoute = '/login'}) {
       ),
       ChangeNotifierProvider<OperatorAssignmentStore>(
         create: (_) => OperatorAssignmentStore(),
+      ),
+      ChangeNotifierProvider<ProtheusConnectionStore>(
+        create: (_) => ProtheusConnectionStore(),
       ),
       ChangeNotifierProvider<WarehouseRequestStore>(
         create: (_) => WarehouseRequestStore(),

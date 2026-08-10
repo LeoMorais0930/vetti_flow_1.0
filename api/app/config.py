@@ -3,11 +3,11 @@ import os
 
 # Banco onde as mutações são aplicadas.
 #
-# Hoje é a cópia do Protheus migrada para PostgreSQL local (`vettip12`), não o
+# Hoje é a cópia do Protheus migrada para PostgreSQL local (`vettiflow`), não o
 # ERP de verdade. É de propósito: o objetivo desta API é ver como as mutações
 # do VettiFlow se comportam contra as tabelas reais antes de encostar em
 # produção.
-DSN = os.getenv("VF_DSN", "postgresql://localhost:5432/vettip12")
+DSN = os.getenv("VF_DSN", "postgresql://localhost:5432/vettiflow")
 
 # Empresa/filial padrão. As tabelas do Protheus são sufixadas pela empresa:
 # SC2 da empresa 010 é `sc2010`.

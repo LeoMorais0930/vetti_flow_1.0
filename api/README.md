@@ -8,10 +8,18 @@ cache local no app. Esta API é o que leva esse cache para o outro lado.
 
 ## Onde ela grava — leia antes de subir
 
-Hoje aplica no banco **`vettip12`**, a cópia do Protheus migrada para o
-PostgreSQL local em 30/07/2026. **Não é o Protheus de produção.** É de
-propósito: o objetivo é ver o efeito real das mutações nas tabelas — quais
-linhas nascem, quais saldos se mexem — antes de encostar no ERP de verdade.
+Hoje aplica no banco **`vettiflow`**, a cópia do Protheus migrada para o
+PostgreSQL. **Não é o Protheus de produção.** É de propósito: o objetivo é ver
+o efeito real das mutações nas tabelas — quais linhas nascem, quais saldos se
+mexem — antes de encostar no ERP de verdade.
+
+A leitura de produtos/saldos aceita dois formatos:
+
+- export/importado do app: `protheus_raw.vw_sb1_products`,
+  `protheus_raw.vw_sg1_product_structures`, `protheus_raw.vw_sb2_stock_balances`
+  e `protheus_raw.vw_sc2_orders`;
+- tabelas físicas espelhadas do Protheus: `sb1010`, `sg1010`, `sb2010`,
+  `sc2010`, etc. O sufixo vem de `VF_EMPRESA`.
 
 Os testes gravam dentro de transações que são desfeitas no fim. O serviço, não:
 `POST /api/v1/mutations` **altera SC2, SD4 e SB2 de verdade**. Para exercitar o
@@ -39,8 +47,14 @@ Documentação interativa em <http://localhost:8000/docs>.
 Apontar o app para cá:
 
 ```bash
-flutter run --dart-define=VETTI_API=http://localhost:8000
+flutter run \
+  --dart-define=VETTIFLOW_API_URL=http://localhost:8000 \
+  --dart-define=VETTIFLOW_ALLOW_DIRECT_POSTGRES_FALLBACK=false
 ```
+
+Com `VETTIFLOW_ALLOW_DIRECT_POSTGRES_FALLBACK=false`, a busca de produto/saldo
+fica centralizada na FastAPI. Em desenvolvimento local, deixar o fallback ligado
+permite abrir o app mesmo sem a API rodando.
 
 ## Testes
 
@@ -48,13 +62,13 @@ flutter run --dart-define=VETTI_API=http://localhost:8000
 ./venv/bin/python -m pytest tests/ -q
 ```
 
-Rodam contra o `vettip12` real e desfazem o que fizeram.
+Rodam contra o banco configurado em `VF_DSN` e desfazem o que fizeram.
 
 ## Configuração
 
 | Variável     | Padrão                                   | O que faz                                    |
 |--------------|------------------------------------------|----------------------------------------------|
-| `VF_DSN`     | `postgresql://localhost:5432/vettip12`   | Banco onde aplica                            |
+| `VF_DSN`     | `postgresql://localhost:5432/vettiflow`  | Banco onde aplica                            |
 | `VF_EMPRESA` | `010`                                    | Sufixo das tabelas (`SC2` → `sc2010`)        |
 | `VF_APPLY`   | `1`                                      | `0` valida e audita, mas não grava           |
 | `VF_FILIAL`  | `04`                                     | Filial padrão das consultas                  |
@@ -67,6 +81,8 @@ Rodam contra o `vettip12` real e desfazem o que fizeram.
 | `POST` | `/api/v1/mutations`              | **Armazena** um lote (não aplica ainda)      |
 | `POST` | `/api/v1/finalizar`              | Aplica mutações armazenadas no Protheus      |
 | `GET`  | `/api/v1/mutations/{id}`         | O que aconteceu com uma mutação              |
+| `GET`  | `/api/v1/produtos?query=...`     | Busca produtos para autocomplete             |
+| `GET`  | `/api/v1/produtos/{cod}`         | Produto + estrutura SG1 + saldos por armazém |
 | `GET`  | `/api/v1/ops/{op}/empenhos`      | Empenhos de uma OP, direto da SD4            |
 | `GET`  | `/api/v1/ops/{op}/armazenadas`   | Mutações armazenadas para uma OP             |
 | `GET`  | `/api/v1/produtos/{cod}/saldos`  | Saldo por almoxarifado, direto da SB2        |
