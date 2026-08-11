@@ -9,29 +9,33 @@ Organizacao:
 
 ## Qual banco o app procura
 
-O nome do banco muda por maquina, e por isso `PostgresSettings`
-(`lib/data/repositories/postgres_settings.dart`) e o unico lugar que define a
-conexao. O padrao e o banco do macOS:
+O app centraliza os defaults em `lib/data/repositories/postgres_settings.dart`.
+Por padrao, ele procura:
 
 ```text
-postgresql://postgres@localhost:5432/vettip12
+postgresql://postgres@localhost:5432/vettiflow
 ```
 
-Na maquina do Leonardo (Windows) o mesmo conteudo vive em `vettiflow`, entao la
-o app roda com:
+Na maquina do Vitor/macOS, quando a copia do Protheus estiver em `vettip12`,
+rode o app informando o banco:
 
-```powershell
-flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettiflow
+```bash
+flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettip12
 ```
 
-As demais chaves seguem iguais: `VETTIFLOW_PG_HOST`, `VETTIFLOW_PG_PORT`,
-`VETTIFLOW_PG_USER`, `VETTIFLOW_PG_PASSWORD`.
+As demais chaves continuam disponiveis:
+
+- `VETTIFLOW_PG_HOST`
+- `VETTIFLOW_PG_PORT`
+- `VETTIFLOW_PG_DATABASE`
+- `VETTIFLOW_PG_USER`
+- `VETTIFLOW_PG_PASSWORD`
 
 ## Postgres local no macOS (Postgres.app)
 
-O dump do VettiP12 foi restaurado no banco `vettip12`, com as tabelas cruas do
-Protheus no schema `public` (`sb1010`, `sc2010`, `sg1010`, `sb2010`, `sd3010`,
-`sd4010`). Para o app funcionar em cima disso:
+O dump do VettiP12 pode ser restaurado no banco `vettip12`, com as tabelas cruas
+do Protheus no schema `public` (`sb1010`, `sc2010`, `sg1010`, `sb2010`,
+`sd3010`, `sd4010`). Para o app funcionar em cima disso:
 
 ```bash
 export PATH=/Applications/Postgres.app/Contents/Versions/latest/bin:$PATH
