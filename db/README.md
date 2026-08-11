@@ -76,11 +76,15 @@ O script tambem passa a posse do schema `vettiflow` para a role — o app roda
 `ALTER TABLE`/`CREATE TABLE IF NOT EXISTS` sozinho ao abrir, e isso exige ser
 dono, nao basta `GRANT`.
 
-No lado Protheus a role le tudo e escreve em quatro tabelas: `sc2_orders`,
-`sd3_movements`, `sd4_commitments` e `sb2_balances`. E o que o app move sozinho,
-direto pelo Postgres — abertura de OP grava SC2 e SD4, a baixa grava SD3, e o
-saldo da SB2 anda junto. Cadastro (`sb1_products`) e `DELETE` continuam fora do
-alcance dela.
+No lado Protheus a role tem `SELECT`, `INSERT`, `UPDATE` e `DELETE` em todo o
+schema `protheus_raw` — as duas maquinas trabalham a copia em pe de igualdade. E
+o app que move essas tabelas, direto pelo Postgres: abertura de OP grava SC2 e
+SD4, a baixa grava SD3, e o saldo da SB2 anda junto.
+
+Se a copia sair torta, ela se refaz do zero com
+`db/local/load_protheus_raw_from_vettip12.sql`, que le do schema `public` do
+proprio banco. O `public` continua so leitura para a role, entao a fonte da
+recarga esta protegida.
 
 **2. Servidor ouvindo na rede.** Em
 `~/Library/Application Support/Postgres/var-18/postgresql.conf`:
