@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/shared/models/warehouse_routing.dart';
@@ -55,6 +56,9 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
   String _filial = '04';
   String _armazem = '';
   String? _pinError;
+  var _showAllCommitments = false;
+  final Set<String> _openComponentWarehousePickers = {};
+  final Set<String> _confirmedComponentWarehouseChoices = {};
 
   @override
   void initState() {
@@ -82,7 +86,8 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
       (widget.onLookupProduto == null
           ? _produto.isNotEmpty
           : _lookup != null) &&
-      _qtd > 0;
+      _qtd > 0 &&
+      _componentsNeedingWarehouseConfirmation.isEmpty;
 
   bool get _requiresProtheusPin => _lookup?.components.isNotEmpty ?? false;
 
@@ -122,6 +127,9 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         _lookupMessage = null;
         _produtoController.clear();
         _isLookingUp = false;
+        _showAllCommitments = false;
+        _openComponentWarehousePickers.clear();
+        _confirmedComponentWarehouseChoices.clear();
       });
       return;
     }
@@ -146,25 +154,39 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         if (result != null) {
           final allowedWarehouses = _orderWarehousesForCurrentOperator(result);
           final currentWarehouse = WarehouseRouting.normalizeCode(_armazem);
+          final defaultWarehouse = WarehouseRouting.normalizeCode(
+            result.defaultWarehouse,
+          );
           final selectedWarehouse =
               _armazem.isNotEmpty &&
                   allowedWarehouses.contains(currentWarehouse)
               ? currentWarehouse
+              : defaultWarehouse.isNotEmpty &&
+                    allowedWarehouses.contains(defaultWarehouse)
+              ? defaultWarehouse
               : allowedWarehouses.isNotEmpty
               ? allowedWarehouses.first
               : '';
-          _lookup = result;
+          _lookup = selectedWarehouse.isEmpty
+              ? result
+              : result.selectWarehouse(selectedWarehouse);
           _filial = result.filial;
           _armazem = selectedWarehouse;
           _produto = result.label;
           _produtoController.text = result.label;
           _lookupMessage = null;
+          _showAllCommitments = false;
+          _openComponentWarehousePickers.clear();
+          _confirmedComponentWarehouseChoices.clear();
         } else {
           _lookup = null;
           _produtoController.clear();
           _lookupMessage = code.contains('-')
               ? 'Código não encontrado no Protheus.'
               : 'Selecione um código completo da lista do Protheus.';
+          _showAllCommitments = false;
+          _openComponentWarehousePickers.clear();
+          _confirmedComponentWarehouseChoices.clear();
         }
         _isLookingUp = false;
       });
@@ -177,6 +199,9 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         _produtoController.clear();
         _lookupMessage = 'Não consegui consultar o Postgres agora.';
         _isLookingUp = false;
+        _showAllCommitments = false;
+        _openComponentWarehousePickers.clear();
+        _confirmedComponentWarehouseChoices.clear();
       });
     }
   }
@@ -240,15 +265,62 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
     }
     setState(() {
       _armazem = warehouse;
+      _lookup = _lookup?.selectWarehouse(warehouse);
+      _openComponentWarehousePickers.clear();
+      _confirmedComponentWarehouseChoices.clear();
     });
   }
 
   void _selectComponentWarehouse(String componentCode, String? value) {
     if (value == null) return;
     final warehouse = WarehouseRouting.normalizeCode(value);
+    if (!WarehouseRouting.canSourceMaterialFromWarehouse(warehouse)) return;
     setState(() {
+      _openComponentWarehousePickers.add(componentCode);
+      _confirmedComponentWarehouseChoices.add(componentCode);
       _lookup = _lookup?.selectComponentWarehouse(componentCode, warehouse);
     });
+  }
+
+  List<ProtheusProductComponent> get _componentsNeedingWarehouseConfirmation {
+    final lookup = _lookup;
+    if (lookup == null || _armazem.isEmpty || _qtd <= 0) return const [];
+    return [
+      for (final component in lookup.components)
+        if (_componentNeedsWarehouseConfirmation(component)) component,
+    ];
+  }
+
+  bool _componentNeedsWarehouseConfirmation(
+    ProtheusProductComponent component,
+  ) {
+    if (!component.shouldValidateStock) return false;
+    final orderWarehouse = WarehouseRouting.normalizeCode(_armazem);
+    final componentWarehouse = WarehouseRouting.normalizeCode(
+      component.armazem,
+    );
+    if (orderWarehouse.isEmpty || componentWarehouse.isEmpty) return false;
+
+    final requiredQuantity = component.requiredQuantityFor(_qtd);
+    final selectedCanCover = component.stockAvailable >= requiredQuantity;
+    final hasWarehouseThatCanCover = component.warehouseBalances.any(
+      (balance) =>
+          WarehouseRouting.normalizeCode(balance.armazem).isNotEmpty &&
+          WarehouseRouting.canSourceMaterialFromWarehouse(balance.armazem) &&
+          balance.availableQuantity >= requiredQuantity,
+    );
+    if (!hasWarehouseThatCanCover && !selectedCanCover) return false;
+
+    final isUsingAnotherWarehouse = componentWarehouse != orderWarehouse;
+    final canCompleteFromAnotherWarehouse =
+        component.missingQuantityFor(_qtd) > 0 &&
+        component.warehousesThatCanCover(_qtd).isNotEmpty;
+    if (!isUsingAnotherWarehouse && !canCompleteFromAnotherWarehouse) {
+      return false;
+    }
+
+    return !_confirmedComponentWarehouseChoices.contains(component.code) ||
+        !selectedCanCover;
   }
 
   List<String> _orderWarehousesForCurrentOperator(
@@ -278,13 +350,19 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         !WarehouseRouting.canOperatorCreateOrder(operatorName, _armazem)) {
       return '$operatorName pode apontar, mas não pode abrir OP no ${WarehouseRouting.labelForWarehouse(_armazem)}.';
     }
-    if (_armazem.isNotEmpty &&
-        !WarehouseRouting.canOperatorUseWarehouse(operatorName, _armazem)) {
-      return '$operatorName não pode abrir OP no ${WarehouseRouting.labelForWarehouse(_armazem)}.';
-    }
     // Itens atendidos por outro armazem viram pendencia de confirmacao para
     // aquele setor. A permissao aqui vale apenas para onde a OP sera aberta.
     return null;
+  }
+
+  String? _warehouseSelectionGateMessage() {
+    final pending = _componentsNeedingWarehouseConfirmation;
+    if (pending.isEmpty) return null;
+    final first = pending.first.code;
+    final suffix = pending.length == 1
+        ? first
+        : '$first e mais ${pending.length - 1}';
+    return 'Confirme o armazém de origem dos materiais que não saem do armazém da OP: $suffix.';
   }
 
   Future<void> _selectDueDate() async {
@@ -312,7 +390,9 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
   @override
   Widget build(BuildContext context) {
     final productionGateMessage =
-        _warehouseGateMessage() ?? _productionGateMessage();
+        _warehouseGateMessage() ??
+        _warehouseSelectionGateMessage() ??
+        _productionGateMessage();
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -406,16 +486,6 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                       color: AppColors.danger,
                     ),
                   ),
-                ),
-              ],
-              if (_lookup != null) ...[
-                const SizedBox(height: 12),
-                _ProductLookupSummary(
-                  lookup: _lookup!,
-                  orderQuantity: _qtd,
-                  selectedWarehouse: _armazem,
-                  currentOperatorName: widget.currentOperatorName,
-                  onComponentWarehouseChanged: _selectComponentWarehouse,
                 ),
               ],
               if (productionGateMessage != null) ...[
@@ -563,6 +633,21 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
                   },
                 ),
               ),
+              if (_lookup != null) ...[
+                const SizedBox(height: 15),
+                _ProductLookupSummary(
+                  lookup: _lookup!,
+                  orderQuantity: _qtd,
+                  selectedWarehouse: _armazem,
+                  currentOperatorName: widget.currentOperatorName,
+                  openComponentWarehousePickers: _openComponentWarehousePickers,
+                  showAllCommitments: _showAllCommitments,
+                  onToggleCommitments: () => setState(
+                    () => _showAllCommitments = !_showAllCommitments,
+                  ),
+                  onComponentWarehouseChanged: _selectComponentWarehouse,
+                ),
+              ],
               if (_lookup != null) ...[
                 const SizedBox(height: 15),
                 _FormField(
@@ -815,6 +900,9 @@ class _ProductLookupSummary extends StatelessWidget {
     required this.orderQuantity,
     required this.selectedWarehouse,
     required this.currentOperatorName,
+    required this.openComponentWarehousePickers,
+    required this.showAllCommitments,
+    required this.onToggleCommitments,
     required this.onComponentWarehouseChanged,
   });
 
@@ -822,6 +910,9 @@ class _ProductLookupSummary extends StatelessWidget {
   final int orderQuantity;
   final String selectedWarehouse;
   final String? currentOperatorName;
+  final Set<String> openComponentWarehousePickers;
+  final bool showAllCommitments;
+  final VoidCallback onToggleCommitments;
   final void Function(String componentCode, String? warehouse)
   onComponentWarehouseChanged;
 
@@ -831,84 +922,334 @@ class _ProductLookupSummary extends StatelessWidget {
       0,
       (total, component) => total + component.childOrders.length,
     );
-    const componentsTitle = 'Estrutura do produto (SG1)';
+    final componentsCountLabel =
+        '${lookup.components.length} componente${lookup.components.length == 1 ? '' : 's'}';
+    final warehouseChoices = lookup.components
+        .where(
+          (component) =>
+              component.shouldValidateStock &&
+              component.missingQuantityFor(orderQuantity) > 0 &&
+              component.warehousesThatCanCover(orderQuantity).isNotEmpty,
+        )
+        .toList();
+    final modCount = lookup.components
+        .where((component) => !component.shouldValidateStock)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FBFD),
+            border: Border.all(color: AppColors.borderLight),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                lookup.label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textStrong,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${lookup.product.type} · ${lookup.product.unit} · grupo ${lookup.product.group}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              if (lookup.components.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  componentsCountLabel,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+              if (lookup.smdReleaseOrders.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Text(
+                  '${lookup.smdReleaseOrders.length} OPs SMD encontradas no Protheus',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.green,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (lookup.components.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Empenhos da OP',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textCode,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onToggleCommitments,
+                icon: Icon(
+                  showAllCommitments
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  showAllCommitments
+                      ? 'Recolher'
+                      : 'Detalhar ($componentsCountLabel)',
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  textStyle: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (showAllCommitments)
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: AppColors.borderLight),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Column(
+                children: [
+                  for (final entry in lookup.components.asMap().entries) ...[
+                    _ComponentCommitmentCard(
+                      component: entry.value,
+                      orderQuantity: orderQuantity,
+                      selectedWarehouse: selectedWarehouse,
+                      currentOperatorName: currentOperatorName,
+                      keepWarehousePickerOpen: openComponentWarehousePickers
+                          .contains(entry.value.code),
+                      onWarehouseChanged: onComponentWarehouseChanged,
+                    ),
+                    if (entry.key != lookup.components.length - 1)
+                      const Divider(height: 1, color: AppColors.borderLight),
+                  ],
+                ],
+              ),
+            )
+          else
+            _CommitmentsCollapsedSummary(
+              components: lookup.components,
+              orderQuantity: orderQuantity,
+              warehouseChoices: warehouseChoices,
+              modCount: modCount,
+              onExpand: onToggleCommitments,
+            ),
+          if (!showAllCommitments && lookup.components.length > 3) ...[
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: onToggleCommitments,
+              icon: const Icon(Icons.open_in_full_rounded, size: 14),
+              label: Text(
+                warehouseChoices.isEmpty
+                    ? 'Expandir e revisar todos'
+                    : 'Expandir para escolher armazéns',
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                textStyle: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+          if (childOrdersCount > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              '$childOrdersCount OPs vinculadas a componentes',
+              style: const TextStyle(fontSize: 11, color: AppColors.primary),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _CommitmentsCollapsedSummary extends StatelessWidget {
+  const _CommitmentsCollapsedSummary({
+    required this.components,
+    required this.orderQuantity,
+    required this.warehouseChoices,
+    required this.modCount,
+    required this.onExpand,
+  });
+
+  final List<ProtheusProductComponent> components;
+  final int orderQuantity;
+  final List<ProtheusProductComponent> warehouseChoices;
+  final int modCount;
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleChoices = warehouseChoices.take(3).toList();
+    final hasChoices = warehouseChoices.isNotEmpty;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(9),
+      onTap: onExpand,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: hasChoices ? const Color(0xFFFFFBEB) : AppColors.bgHeader,
+          border: Border.all(
+            color: hasChoices ? const Color(0xFFEED38B) : AppColors.borderLight,
+          ),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  hasChoices
+                      ? Icons.inventory_2_outlined
+                      : Icons.check_circle_outline_rounded,
+                  size: 17,
+                  color: hasChoices ? AppColors.orangeText : AppColors.green,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    hasChoices
+                        ? '${warehouseChoices.length} item${warehouseChoices.length == 1 ? '' : 's'} precisa${warehouseChoices.length == 1 ? '' : 'm'} completar por outro armazém'
+                        : 'Sem escolhas pendentes de armazém',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: hasChoices
+                          ? AppColors.orangeText
+                          : AppColors.textStrong,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (visibleChoices.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (final component in visibleChoices) ...[
+                _CollapsedChoiceLine(
+                  component: component,
+                  orderQuantity: orderQuantity,
+                ),
+                if (component != visibleChoices.last) const SizedBox(height: 4),
+              ],
+            ],
+            const SizedBox(height: 8),
+            Text(
+              hasChoices
+                  ? 'Expanda para escolher o armazém de cada item.'
+                  : 'Expanda apenas se quiser revisar quantidades e armazéns.',
+              style: const TextStyle(
+                fontSize: 11.2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            if (modCount > 0) ...[
+              const SizedBox(height: 5),
+              Text(
+                '$modCount MOD ${modCount == 1 ? 'está' : 'estão'} como custo/mão de obra, sem saldo físico.',
+                style: const TextStyle(
+                  fontSize: 10.8,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CollapsedChoiceLine extends StatelessWidget {
+  const _CollapsedChoiceLine({
+    required this.component,
+    required this.orderQuantity,
+  });
+
+  final ProtheusProductComponent component;
+  final int orderQuantity;
+
+  @override
+  Widget build(BuildContext context) {
+    final missing = component.missingQuantityFor(orderQuantity);
+    final unit = component.unit.isEmpty ? 'un' : component.unit;
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFD),
-        border: Border.all(color: AppColors.borderLight),
-        borderRadius: BorderRadius.circular(9),
+        color: const Color(0xFFFFF8E1),
+        border: Border.all(color: const Color(0xFFE9C46A)),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            lookup.label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textStrong,
-            ),
+          const Icon(
+            Icons.priority_high_rounded,
+            size: 14,
+            color: AppColors.orangeText,
           ),
-          const SizedBox(height: 4),
-          Text(
-            '${lookup.product.type} · ${lookup.product.unit} · grupo ${lookup.product.group}',
-            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Filial ${lookup.filial} - VT',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-          ),
-          if (lookup.components.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              componentsTitle,
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              component.code,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 12.5,
+                fontSize: 11.2,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textStrong,
               ),
             ),
-            const SizedBox(height: 7),
-            for (final component in lookup.components)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _ComponentCommitmentCard(
-                  component: component,
-                  orderQuantity: orderQuantity,
-                  selectedWarehouse: selectedWarehouse,
-                  currentOperatorName: currentOperatorName,
-                  onWarehouseChanged: onComponentWarehouseChanged,
-                ),
-              ),
-            Text(
-              '${lookup.components.length} componentes'
-              '${childOrdersCount > 0 ? ' · $childOrdersCount OPs vinculadas a componentes' : ''}',
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'faltam ${formatProductionQuantity(missing)} $unit',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.danger,
             ),
-          ],
-          if (lookup.smdReleaseOrders.isNotEmpty) ...[
-            const SizedBox(height: 7),
-            Text(
-              '${lookup.smdReleaseOrders.length} OPs SMD encontradas no Protheus',
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.green,
-              ),
-            ),
-          ],
+          ),
         ],
       ),
     );
@@ -921,6 +1262,7 @@ class _ComponentCommitmentCard extends StatelessWidget {
     required this.orderQuantity,
     required this.selectedWarehouse,
     required this.currentOperatorName,
+    required this.keepWarehousePickerOpen,
     required this.onWarehouseChanged,
   });
 
@@ -928,35 +1270,68 @@ class _ComponentCommitmentCard extends StatelessWidget {
   final int orderQuantity;
   final String selectedWarehouse;
   final String? currentOperatorName;
+  final bool keepWarehousePickerOpen;
   final void Function(String componentCode, String? warehouse)
   onWarehouseChanged;
 
   @override
   Widget build(BuildContext context) {
-    final required = component.requiredQuantityFor(orderQuantity);
+    final requiredQuantity = component.requiredQuantityFor(orderQuantity);
     final missing = component.missingQuantityFor(orderQuantity);
     final alternatives = component.warehousesThatCanCover(orderQuantity);
     final selectedFromOtherWarehouse =
+        component.shouldValidateStock &&
         selectedWarehouse.isNotEmpty &&
         component.armazem.isNotEmpty &&
         component.armazem != selectedWarehouse;
-    final coverageOptions = _coverageOptions(required);
+    final coverageOptions = _coverageOptions(requiredQuantity);
+    final needsExternalWarehouseChoice =
+        component.shouldValidateStock &&
+        missing > 0 &&
+        coverageOptions.any(
+          (balance) =>
+              balance.armazem != component.armazem &&
+              balance.availableQuantity >= requiredQuantity,
+        );
+    final highlightExternalWarehouse =
+        selectedFromOtherWarehouse || needsExternalWarehouseChoice;
+    final highlightColor = selectedFromOtherWarehouse
+        ? const Color(0xFFEAF5FB)
+        : const Color(0xFFFFF8E1);
+    final highlightBorder = selectedFromOtherWarehouse
+        ? const Color(0xFF8EC8E8)
+        : const Color(0xFFE9C46A);
     final commitmentLabel = component.commitmentQuantity > 0
-        ? ' · quantidade empenhada ${component.commitmentQuantity}'
+        ? 'Quantidade empenhada ${formatProductionQuantity(component.commitmentQuantity)}.'
         : '';
     final originalLabel = component.originalQuantity > 0
-        ? ' · quantidade original ${component.originalQuantity}'
+        ? 'Quantidade original ${formatProductionQuantity(component.originalQuantity)}.'
         : '';
+    final status = component.shouldValidateStock
+        ? _availabilityStatus(missing)
+        : const _ComponentAvailabilityStatus(
+            label: 'MOD: custo/mão de obra. Sem saldo físico para validar.',
+            others: '',
+            color: AppColors.textSecondary,
+          );
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
       width: double.infinity,
-      padding: const EdgeInsets.all(9),
+      margin: EdgeInsets.symmetric(
+        horizontal: highlightExternalWarehouse ? 8 : 12,
+        vertical: highlightExternalWarehouse ? 8 : 10,
+      ),
+      padding: EdgeInsets.all(highlightExternalWarehouse ? 10 : 0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: highlightExternalWarehouse ? highlightColor : Colors.transparent,
         border: Border.all(
-          color: missing > 0 ? const Color(0xFFE8C4C4) : AppColors.borderLight,
+          color: highlightExternalWarehouse
+              ? highlightBorder
+              : Colors.transparent,
+          width: highlightExternalWarehouse ? 1.2 : 0,
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(9),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -965,55 +1340,110 @@ class _ComponentCommitmentCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  '${component.code} · ${component.description}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textStrong,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      component.code,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textStrong,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      component.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    if (highlightExternalWarehouse) ...[
+                      const SizedBox(height: 5),
+                      _ExternalWarehouseBadge(
+                        confirmed: selectedFromOtherWarehouse,
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'necessário $required ${component.unit}'
-            ' · saldo atual ${component.currentStock}'
-            ' · empenhado ${component.committedQuantity}'
-            ' · reservado ${component.reservedQuantity}'
-            ' · disponível ${component.stockAvailable}'
-            '${component.armazem.isNotEmpty ? ' · ${WarehouseRouting.labelForWarehouse(component.armazem)}' : ''}'
-            '$commitmentLabel$originalLabel',
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (missing > 0 || selectedFromOtherWarehouse) ...[
-            const SizedBox(height: 5),
-            Text(
-              missing <= 0
-                  ? 'Atendido pelo ${WarehouseRouting.labelForWarehouse(component.armazem)}.'
-                  : alternatives.isEmpty
-                  ? 'Falta $missing ${component.unit}. Nenhum outro armazém cobre a quantidade.'
-                  : 'Falta $missing ${component.unit}. Selecione de qual armazém tirar.',
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.danger,
+              const SizedBox(width: 8),
+              _InlineReadOnlyField(
+                width: 84,
+                text: formatProductionQuantity(requiredQuantity),
               ),
-            ),
-            if (coverageOptions.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _WarehouseCoveragePicker(
+              const SizedBox(width: 8),
+              _ComponentWarehouseField(
                 component: component,
-                alternatives: coverageOptions,
+                options: coverageOptions,
                 onWarehouseChanged: onWarehouseChanged,
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: status.label,
+                  style: TextStyle(
+                    color: status.color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (status.others.isNotEmpty)
+                  TextSpan(
+                    text: ' Outros: ${status.others}.',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+              ],
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11.3),
+          ),
+          if (commitmentLabel.isNotEmpty || originalLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              [
+                commitmentLabel,
+                originalLabel,
+              ].where((label) => label.isNotEmpty).join(' '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10.8,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
+          if (missing > 0 ||
+              selectedFromOtherWarehouse ||
+              keepWarehousePickerOpen) ...[
+            const SizedBox(height: 6),
+            if (coverageOptions.isNotEmpty) ...[
+              _WarehouseCoveragePicker(
+                component: component,
+                requiredQuantity: requiredQuantity,
+                alternatives: coverageOptions,
+                onWarehouseChanged: onWarehouseChanged,
+              ),
+            ] else
+              Text(
+                alternatives.isEmpty
+                    ? 'Nenhum outro armazém cobre a quantidade necessária.'
+                    : 'Selecione de qual armazém tirar.',
+                style: const TextStyle(
+                  fontSize: 11.2,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.danger,
+                ),
+              ),
           ],
         ],
       ),
@@ -1024,8 +1454,12 @@ class _ComponentCommitmentCard extends StatelessWidget {
     final options = <ProtheusWarehouseBalance>[];
     final seen = <String>{};
     for (final balance in component.warehouseBalances) {
-      final selected = balance.armazem == component.armazem;
-      final canCover = balance.availableQuantity >= requiredQuantity;
+      final selected =
+          WarehouseRouting.canSourceMaterialFromWarehouse(balance.armazem) &&
+          balance.armazem == component.armazem;
+      final canCover =
+          WarehouseRouting.canSourceMaterialFromWarehouse(balance.armazem) &&
+          balance.availableQuantity >= requiredQuantity;
       if ((selected || canCover) && seen.add(balance.armazem)) {
         options.add(balance);
       }
@@ -1033,49 +1467,277 @@ class _ComponentCommitmentCard extends StatelessWidget {
     options.sort((a, b) => b.availableQuantity.compareTo(a.availableQuantity));
     return options;
   }
+
+  _ComponentAvailabilityStatus _availabilityStatus(num missing) {
+    final local = WarehouseRouting.normalizeCode(component.armazem);
+    final available = formatProductionQuantity(component.stockAvailable);
+    final others = component.warehouseBalances
+        .where(
+          (balance) =>
+              balance.armazem != local &&
+              WarehouseRouting.canSourceMaterialFromWarehouse(balance.armazem),
+        )
+        .take(5)
+        .map(
+          (balance) =>
+              '${WarehouseRouting.normalizeCode(balance.armazem)}: '
+              '${formatProductionQuantity(balance.availableQuantity)}',
+        )
+        .join(', ');
+    if (missing > 0) {
+      return _ComponentAvailabilityStatus(
+        label:
+            'Almox. ${local.isEmpty ? '-' : local} tem $available disponível.',
+        others: others,
+        color: AppColors.danger,
+      );
+    }
+    return _ComponentAvailabilityStatus(
+      label: 'Disponível: $available aqui.',
+      others: others,
+      color: AppColors.green,
+    );
+  }
+}
+
+class _ComponentAvailabilityStatus {
+  const _ComponentAvailabilityStatus({
+    required this.label,
+    required this.others,
+    required this.color,
+  });
+
+  final String label;
+  final String others;
+  final Color color;
+}
+
+class _ExternalWarehouseBadge extends StatelessWidget {
+  const _ExternalWarehouseBadge({required this.confirmed});
+
+  final bool confirmed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: confirmed ? const Color(0xFFDDF1FB) : const Color(0xFFFFE7B8),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: confirmed ? const Color(0xFF9CCFE8) : const Color(0xFFE9C46A),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            confirmed ? Icons.swap_horiz_rounded : Icons.error_outline_rounded,
+            size: 13,
+            color: confirmed ? AppColors.primary : AppColors.orangeText,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              confirmed ? 'Usa outro armazém' : 'Escolha obrigatória',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                color: confirmed ? AppColors.primary : AppColors.orangeText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineReadOnlyField extends StatelessWidget {
+  const _InlineReadOnlyField({required this.width, required this.text});
+
+  final double width;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFDFF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD8E8F2)),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.ibmPlexMono(
+          fontSize: 12,
+          color: AppColors.textStrong,
+        ),
+      ),
+    );
+  }
+}
+
+class _ComponentWarehouseField extends StatelessWidget {
+  const _ComponentWarehouseField({
+    required this.component,
+    required this.options,
+    required this.onWarehouseChanged,
+  });
+
+  final ProtheusProductComponent component;
+  final List<ProtheusWarehouseBalance> options;
+  final void Function(String componentCode, String? warehouse)
+  onWarehouseChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = {
+      if (component.armazem.isNotEmpty &&
+          WarehouseRouting.canSourceMaterialFromWarehouse(component.armazem))
+        component.armazem,
+      for (final option in options)
+        if (option.armazem.isNotEmpty &&
+            WarehouseRouting.canSourceMaterialFromWarehouse(option.armazem))
+          option.armazem,
+    }.toList()..sort();
+    final selected = values.contains(component.armazem)
+        ? component.armazem
+        : values.isNotEmpty
+        ? values.first
+        : null;
+
+    final selectedLabel = selected == null
+        ? '-'
+        : WarehouseRouting.normalizeCode(selected);
+
+    return PopupMenuButton<String>(
+      key: ValueKey(
+        'component-warehouse-${component.code}-${component.armazem}',
+      ),
+      tooltip: 'Escolher armazém',
+      initialValue: selected,
+      position: PopupMenuPosition.under,
+      constraints: const BoxConstraints(minWidth: 210, maxWidth: 240),
+      onSelected: (value) => onWarehouseChanged(component.code, value),
+      itemBuilder: (context) => [
+        for (final value in values)
+          PopupMenuItem(
+            value: value,
+            child: SizedBox(
+              width: 190,
+              child: Text(
+                WarehouseRouting.labelForWarehouse(value),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+      ],
+      child: Container(
+        width: 92,
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBFDFF),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFD8E8F2)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                selectedLabel,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.ibmPlexMono(
+                  fontSize: 12,
+                  color: AppColors.textStrong,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _WarehouseCoveragePicker extends StatelessWidget {
   const _WarehouseCoveragePicker({
     required this.component,
+    required this.requiredQuantity,
     required this.alternatives,
     required this.onWarehouseChanged,
   });
 
   final ProtheusProductComponent component;
+  final num requiredQuantity;
   final List<ProtheusWarehouseBalance> alternatives;
   final void Function(String componentCode, String? warehouse)
   onWarehouseChanged;
 
   @override
   Widget build(BuildContext context) {
+    ProtheusWarehouseBalance? selectedBalance;
+    for (final balance in alternatives) {
+      if (balance.armazem == component.armazem) {
+        selectedBalance = balance;
+        break;
+      }
+    }
+    final selectedCovers =
+        selectedBalance != null &&
+        selectedBalance.availableQuantity >= requiredQuantity;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.only(top: 1),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        border: Border.all(color: const Color(0xFFF1D490)),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Escolher armazém para atender',
-            style: TextStyle(
-              fontSize: 11.5,
+          Text(
+            !selectedCovers
+                ? 'Solicitar transferência'
+                : 'Selecionado: ${WarehouseRouting.labelForWarehouse(selectedBalance.armazem)}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11.2,
               fontWeight: FontWeight.w800,
-              color: AppColors.textStrong,
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 6),
-          for (final balance in alternatives)
-            _WarehouseCoverageOption(
-              component: component,
-              balance: balance,
-              selected: component.armazem == balance.armazem,
-              onWarehouseChanged: onWarehouseChanged,
-            ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final balance in alternatives)
+                _WarehouseCoverageOption(
+                  component: component,
+                  balance: balance,
+                  requiredQuantity: requiredQuantity,
+                  selected: component.armazem == balance.armazem,
+                  onWarehouseChanged: onWarehouseChanged,
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -1086,56 +1748,78 @@ class _WarehouseCoverageOption extends StatelessWidget {
   const _WarehouseCoverageOption({
     required this.component,
     required this.balance,
+    required this.requiredQuantity,
     required this.selected,
     required this.onWarehouseChanged,
   });
 
   final ProtheusProductComponent component;
   final ProtheusWarehouseBalance balance;
+  final num requiredQuantity;
   final bool selected;
   final void Function(String componentCode, String? warehouse)
   onWarehouseChanged;
 
   @override
   Widget build(BuildContext context) {
+    final canCover = balance.availableQuantity >= requiredQuantity;
+    final selectedColor = selected ? AppColors.primary : AppColors.borderLight;
+    final availableColor = balance.availableQuantity < 0
+        ? AppColors.danger
+        : canCover
+        ? AppColors.primary
+        : AppColors.orangeText;
+
     return InkWell(
       key: Key(
         'nova-op-component-warehouse-option-${component.code}-${balance.armazem}',
       ),
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(999),
       onTap: () => onWarehouseChanged(component.code, balance.armazem),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF5FB) : const Color(0xFFF8FBFD),
+          border: Border.all(color: selectedColor),
+          borderRadius: BorderRadius.circular(999),
+        ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: Checkbox(
-                value: selected,
-                onChanged: (_) =>
-                    onWarehouseChanged(component.code, balance.armazem),
-                visualDensity: VisualDensity.compact,
+            if (selected) ...[
+              const Icon(
+                Icons.check_rounded,
+                size: 13,
+                color: AppColors.primary,
               ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                WarehouseRouting.labelForWarehouse(balance.armazem),
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textStrong,
-                ),
-              ),
-            ),
+              const SizedBox(width: 4),
+            ],
             Text(
-              'disponível ${balance.availableQuantity}',
+              WarehouseRouting.normalizeCode(balance.armazem),
               style: const TextStyle(
-                fontSize: 11.5,
-                color: AppColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textStrong,
               ),
             ),
+            const SizedBox(width: 5),
+            Text(
+              'disponível ${formatProductionQuantity(balance.availableQuantity)}',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: availableColor,
+              ),
+            ),
+            if (!canCover) ...[
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 12,
+                color: AppColors.orangeText,
+              ),
+            ],
           ],
         ),
       ),

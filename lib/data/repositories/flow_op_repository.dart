@@ -456,14 +456,7 @@ class FlowOpRepository implements OpRepository {
     if (orderWarehouse.isNotEmpty &&
         !WarehouseRouting.canOperatorCreateOrder(openedBy, orderWarehouse)) {
       throw StateError(
-        '$openedBy pode apontar, mas não pode abrir OP no ${WarehouseRouting.labelForWarehouse(orderWarehouse)}.',
-      );
-    }
-
-    if (orderWarehouse.isNotEmpty &&
-        !WarehouseRouting.canOperatorUseWarehouse(openedBy, orderWarehouse)) {
-      throw StateError(
-        '$openedBy não pode abrir OP no ${WarehouseRouting.labelForWarehouse(orderWarehouse)}.',
+        'Armazém inválido para abertura de OP: ${WarehouseRouting.labelForWarehouse(orderWarehouse)}.',
       );
     }
 

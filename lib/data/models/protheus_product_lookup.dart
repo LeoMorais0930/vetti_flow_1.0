@@ -1,4 +1,5 @@
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
+import 'package:vetti_flow_1_0/shared/models/warehouse_routing.dart';
 
 class ProtheusProduct {
   final String filial;
@@ -108,12 +109,21 @@ class ProtheusProductComponent {
     String preferredWarehouse,
   ) {
     if (balances.isEmpty) return null;
-    final preferred = balances.cast<ProtheusWarehouseBalance?>().firstWhere(
-      (balance) => balance?.armazem == preferredWarehouse,
-      orElse: () => null,
-    );
+    final eligibleBalances = balances
+        .where(
+          (balance) =>
+              WarehouseRouting.canSourceMaterialFromWarehouse(balance.armazem),
+        )
+        .toList();
+    if (eligibleBalances.isEmpty) return null;
+    final preferred = eligibleBalances
+        .cast<ProtheusWarehouseBalance?>()
+        .firstWhere(
+          (balance) => balance?.armazem == preferredWarehouse,
+          orElse: () => null,
+        );
     final positiveBalances =
-        balances
+        eligibleBalances
             .where(
               (balance) =>
                   balance.availableQuantity > 0 || balance.currentStock > 0,
@@ -152,6 +162,7 @@ class ProtheusProductComponent {
       }
     }
     if (selected == null) {
+      final hasKnownBalances = warehouseBalances.isNotEmpty;
       return ProtheusProductComponent(
         filial: filial,
         armazem: warehouse,
@@ -159,10 +170,10 @@ class ProtheusProductComponent {
         description: description,
         quantityPerUnit: quantityPerUnit,
         unit: unit,
-        stockAvailable: stockAvailable,
-        currentStock: currentStock,
-        committedQuantity: committedQuantity,
-        reservedQuantity: reservedQuantity,
+        stockAvailable: hasKnownBalances ? 0 : stockAvailable,
+        currentStock: hasKnownBalances ? 0 : currentStock,
+        committedQuantity: hasKnownBalances ? 0 : committedQuantity,
+        reservedQuantity: hasKnownBalances ? 0 : reservedQuantity,
         requirementSource: requirementSource,
         sourceOrder: sourceOrder,
         commitmentDate: commitmentDate,
@@ -210,7 +221,9 @@ class ProtheusProductComponent {
     final required = requiredQuantityFor(orderQuantity);
     final options = [
       for (final balance in warehouseBalances)
-        if (balance.armazem != armazem && balance.availableQuantity >= required)
+        if (balance.armazem != armazem &&
+            WarehouseRouting.canSourceMaterialFromWarehouse(balance.armazem) &&
+            balance.availableQuantity >= required)
           balance,
     ];
     options.sort((a, b) => b.availableQuantity.compareTo(a.availableQuantity));

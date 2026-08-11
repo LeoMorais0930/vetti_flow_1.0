@@ -14,6 +14,7 @@ import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_product_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_request_store.dart';
+import 'package:vetti_flow_1_0/shared/models/warehouse_routing.dart';
 
 void main() {
   test('product lookup keeps VT branch and selected warehouse balances', () {
@@ -96,6 +97,58 @@ void main() {
       expect(selected?.currentStock, 3796);
     },
   );
+
+  test('support warehouses are never material source options', () {
+    const component = ProtheusProductComponent(
+      filial: '04',
+      armazem: '05',
+      code: '100-010',
+      description: 'PARAFUSO',
+      quantityPerUnit: 1,
+      unit: 'PC',
+      stockAvailable: 0,
+      warehouseBalances: [
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '06',
+          currentStock: 900,
+          committedQuantity: 0,
+          reservedQuantity: 0,
+          availableQuantity: 900,
+        ),
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '07',
+          currentStock: 700,
+          committedQuantity: 0,
+          reservedQuantity: 0,
+          availableQuantity: 700,
+        ),
+        ProtheusWarehouseBalance(
+          filial: '04',
+          armazem: '01',
+          currentStock: 50,
+          committedQuantity: 0,
+          reservedQuantity: 0,
+          availableQuantity: 50,
+        ),
+      ],
+    );
+
+    expect(WarehouseRouting.canSourceMaterialFromWarehouse('06'), isFalse);
+    expect(WarehouseRouting.canSourceMaterialFromWarehouse('07'), isFalse);
+    expect(
+      component.warehousesThatCanCover(10).map((balance) => balance.armazem),
+      ['01'],
+    );
+    expect(
+      ProtheusProductComponent.selectBestWarehouseBalance(
+        component.warehouseBalances,
+        '06',
+      )?.armazem,
+      '01',
+    );
+  });
 
   test('MOD components can have negative stock without creating shortage', () {
     const component = ProtheusProductComponent(
@@ -408,7 +461,7 @@ void main() {
       find.text('730-0863 - SMART ALARM - MONITORADA CENTRAL'),
       findsWidgets,
     );
-    expect(find.textContaining('SUB MEC SMART ALARM'), findsOneWidget);
+    expect(find.textContaining('1 componente'), findsWidgets);
 
     await tester.enterText(
       find.byKey(const Key('nova-op-due-date')),
@@ -466,7 +519,7 @@ void main() {
   });
 
   test(
-    'flow repository blocks OP creation outside operator warehouses',
+    'flow repository lets any operator create OP in any warehouse',
     () async {
       final store = ProductionFlowStore();
       final repository = FlowOpRepository(
@@ -474,43 +527,43 @@ void main() {
         protheusProducts: const _FakeProtheusProductRepository(),
       );
 
-      const blockedDto = NovaOrdemDTO(
-        produto: '730-0863',
-        productCode: '730-0863',
-        productName: 'SMART ALARM - MONITORADA CENTRAL',
-        openedBy: 'Vera',
-        operatorPin: '4003',
-        armazem: '05',
-        components: [
-          ProtheusProductComponent(
-            code: '575-0863',
-            description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
-            quantityPerUnit: 1,
-            unit: 'PC',
-            filial: '04',
-            armazem: '05',
-            stockAvailable: 20,
-          ),
-        ],
-        smdReleaseOrders: [
-          ProtheusChildOrder(
-            number: '015957-01-001',
-            productCode: '500-0863',
-            productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
-            plannedQuantity: 10,
-            producedQuantity: 10,
-            status: 'N',
-          ),
-        ],
-        qtd: 12,
-        responsavel: 'Vera',
-        prazo: '31/07/2026',
+      final createdByVera = await repository.criarOrdem(
+        const NovaOrdemDTO(
+          produto: '730-0863',
+          productCode: '730-0863',
+          productName: 'SMART ALARM - MONITORADA CENTRAL',
+          openedBy: 'Vera',
+          operatorPin: '4003',
+          armazem: '05',
+          components: [
+            ProtheusProductComponent(
+              code: '575-0863',
+              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+              quantityPerUnit: 1,
+              unit: 'PC',
+              filial: '04',
+              armazem: '05',
+              stockAvailable: 20,
+            ),
+          ],
+          smdReleaseOrders: [
+            ProtheusChildOrder(
+              number: '015957-01-001',
+              productCode: '500-0863',
+              productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+              plannedQuantity: 10,
+              producedQuantity: 10,
+              status: 'N',
+            ),
+          ],
+          qtd: 12,
+          responsavel: 'Vera',
+          prazo: '31/07/2026',
+        ),
       );
 
-      expect(
-        () => repository.criarOrdem(blockedDto),
-        throwsA(isA<StateError>()),
-      );
+      expect(createdByVera.numero, startsWith('OP-'));
+      expect(createdByVera.armazem, '05');
 
       final created = await repository.criarOrdem(
         const NovaOrdemDTO(
@@ -617,56 +670,50 @@ void main() {
     },
   );
 
-  test('flow repository blocks Paula from creating SMD orders', () async {
+  test('flow repository lets Paula create SMD orders', () async {
     final store = ProductionFlowStore();
     final repository = FlowOpRepository(
       store,
       protheusProducts: const _FakeProtheusProductRepository(),
     );
 
-    expect(
-      () => repository.criarOrdem(
-        const NovaOrdemDTO(
-          produto: '730-0863',
-          productCode: '730-0863',
-          productName: 'SMART ALARM - MONITORADA CENTRAL',
-          openedBy: 'Paula',
-          operatorPin: '4001',
-          armazem: '03',
-          components: [
-            ProtheusProductComponent(
-              code: '575-0863',
-              description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
-              quantityPerUnit: 1,
-              unit: 'PC',
-              filial: '04',
-              armazem: '03',
-              stockAvailable: 20,
-            ),
-          ],
-          smdReleaseOrders: [
-            ProtheusChildOrder(
-              number: '015957-01-001',
-              productCode: '500-0863',
-              productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
-              plannedQuantity: 10,
-              producedQuantity: 10,
-              status: 'N',
-            ),
-          ],
-          qtd: 12,
-          responsavel: 'Paula',
-          prazo: '31/07/2026',
-        ),
-      ),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('pode apontar, mas não pode abrir OP'),
-        ),
+    final created = await repository.criarOrdem(
+      const NovaOrdemDTO(
+        produto: '730-0863',
+        productCode: '730-0863',
+        productName: 'SMART ALARM - MONITORADA CENTRAL',
+        openedBy: 'Paula',
+        operatorPin: '4001',
+        armazem: '03',
+        components: [
+          ProtheusProductComponent(
+            code: '575-0863',
+            description: 'SUB MEC SMART ALARM MONITORADA CENTRAL',
+            quantityPerUnit: 1,
+            unit: 'PC',
+            filial: '04',
+            armazem: '03',
+            stockAvailable: 20,
+          ),
+        ],
+        smdReleaseOrders: [
+          ProtheusChildOrder(
+            number: '015957-01-001',
+            productCode: '500-0863',
+            productDescription: 'SUB SMD SMART ALARM MONITORADA CENTRAL',
+            plannedQuantity: 10,
+            producedQuantity: 10,
+            status: 'N',
+          ),
+        ],
+        qtd: 12,
+        responsavel: 'Paula',
+        prazo: '31/07/2026',
       ),
     );
+
+    expect(created.armazem, '03');
+    expect(created.numero, startsWith('OP-'));
   });
 
   test('flow repository creates Protheus OP above stock', () async {
@@ -782,15 +829,14 @@ void main() {
 
     expect(find.text('Filial 04 - VT'), findsWidgets);
     expect(find.text('Armazém'), findsOneWidget);
-    expect(find.text('Estrutura do produto (SG1)'), findsOneWidget);
-    expect(find.textContaining('COMP-005'), findsOneWidget);
-
-    await tester.ensureVisible(find.byKey(const Key('nova-op-warehouse')));
+    expect(find.text('Empenhos da OP'), findsOneWidget);
+    expect(find.textContaining('COMP-005'), findsNothing);
+    expect(find.textContaining('Sem escolhas pendentes'), findsWidgets);
+    await tester.ensureVisible(find.textContaining('Detalhar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('nova-op-warehouse')));
+    await tester.tap(find.textContaining('Detalhar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Armazém 02').last);
-    await tester.pumpAndSettle();
+    expect(find.textContaining('COMP-005'), findsWidgets);
 
     expect(find.textContaining('emp.'), findsNothing);
     expect(find.textContaining('res.'), findsNothing);
@@ -800,6 +846,14 @@ void main() {
     await tester.enterText(find.byKey(const Key('nova-op-quantity')), '5');
     await tester.pumpAndSettle();
     expect(find.textContaining('disponível 45'), findsWidgets);
+    await tester.ensureVisible(
+      find.byKey(const Key('nova-op-component-warehouse-option-COMP-001-02')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('nova-op-component-warehouse-option-COMP-001-02')),
+    );
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
     await tester.enterText(
       find.byKey(const Key('nova-op-operator-pin')),
@@ -813,10 +867,10 @@ void main() {
 
     expect(created, isNotNull);
     expect(created!.filial, '04');
-    expect(created!.armazem, '02');
+    expect(created!.armazem, '01');
     expect(created!.prazo, isNull);
     expect(created!.components, hasLength(5));
-    expect(created!.components.first.armazem, '01');
+    expect(created!.components.first.armazem, '02');
   });
 
   testWidgets(
@@ -853,7 +907,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('não tem armazém liberado'), findsNothing);
-      expect(find.textContaining('Armazém 05 - Produção'), findsWidgets);
+      expect(find.textContaining('Armazém 01 - Almoxarifado'), findsWidgets);
       expect(find.textContaining('Aviso:'), findsWidgets);
 
       await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
@@ -868,53 +922,56 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(created, isNotNull);
-      expect(created!.armazem, '05');
+      expect(created!.armazem, '01');
       expect(created!.components.single.armazem, '01');
     },
   );
 
-  testWidgets('new OP dialog filters warehouses by current operator', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: Scaffold(
-          body: NovaOpDialog(
-            produtos: const [],
-            responsaveis: const ['Tatiane'],
-            currentOperatorName: 'Tatiane',
-            onLookupProduto:
-                const _RestrictedWarehouseProtheusProductRepository()
-                    .lookupByCode,
-            onSearchProdutos:
-                const _RestrictedWarehouseProtheusProductRepository()
-                    .searchProducts,
-            onCreate: (_) {},
-            onClose: () {},
+  testWidgets(
+    'new OP dialog allows any operator to choose any order warehouse',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: NovaOpDialog(
+              produtos: const [],
+              responsaveis: const ['Tatiane'],
+              currentOperatorName: 'Tatiane',
+              onLookupProduto:
+                  const _RestrictedWarehouseProtheusProductRepository()
+                      .lookupByCode,
+              onSearchProdutos:
+                  const _RestrictedWarehouseProtheusProductRepository()
+                      .searchProducts,
+              onCreate: (_) {},
+              onClose: () {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.enterText(
-      find.byKey(const Key('nova-op-product-code')),
-      '730-0863',
-    );
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('nova-op-product-code')),
+        '730-0863',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
 
-    expect(find.textContaining('Armazém 05 - Produção'), findsWidgets);
-    expect(find.textContaining('Armazém 01 - Almoxarifado'), findsWidgets);
+      expect(find.textContaining('Armazém 01 - Almoxarifado'), findsWidgets);
+      expect(find.textContaining('Sem escolhas pendentes'), findsWidgets);
 
-    tester.binding.focusManager.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('nova-op-warehouse')));
-    await tester.tap(find.byKey(const Key('nova-op-warehouse')));
-    await tester.pumpAndSettle();
+      tester.binding.focusManager.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('nova-op-warehouse')));
+      await tester.tap(find.byKey(const Key('nova-op-warehouse')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Armazém 10 - Expedição'), findsOneWidget);
-  });
+      expect(find.text('Armazém 03 - SMD'), findsOneWidget);
+      expect(find.text('Armazém 05 - Produção'), findsOneWidget);
+      expect(find.text('Armazém 10 - Expedição'), findsOneWidget);
+    },
+  );
 
   testWidgets('new OP dialog opens a future-only calendar for due date', (
     tester,
@@ -976,9 +1033,15 @@ void main() {
     await tester.enterText(find.byKey(const Key('nova-op-quantity')), '5');
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Falta'), findsWidgets);
-    expect(find.text('Escolher armazém para atender'), findsOneWidget);
-    expect(find.text('Armazém 02'), findsOneWidget);
+    expect(find.textContaining('precisa completar'), findsWidgets);
+    await tester.ensureVisible(find.textContaining('Detalhar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Detalhar'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Almox. 01 tem'), findsWidgets);
+    expect(find.text('Solicitar transferência'), findsOneWidget);
+    expect(find.text('Escolha obrigatória'), findsOneWidget);
+    expect(find.textContaining('02'), findsWidgets);
     expect(find.textContaining('disponível 45'), findsOneWidget);
 
     await tester.ensureVisible(
@@ -990,9 +1053,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Escolher armazém para atender'), findsOneWidget);
-    expect(find.text('Armazém 02'), findsOneWidget);
-    expect(find.text('Atendido pelo Armazém 02.'), findsOneWidget);
+    expect(find.textContaining('Selecionado: Armazém 02'), findsOneWidget);
+    expect(find.text('Usa outro armazém'), findsOneWidget);
+    expect(find.textContaining('02'), findsWidgets);
 
     await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
     await tester.enterText(
@@ -1009,6 +1072,396 @@ void main() {
     expect(created!.components.first.armazem, '02');
     expect(created!.components[1].armazem, '01');
   });
+
+  testWidgets(
+    'new OP dialog blocks creation until external warehouses are confirmed',
+    (tester) async {
+      NovaOrdemDTO? created;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: NovaOpDialog(
+              produtos: const [],
+              responsaveis: const ['Tatiane'],
+              currentOperatorName: 'Tatiane',
+              onLookupProduto:
+                  const _MissClickWarehouseProtheusProductRepository()
+                      .lookupByCode,
+              onSearchProdutos:
+                  const _MissClickWarehouseProtheusProductRepository()
+                      .searchProducts,
+              onCreate: (dto) => created = dto,
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('nova-op-product-code')),
+        '730-0863',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('precisa completar'), findsWidgets);
+      await tester.ensureVisible(find.byKey(const Key('nova-op-operator-pin')));
+      await tester.enterText(
+        find.byKey(const Key('nova-op-operator-pin')),
+        '2001',
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Criar OP'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<ElevatedButton>(
+              find.widgetWithText(ElevatedButton, 'Criar OP'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(created, isNull);
+      expect(find.textContaining('Confirme o armazém de origem'), findsWidgets);
+
+      await tester.ensureVisible(find.textContaining('Detalhar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Detalhar'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Almox. 05 tem 0 disponível'), findsWidgets);
+      await tester.ensureVisible(
+        find.byKey(
+          const Key('nova-op-component-warehouse-option-COMP-MISS-10'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const Key('nova-op-component-warehouse-option-COMP-MISS-10'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Criar OP'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ElevatedButton>(
+              find.widgetWithText(ElevatedButton, 'Criar OP'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Criar OP'));
+      await tester.pumpAndSettle();
+
+      expect(created, isNotNull);
+      expect(created!.components.single.armazem, '10');
+    },
+  );
+
+  testWidgets('new OP dialog keeps component warehouse picker open after tap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            currentOperatorName: 'Tatiane',
+            onLookupProduto:
+                const _MissClickWarehouseProtheusProductRepository()
+                    .lookupByCode,
+            onSearchProdutos:
+                const _MissClickWarehouseProtheusProductRepository()
+                    .searchProducts,
+            onCreate: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      '730-0863',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('precisa completar'), findsWidgets);
+    await tester.ensureVisible(find.textContaining('Detalhar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Detalhar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Solicitar transferência'), findsOneWidget);
+    expect(find.textContaining('10'), findsWidgets);
+
+    tester.binding.focusManager.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('nova-op-component-warehouse-option-COMP-MISS-10')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('nova-op-component-warehouse-option-COMP-MISS-10')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Selecionado: Armazém 10'), findsOneWidget);
+    expect(find.textContaining('disponível 80'), findsWidgets);
+  });
+
+  testWidgets(
+    'new OP dialog opens component warehouse menu with readable width',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Scaffold(
+            body: NovaOpDialog(
+              produtos: const [],
+              responsaveis: const ['Tatiane'],
+              currentOperatorName: 'Tatiane',
+              onLookupProduto:
+                  const _MissClickWarehouseProtheusProductRepository()
+                      .lookupByCode,
+              onSearchProdutos:
+                  const _MissClickWarehouseProtheusProductRepository()
+                      .searchProducts,
+              onCreate: (_) {},
+              onClose: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('nova-op-product-code')),
+        '730-0863',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.textContaining('Detalhar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Detalhar'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('component-warehouse-COMP-MISS-05')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('component-warehouse-COMP-MISS-05')),
+      );
+      await tester.pumpAndSettle();
+
+      final productionOption = find.text('Armazém 05 - Produção').last;
+      expect(productionOption, findsOneWidget);
+      expect(tester.getSize(productionOption).width, greaterThan(130));
+      expect(find.text('Armazém 06 - Suporte'), findsNothing);
+      expect(find.text('Armazém 07 - Suporte'), findsNothing);
+    },
+  );
+
+  testWidgets('new OP dialog hides physical availability for MOD components', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: NovaOpDialog(
+            produtos: const [],
+            responsaveis: const ['Tatiane'],
+            onLookupProduto:
+                const _ModOnlyProtheusProductRepository().lookupByCode,
+            onSearchProdutos:
+                const _ModOnlyProtheusProductRepository().searchProducts,
+            onCreate: (_) {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('nova-op-product-code')),
+      '900-MOD',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('MOD está como custo/mão de obra'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Disponível:'), findsNothing);
+
+    tester.binding.focusManager.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.textContaining('Detalhar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Detalhar'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('MOD: custo/mão de obra'), findsOneWidget);
+    expect(find.textContaining('Disponível:'), findsNothing);
+  });
+}
+
+class _ModOnlyProtheusProductRepository implements ProtheusProductRepository {
+  const _ModOnlyProtheusProductRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['900-MOD - PRODUTO COM MOD'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    return const [
+      ProtheusProduct(
+        filial: '04',
+        code: '900-MOD',
+        description: 'PRODUTO COM MOD',
+        type: 'PA',
+        unit: 'PC',
+        group: '900',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code != '900-MOD') return null;
+    return const ProtheusProductLookup(
+      filial: '04',
+      armazem: '05',
+      product: ProtheusProduct(
+        filial: '04',
+        code: '900-MOD',
+        description: 'PRODUTO COM MOD',
+        type: 'PA',
+        unit: 'PC',
+        group: '900',
+      ),
+      components: [
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '05',
+          code: 'MOD900',
+          description: 'MAO DE OBRA PRODUCAO',
+          quantityPerUnit: 1,
+          unit: 'HR',
+          stockAvailable: -999,
+        ),
+      ],
+    );
+  }
+}
+
+class _MissClickWarehouseProtheusProductRepository
+    implements ProtheusProductRepository {
+  const _MissClickWarehouseProtheusProductRepository();
+
+  @override
+  Future<List<String>> fetchProductLabels({int limit = 250}) async {
+    return const ['730-0863 - SMART ALARM - MONITORADA CENTRAL'];
+  }
+
+  @override
+  Future<List<ProtheusProduct>> searchProducts(
+    String query, {
+    int limit = 12,
+  }) async {
+    return const [
+      ProtheusProduct(
+        filial: '04',
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+    ];
+  }
+
+  @override
+  Future<ProtheusProductLookup?> lookupByCode(String code) async {
+    if (code != '730-0863') return null;
+    return const ProtheusProductLookup(
+      filial: '04',
+      armazem: '05',
+      product: ProtheusProduct(
+        filial: '04',
+        code: '730-0863',
+        description: 'SMART ALARM - MONITORADA CENTRAL',
+        type: 'PA',
+        unit: 'PC',
+        group: '730',
+      ),
+      components: [
+        ProtheusProductComponent(
+          filial: '04',
+          armazem: '01',
+          code: 'COMP-MISS',
+          description: 'Componente com opcao de retorno',
+          quantityPerUnit: 1,
+          unit: 'PC',
+          stockAvailable: 0,
+          warehouseBalances: [
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '01',
+              currentStock: 100,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 100,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '05',
+              currentStock: 0,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 0,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '10',
+              currentStock: 80,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 80,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '06',
+              currentStock: 900,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 900,
+            ),
+            ProtheusWarehouseBalance(
+              filial: '04',
+              armazem: '07',
+              currentStock: 700,
+              committedQuantity: 0,
+              reservedQuantity: 0,
+              availableQuantity: 700,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _RestrictedWarehouseProtheusProductRepository

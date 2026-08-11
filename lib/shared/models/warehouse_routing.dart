@@ -101,14 +101,7 @@ class WarehouseRouting {
     'tamara': ['10'],
   };
 
-  static const _operatorOrderCreationAccess = {
-    'tatiane': ['05', '10'],
-    'andressa': ['05'],
-    'vera': ['01'],
-    'bruno': ['06', '07'],
-    'bruna': ['10'],
-    'tamara': ['10'],
-  };
+  static const _blockedMaterialSourceWarehouses = {'06', '07'};
 
   static WarehouseRouteTarget? byCode(String code) {
     final normalized = normalizeCode(code);
@@ -137,10 +130,7 @@ class WarehouseRouting {
   }
 
   static List<String> orderCreationWarehousesForOperator(String? operatorName) {
-    final key = _normalizeOperatorName(operatorName);
-    if (key.isEmpty) return all.map((target) => target.code).toList();
-    final warehouses = _operatorOrderCreationAccess[key] ?? const <String>[];
-    return [...warehouses]..sort();
+    return all.map((target) => target.code).toList()..sort();
   }
 
   static bool canOperatorUseWarehouse(String? operatorName, String warehouse) {
@@ -152,11 +142,11 @@ class WarehouseRouting {
   }
 
   static bool canOperatorCreateOrder(String? operatorName, String warehouse) {
-    final key = _normalizeOperatorName(operatorName);
-    if (key.isEmpty) return true;
-    final allowed = _operatorOrderCreationAccess[key];
-    if (allowed == null) return false;
-    return allowed.contains(normalizeCode(warehouse));
+    return byCode(warehouse) != null;
+  }
+
+  static bool canSourceMaterialFromWarehouse(String warehouse) {
+    return !_blockedMaterialSourceWarehouses.contains(normalizeCode(warehouse));
   }
 
   static List<String> filterWarehousesForOperator(
