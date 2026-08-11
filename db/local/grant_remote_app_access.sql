@@ -48,11 +48,48 @@ BEGIN
 END
 $$;
 
--- O lado Protheus e so leitura: o app le SB1/SB2/SC2/SD3/SD4 e as views, mas
--- quem escreve la e a API, com a propria conexao.
+-- Leitura em todo o lado Protheus.
 GRANT USAGE ON SCHEMA protheus_raw, protheus_metadata, public TO vettiflow_app;
 GRANT SELECT ON ALL TABLES IN SCHEMA protheus_raw, protheus_metadata, public
   TO vettiflow_app;
+
+-- E escrita nas quatro tabelas que o app move sozinho, direto pelo Postgres:
+-- abertura de OP grava SC2 e SD4, a baixa grava SD3, e o saldo da SB2 anda
+-- junto em toda operacao. Nao passa pela API — a fila de mutacoes e um segundo
+-- caminho, que hoje nenhuma tela alimenta.
+--
+-- `UPDATE` nao e so pelos UPDATEs: o `_withNextRecno` calcula o proximo RECNO
+-- sob `LOCK TABLE ... IN SHARE ROW EXCLUSIVE MODE`, e esse modo de lock exige
+-- privilegio de escrita. So com INSERT o app trava na primeira gravacao.
+GRANT INSERT, UPDATE ON
+  protheus_raw.sc2_orders,
+  protheus_raw.sd3_movements,
+  protheus_raw.sd4_commitments,
+  protheus_raw.sb2_balances
+  TO vettiflow_app;
+
+-- A coluna `id` dessas tabelas e serial, e serial precisa da sequence: sem
+-- isso o INSERT morre em `permission denied for sequence`, mesmo com o GRANT
+-- de INSERT na tabela.
+DO $$
+DECLARE
+  tabela text;
+  seq text;
+BEGIN
+  FOREACH tabela IN ARRAY ARRAY[
+    'protheus_raw.sc2_orders',
+    'protheus_raw.sd3_movements',
+    'protheus_raw.sd4_commitments',
+    'protheus_raw.sb2_balances'
+  ]
+  LOOP
+    seq := pg_get_serial_sequence(tabela, 'id');
+    IF seq IS NOT NULL THEN
+      EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO vettiflow_app', seq);
+    END IF;
+  END LOOP;
+END
+$$;
 
 -- Tabelas que a `postgres` criar depois (migrations novas) ja nascem legiveis.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA protheus_raw, protheus_metadata, public
