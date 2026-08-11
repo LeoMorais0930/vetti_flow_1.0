@@ -918,10 +918,6 @@ class _ProductLookupSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final childOrdersCount = lookup.components.fold<int>(
-      0,
-      (total, component) => total + component.childOrders.length,
-    );
     final componentsCountLabel =
         '${lookup.components.length} componente${lookup.components.length == 1 ? '' : 's'}';
     final warehouseChoices = lookup.components
@@ -976,17 +972,6 @@ class _ProductLookupSummary extends StatelessWidget {
                     fontSize: 11.5,
                     fontWeight: FontWeight.w800,
                     color: AppColors.primary,
-                  ),
-                ),
-              ],
-              if (lookup.smdReleaseOrders.isNotEmpty) ...[
-                const SizedBox(height: 7),
-                Text(
-                  '${lookup.smdReleaseOrders.length} OPs SMD encontradas no Protheus',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.green,
                   ),
                 ),
               ],
@@ -1085,13 +1070,6 @@ class _ProductLookupSummary extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
-          ],
-          if (childOrdersCount > 0) ...[
-            const SizedBox(height: 6),
-            Text(
-              '$childOrdersCount OPs vinculadas a componentes',
-              style: const TextStyle(fontSize: 11, color: AppColors.primary),
             ),
           ],
         ],
