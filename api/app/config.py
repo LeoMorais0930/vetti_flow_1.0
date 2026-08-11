@@ -22,6 +22,21 @@ APPLY = os.getenv("VF_APPLY", "1") not in ("0", "false", "False")
 # Filial em que o VettiFlow opera. Confere com `filialOperacao` no app.
 FILIAL_PADRAO = os.getenv("VF_FILIAL", "04")
 
+# Token exigido no cabeçalho `X-API-Token` de toda requisição.
+#
+# Sem ele a API só atende o loopback: essa API abre OP e dá baixa no Protheus,
+# então largá-la na rede sem credencial nenhuma seria entregar o ERP para quem
+# alcançar a porta. Vazio é o default de propósito — o desenvolvimento local
+# continua funcionando sem configurar nada, e é só o acesso remoto que fecha.
+API_TOKEN = os.getenv("VF_API_TOKEN", "").strip()
+
+# Origens aceitas no CORS, separadas por vírgula. `*` libera todas.
+CORS_ORIGINS = [
+    origem.strip()
+    for origem in os.getenv("VF_CORS_ORIGINS", "*").split(",")
+    if origem.strip()
+]
+
 
 def tabela(nome: str) -> str:
     """`SC2` -> `sc2010`. Os nomes vieram minúsculos da migração."""

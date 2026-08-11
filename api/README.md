@@ -66,12 +66,45 @@ Rodam contra o banco configurado em `VF_DSN` e desfazem o que fizeram.
 
 ## Configuração
 
-| Variável     | Padrão                                   | O que faz                                    |
-|--------------|------------------------------------------|----------------------------------------------|
-| `VF_DSN`     | `postgresql://localhost:5432/vettiflow`  | Banco onde aplica                            |
-| `VF_EMPRESA` | `010`                                    | Sufixo das tabelas (`SC2` → `sc2010`)        |
-| `VF_APPLY`   | `1`                                      | `0` valida e audita, mas não grava           |
-| `VF_FILIAL`  | `04`                                     | Filial padrão das consultas                  |
+| Variável          | Padrão                                   | O que faz                                    |
+|-------------------|------------------------------------------|----------------------------------------------|
+| `VF_DSN`          | `postgresql://localhost:5432/vettiflow`  | Banco onde aplica                            |
+| `VF_EMPRESA`      | `010`                                    | Sufixo das tabelas (`SC2` → `sc2010`)        |
+| `VF_APPLY`        | `1`                                      | `0` valida e audita, mas não grava           |
+| `VF_FILIAL`       | `04`                                     | Filial padrão das consultas                  |
+| `VF_API_TOKEN`    | vazio                                    | Exigido em `X-API-Token`; vazio = só loopback |
+| `VF_CORS_ORIGINS` | `*`                                      | Origens aceitas, separadas por vírgula       |
+
+O `VF_DSN` aqui usa a role **`postgres`**, não a `vettiflow_app`. A API roda na
+mesma máquina do banco e precisa criar/gravar a tabela de auditoria
+`vf_mutations` — a `vettiflow_app` só tem `SELECT` no schema `public` e a API
+morre no startup com ela. A role restrita existe para o acesso pela rede.
+
+## Acesso de outra máquina
+
+Esta API abre OP e dá baixa no Protheus. **Nunca a exponha sem token.**
+
+```bash
+export VF_API_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+./venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Sem `VF_API_TOKEN` definido ela recusa qualquer requisição que não venha do
+loopback, com `503` — esquecer a variável fecha a API em vez de abrir o
+Protheus. Com o token, toda rota responde `401` sem o cabeçalho, `/health`
+inclusive: um `401` já prova que a porta está acessível.
+
+```bash
+curl -H "X-API-Token: $VF_API_TOKEN" http://<ip-do-servidor>:8000/api/v1/health
+```
+
+E o app da outra máquina leva o mesmo token para o build:
+
+```bash
+flutter run \
+  --dart-define=VETTIFLOW_API_URL=http://<ip-do-servidor>:8000 \
+  --dart-define=VETTIFLOW_API_TOKEN=<o-token>
+```
 
 ## Endpoints
 

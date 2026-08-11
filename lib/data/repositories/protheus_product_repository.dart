@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:postgres/postgres.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
+import 'package:vetti_flow_1_0/data/repositories/api_settings.dart';
 import 'package:vetti_flow_1_0/data/repositories/postgres_settings.dart';
 
 abstract class ProtheusProductRepository {
@@ -102,7 +103,10 @@ class ApiProtheusProductRepository implements ProtheusProductRepository {
     if (normalizedCode.isEmpty) return null;
 
     final response = await _http
-        .get(_uri('/api/v1/produtos/$normalizedCode'))
+        .get(
+          _uri('/api/v1/produtos/$normalizedCode'),
+          headers: ApiSettings.headers(),
+        )
         .timeout(_timeout);
     if (response.statusCode == 404) return null;
     _ensureOk(response);
@@ -121,6 +125,7 @@ class ApiProtheusProductRepository implements ProtheusProductRepository {
             'query': query.trim(),
             'limit': limit.toString(),
           }),
+          headers: ApiSettings.headers(),
         )
         .timeout(_timeout);
     _ensureOk(response);

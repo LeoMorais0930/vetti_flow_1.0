@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:vetti_flow_1_0/data/models/pending_mutation.dart';
+import 'package:vetti_flow_1_0/data/repositories/api_settings.dart';
 
 class MutationResult {
   const MutationResult({
@@ -50,7 +51,7 @@ class ProtheusSyncClient {
   Future<bool> health() async {
     try {
       final response = await _http
-          .get(_uri('/api/v1/health'))
+          .get(_uri('/api/v1/health'), headers: ApiSettings.headers())
           .timeout(_timeout);
       return response.statusCode == 200;
     } catch (_) {
@@ -66,7 +67,7 @@ class ProtheusSyncClient {
       response = await _http
           .post(
             _uri('/api/v1/mutations'),
-            headers: const {'Content-Type': 'application/json'},
+            headers: ApiSettings.headers(json: true),
             body: jsonEncode({
               'mutations': [
                 for (final mutation in mutations) mutation.toJson(),
@@ -103,7 +104,7 @@ class ProtheusSyncClient {
       response = await _http
           .post(
             _uri('/api/v1/finalizar'),
-            headers: const {'Content-Type': 'application/json'},
+            headers: ApiSettings.headers(json: true),
             body: jsonEncode({'ids': ids}),
           )
           .timeout(_timeout);

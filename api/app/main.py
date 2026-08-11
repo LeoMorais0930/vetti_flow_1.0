@@ -10,11 +10,13 @@ real nas tabelas antes de encostar em produção.
 """
 import json
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import config, db, protheus
 from .schemas import (
@@ -33,6 +35,8 @@ async def lifespan(_: FastAPI):
     db.preparar_banco()
     if not config.APPLY:
         log.warning("VF_APPLY=0 — validando sem gravar em SC2/SD4/SB2")
+    if not config.API_TOKEN:
+        log.warning("VF_API_TOKEN vazio — atendendo so localhost")
     yield
 
 
@@ -43,9 +47,53 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+CABECALHO_TOKEN = "X-API-Token"
+_LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+@app.middleware("http")
+async def exigir_token(request: Request, call_next):
+    """Fecha a API para quem nao apresenta `X-API-Token`.
+
+    Sem `VF_API_TOKEN` configurado a API continua atendendo o loopback — e so o
+    loopback. E o modo de desenvolvimento: quem sobe local nao precisa
+    configurar nada, e quem esquece de configurar nao expoe o Protheus sem
+    querer.
+    """
+    # O preflight do CORS nao carrega cabecalho customizado; barra-lo aqui faria
+    # o navegador reportar erro de CORS no lugar do 401 que interessa.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    origem = request.client.host if request.client else ""
+    if config.API_TOKEN:
+        enviado = request.headers.get(CABECALHO_TOKEN, "")
+        # compare_digest para o tempo de resposta nao entregar o token.
+        if not secrets.compare_digest(enviado, config.API_TOKEN):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": f"{CABECALHO_TOKEN} ausente ou invalido"},
+            )
+    elif origem not in _LOOPBACK:
+        log.warning("recusando %s: VF_API_TOKEN nao configurado", origem)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "API sem VF_API_TOKEN configurado; so atende localhost"
+                )
+            },
+        )
+
+    return await call_next(request)
+
+
+# Registrado depois do token para ficar por fora dele: assim ate a resposta 401
+# sai com os cabecalhos de CORS, e o build web enxerga o status de verdade em
+# vez de um erro opaco de origem.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
