@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:postgres/postgres.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
+import 'package:vetti_flow_1_0/data/repositories/postgres_settings.dart';
 
 abstract class ProtheusProductRepository {
   Future<ProtheusProductLookup?> lookupByCode(String code);
@@ -274,26 +275,11 @@ class PostgresProtheusProductRepository implements ProtheusProductRepository {
   static const vtFilial = '04';
 
   PostgresProtheusProductRepository({
-    this.host = const String.fromEnvironment(
-      'VETTIFLOW_PG_HOST',
-      defaultValue: 'localhost',
-    ),
-    this.port = const int.fromEnvironment(
-      'VETTIFLOW_PG_PORT',
-      defaultValue: 5432,
-    ),
-    this.database = const String.fromEnvironment(
-      'VETTIFLOW_PG_DATABASE',
-      defaultValue: 'vettiflow',
-    ),
-    this.username = const String.fromEnvironment(
-      'VETTIFLOW_PG_USER',
-      defaultValue: 'postgres',
-    ),
-    this.password = const String.fromEnvironment(
-      'VETTIFLOW_PG_PASSWORD',
-      defaultValue: '093003',
-    ),
+    this.host = PostgresSettings.defaultHost,
+    this.port = PostgresSettings.defaultPort,
+    this.database = PostgresSettings.defaultDatabase,
+    this.username = PostgresSettings.defaultUsername,
+    this.password = PostgresSettings.defaultPassword,
   });
 
   final String host;

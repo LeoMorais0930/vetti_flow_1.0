@@ -1,5 +1,6 @@
 import 'package:postgres/postgres.dart';
 import 'package:vetti_flow_1_0/data/models/warehouse_request.dart';
+import 'package:vetti_flow_1_0/data/repositories/postgres_settings.dart';
 
 abstract class WarehouseRequestDatabase {
   Future<List<WarehouseConfirmationRequest>> loadRequests();
@@ -18,26 +19,11 @@ class EmptyWarehouseRequestDatabase implements WarehouseRequestDatabase {
 
 class PostgresWarehouseRequestDatabase implements WarehouseRequestDatabase {
   PostgresWarehouseRequestDatabase({
-    this.host = const String.fromEnvironment(
-      'VETTIFLOW_PG_HOST',
-      defaultValue: 'localhost',
-    ),
-    this.port = const int.fromEnvironment(
-      'VETTIFLOW_PG_PORT',
-      defaultValue: 5432,
-    ),
-    this.database = const String.fromEnvironment(
-      'VETTIFLOW_PG_DATABASE',
-      defaultValue: 'vettiflow',
-    ),
-    this.username = const String.fromEnvironment(
-      'VETTIFLOW_PG_USER',
-      defaultValue: 'postgres',
-    ),
-    this.password = const String.fromEnvironment(
-      'VETTIFLOW_PG_PASSWORD',
-      defaultValue: '093003',
-    ),
+    this.host = PostgresSettings.defaultHost,
+    this.port = PostgresSettings.defaultPort,
+    this.database = PostgresSettings.defaultDatabase,
+    this.username = PostgresSettings.defaultUsername,
+    this.password = PostgresSettings.defaultPassword,
   });
 
   final String host;

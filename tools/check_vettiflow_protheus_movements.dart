@@ -191,7 +191,7 @@ Future<Connection> _open(String password) {
       port: const int.fromEnvironment('VETTIFLOW_PG_PORT', defaultValue: 5432),
       database: const String.fromEnvironment(
         'VETTIFLOW_PG_DATABASE',
-        defaultValue: 'vettiflow',
+        defaultValue: 'vettip12',
       ),
       username: const String.fromEnvironment(
         'VETTIFLOW_PG_USER',

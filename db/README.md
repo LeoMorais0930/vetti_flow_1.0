@@ -7,7 +7,54 @@ Organizacao:
 - `migrations/`: criacao e alteracoes do banco local.
 - `postgres/`: selects e consultas auxiliares para rodar no Postgres.
 
-## Postgres local
+## Qual banco o app procura
+
+O nome do banco muda por maquina, e por isso `PostgresSettings`
+(`lib/data/repositories/postgres_settings.dart`) e o unico lugar que define a
+conexao. O padrao e o banco do macOS:
+
+```text
+postgresql://postgres@localhost:5432/vettip12
+```
+
+Na maquina do Leonardo (Windows) o mesmo conteudo vive em `vettiflow`, entao la
+o app roda com:
+
+```powershell
+flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettiflow
+```
+
+As demais chaves seguem iguais: `VETTIFLOW_PG_HOST`, `VETTIFLOW_PG_PORT`,
+`VETTIFLOW_PG_USER`, `VETTIFLOW_PG_PASSWORD`.
+
+## Postgres local no macOS (Postgres.app)
+
+O dump do VettiP12 foi restaurado no banco `vettip12`, com as tabelas cruas do
+Protheus no schema `public` (`sb1010`, `sc2010`, `sg1010`, `sb2010`, `sd3010`,
+`sd4010`). Para o app funcionar em cima disso:
+
+```bash
+export PATH=/Applications/Postgres.app/Contents/Versions/latest/bin:$PATH
+
+# 1. o Postgres.app nao cria a role `postgres`; sem ela a conexao falha com
+#    `28000: role "postgres" does not exist`
+psql -h localhost -U "$USER" -d postgres -c "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD '093003';"
+
+# 2. schemas vettiflow / protheus_metadata / protheus_raw
+for f in db/migrations/*.sql; do
+  psql -h localhost -U postgres -d vettip12 -v ON_ERROR_STOP=1 -f "$f"
+done
+
+# 3. popular protheus_raw.* a partir das tabelas cruas do proprio banco
+psql -h localhost -U postgres -d vettip12 -v ON_ERROR_STOP=1 \
+  -f db/local/load_protheus_raw_from_vettip12.sql
+```
+
+O passo 3 substitui o `tools/import_protheus_export_to_postgres.ps1`, que existe
+para a maquina do Leonardo (onde a origem e o export em CSV/JSON). Aqui a origem
+ja esta no Postgres, entao e so converter cada linha em `jsonb`.
+
+## Postgres local no Windows
 
 O cluster local foi criado em `.local_pg/data` e fica fora do git.
 

@@ -638,7 +638,7 @@ class _PostgresSettings {
       host: Platform.environment['VETTIFLOW_PG_HOST'] ?? 'localhost',
       port:
           int.tryParse(Platform.environment['VETTIFLOW_PG_PORT'] ?? '') ?? 5432,
-      database: Platform.environment['VETTIFLOW_PG_DATABASE'] ?? 'vettiflow',
+      database: Platform.environment['VETTIFLOW_PG_DATABASE'] ?? 'vettip12',
       username: Platform.environment['VETTIFLOW_PG_USER'] ?? 'postgres',
       password: password,
     );
