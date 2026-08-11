@@ -76,6 +76,7 @@ class ProtheusProductComponent {
   final String commitmentDate;
   final num originalQuantity;
   final num commitmentQuantity;
+  final String structureSequence;
   final List<ProtheusWarehouseBalance> warehouseBalances;
   final List<ProtheusChildOrder> childOrders;
 
@@ -95,6 +96,7 @@ class ProtheusProductComponent {
     this.commitmentDate = '',
     this.originalQuantity = 0,
     this.commitmentQuantity = 0,
+    this.structureSequence = '',
     this.warehouseBalances = const [],
     this.childOrders = const [],
   });
@@ -166,6 +168,7 @@ class ProtheusProductComponent {
         commitmentDate: commitmentDate,
         originalQuantity: originalQuantity,
         commitmentQuantity: commitmentQuantity,
+        structureSequence: structureSequence,
         warehouseBalances: warehouseBalances,
         childOrders: childOrders,
       );
@@ -186,6 +189,7 @@ class ProtheusProductComponent {
       commitmentDate: commitmentDate,
       originalQuantity: originalQuantity,
       commitmentQuantity: commitmentQuantity,
+      structureSequence: structureSequence,
       warehouseBalances: warehouseBalances,
       childOrders: childOrders,
     );
@@ -234,6 +238,7 @@ class ProtheusProductComponent {
       commitmentDate: commitmentDate,
       originalQuantity: originalQuantity.round(),
       commitmentQuantity: commitmentQuantity.round(),
+      structureSequence: structureSequence,
     );
   }
 }

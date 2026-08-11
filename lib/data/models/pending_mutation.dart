@@ -223,6 +223,7 @@ class EmpenhoLinha {
     required this.quantidade,
     required this.local,
     this.quantidadeOriginal,
+    this.structureSequence = '',
   });
 
   final String produto;
@@ -230,6 +231,7 @@ class EmpenhoLinha {
   final double quantidade;
   final String local;
   final double? quantidadeOriginal;
+  final String structureSequence;
 
   Map<String, dynamic> toJson() => {
     'produto': produto,
@@ -237,6 +239,7 @@ class EmpenhoLinha {
     'quantidade': quantidade,
     'local': local,
     'quantidadeOriginal': quantidadeOriginal,
+    'structureSequence': structureSequence,
   };
 
   factory EmpenhoLinha.fromJson(Map<String, dynamic> json) => EmpenhoLinha(
@@ -245,6 +248,7 @@ class EmpenhoLinha {
     quantidade: (json['quantidade'] as num?)?.toDouble() ?? 0,
     local: json['local'] as String? ?? '',
     quantidadeOriginal: (json['quantidadeOriginal'] as num?)?.toDouble(),
+    structureSequence: json['structureSequence'] as String? ?? '',
   );
 }
 

@@ -242,7 +242,8 @@ def _componentes_raw(conn, codigo: str, filial: str) -> list[dict]:
           '' AS "sourceOrder",
           '' AS "commitmentDate",
           0 AS "originalQuantity",
-          0 AS "commitmentQuantity"
+          0 AS "commitmentQuantity",
+          COALESCE(s.payload ->> 'g1_trt', s.payload ->> 'G1_TRT', '') AS "structureSequence"
         FROM protheus_raw.vw_sg1_product_structures AS s
         LEFT JOIN protheus_raw.vw_sb1_products AS p
           ON p.codigo = s.componente_codigo
@@ -253,7 +254,9 @@ def _componentes_raw(conn, codigo: str, filial: str) -> list[dict]:
         WHERE s.produto_codigo = %s
           AND (s.filial = %s OR s.filial = '')
           AND COALESCE(NULLIF(p.payload ->> 'b1_msblql', ''), NULLIF(p.payload ->> 'B1_MSBLQL', ''), '2') <> '1'
-        ORDER BY s.componente_codigo
+        ORDER BY
+          COALESCE(NULLIF(s.payload ->> 'g1_trt', ''), NULLIF(s.payload ->> 'G1_TRT', ''), s.componente_codigo),
+          s.componente_codigo
         """,
         (filial, filial, filial, filial, codigo, filial),
     ).fetchall()
@@ -356,7 +359,8 @@ def _componentes_fisicos(conn, codigo: str, filial: str) -> list[dict]:
           btrim(s.g1_comp) AS code,
           btrim(COALESCE(p.b1_desc, '')) AS description,
           s.g1_quant AS "quantityPerUnit",
-          btrim(COALESCE(p.b1_um, '')) AS unit
+          btrim(COALESCE(p.b1_um, '')) AS unit,
+          btrim(COALESCE(s.g1_trt, '')) AS "structureSequence"
         FROM {sg1} s
         LEFT JOIN {sb1} p
           ON btrim(p.b1_cod) = btrim(s.g1_comp)
@@ -367,7 +371,7 @@ def _componentes_fisicos(conn, codigo: str, filial: str) -> list[dict]:
           AND btrim(COALESCE(s.g1_ini, '')) <= %s
           AND (btrim(COALESCE(s.g1_fim, '')) = '' OR btrim(s.g1_fim) >= %s)
           AND COALESCE(NULLIF(btrim(COALESCE(p.b1_msblql, '')), ''), '2') <> '1'
-        ORDER BY btrim(s.g1_comp)
+        ORDER BY btrim(COALESCE(s.g1_trt, '')), btrim(s.g1_comp)
         """,
         (filial, codigo, filial, hoje, hoje),
     ).fetchall()

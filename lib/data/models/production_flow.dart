@@ -525,6 +525,7 @@ class ProductionComponent {
     this.commitmentDate = '',
     this.originalQuantity = 0,
     this.commitmentQuantity = 0,
+    this.structureSequence = '',
   });
 
   final String code;
@@ -541,6 +542,7 @@ class ProductionComponent {
   final String commitmentDate;
   final int originalQuantity;
   final int commitmentQuantity;
+  final String structureSequence;
 
   String get quantityLabel => '$quantity un';
   String get stockLabel => '$stock un';

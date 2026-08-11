@@ -110,7 +110,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     final componentRows = await conn.execute('''
         SELECT *
         FROM vettiflow.production_components
-        ORDER BY order_number, component_code
+        ORDER BY order_number, structure_sequence, component_code
       ''', timeout: const Duration(seconds: 8));
     final timingRows = await conn.execute(
       'SELECT * FROM vettiflow.production_stage_timings',
@@ -317,7 +317,8 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
               source_order,
               commitment_date,
               original_quantity,
-              commitment_quantity
+              commitment_quantity,
+              structure_sequence
             )
             VALUES (
               @order_number,
@@ -334,7 +335,8 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
               @source_order,
               @commitment_date,
               @original_quantity,
-              @commitment_quantity
+              @commitment_quantity,
+              @structure_sequence
             )
           '''),
           parameters: {
@@ -353,6 +355,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
             'commitment_date': component.commitmentDate,
             'original_quantity': component.originalQuantity,
             'commitment_quantity': component.commitmentQuantity,
+            'structure_sequence': component.structureSequence,
           },
         );
       }
@@ -1008,17 +1011,22 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
           jsonb_set(
             jsonb_set(
               jsonb_set(
-                payload,
-                '{d4_quant}',
+                jsonb_set(
+                  payload,
+                  '{d4_quant}',
+                  to_jsonb(0),
+                  true
+                ),
+                '{d4_sldemp}',
                 to_jsonb(0),
                 true
               ),
-              '{d4_sldemp}',
+              '{d4_sldemp2}',
               to_jsonb(0),
               true
             ),
-            '{d4_sldemp2}',
-            to_jsonb(0),
+            '{d4_situaca}',
+            to_jsonb('R'::text),
             true
           ),
           '{vettiflow_consumed_at}',
@@ -1196,7 +1204,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
                 true
               ),
               '{d4_situaca}',
-              to_jsonb('C'::text),
+              to_jsonb('D'::text),
               true
             ),
             '{d_e_l_e_t_}',
@@ -1292,6 +1300,10 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
       ALTER TABLE IF EXISTS vettiflow.production_orders
       ADD COLUMN IF NOT EXISTS operator_pin_hash text
     ''', timeout: const Duration(seconds: 8));
+    await conn.execute('''
+      ALTER TABLE IF EXISTS vettiflow.production_components
+      ADD COLUMN IF NOT EXISTS structure_sequence text NOT NULL DEFAULT ''
+    ''', timeout: const Duration(seconds: 8));
     _schemaChecked = true;
   }
 
@@ -1375,6 +1387,7 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
       commitmentDate: _text(data['commitment_date']),
       originalQuantity: _int(data['original_quantity']),
       commitmentQuantity: _int(data['commitment_quantity']),
+      structureSequence: _text(data['structure_sequence']),
     );
   }
 

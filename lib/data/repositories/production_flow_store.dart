@@ -623,6 +623,7 @@ class ProductionFlowStore extends ChangeNotifier {
       'commitmentDate': component.commitmentDate,
       'originalQuantity': component.originalQuantity,
       'commitmentQuantity': component.commitmentQuantity,
+      'structureSequence': component.structureSequence,
     };
   }
 
@@ -642,6 +643,7 @@ class ProductionFlowStore extends ChangeNotifier {
       commitmentDate: json['commitmentDate'] as String? ?? '',
       originalQuantity: (json['originalQuantity'] as num?)?.toInt() ?? 0,
       commitmentQuantity: (json['commitmentQuantity'] as num?)?.toInt() ?? 0,
+      structureSequence: json['structureSequence'] as String? ?? '',
     );
   }
 

@@ -30,6 +30,7 @@ class EmpenhoLinha(BaseModel):
     descricao: str = ""
     quantidade: float
     local: str
+    structureSequence: str = ""
 
 
 class AberturaOpPayload(BaseModel):

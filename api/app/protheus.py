@@ -56,7 +56,9 @@ def _estrutura(conn, produto: str) -> list[dict]:
     hoje = date.today().strftime("%Y%m%d")
     return conn.execute(
         f"""
-        SELECT btrim(g1_comp) AS componente, g1_quant AS quantidade
+        SELECT btrim(g1_comp) AS componente,
+               g1_quant AS quantidade,
+               btrim(COALESCE(g1_trt, '')) AS estrutura
         FROM {db.config.tabela('SG1')}
         WHERE d_e_l_e_t_ <> '*'
           AND btrim(g1_cod) = %s
@@ -168,6 +170,7 @@ def abrir_op(conn, mutacao) -> tuple[str, dict]:
                 "produto": e["componente"],
                 "quantidade": float(e["quantidade"] or 0) * p.quantidade,
                 "local": p.localProducao,
+                "estrutura": e.get("estrutura") or "",
             },
         )()
         for e in _estrutura(conn, p.produto)
@@ -179,9 +182,15 @@ def abrir_op(conn, mutacao) -> tuple[str, dict]:
             filial=filial,
             op=op,
             produto=linha.produto,
+            produto_pai=p.produto,
             local=linha.local,
             quantidade=float(linha.quantidade),
             data=emissao,
+            estrutura=(
+                getattr(linha, "structureSequence", None)
+                or getattr(linha, "estrutura", None)
+                or ""
+            ),
         )
 
     return op, {"criou_op": op, "empenhos": len(list(linhas))}
@@ -192,24 +201,74 @@ def abrir_op(conn, mutacao) -> tuple[str, dict]:
 # --------------------------------------------------------------------------
 
 
+def _produto_da_op(conn, filial: str, op: str) -> str:
+    if len(op) != 11:
+        return ""
+    numero, item, sequencia = op[:6], op[6:8], op[8:11]
+    linha = conn.execute(
+        f"""
+        SELECT btrim(c2_produto) AS produto
+        FROM {db.config.tabela('SC2')}
+        WHERE c2_filial = %s AND c2_num = %s AND c2_item = %s
+          AND c2_sequen = %s AND d_e_l_e_t_ <> '*'
+        LIMIT 1
+        """,
+        (filial, numero, item, sequencia),
+    ).fetchone()
+    return linha["produto"] if linha else ""
+
+
+def _sd4_commitment_values(
+    *,
+    filial: str,
+    op: str,
+    produto: str,
+    produto_pai: str,
+    local: str,
+    quantidade: float,
+    data: str,
+    estrutura: str = "",
+) -> dict:
+    return {
+        "d4_filial": filial,
+        "d4_op": op,
+        "d4_cod": produto,
+        "d4_produto": produto_pai,
+        "d4_local": local,
+        "d4_quant": quantidade,
+        "d4_qtdeori": quantidade,
+        "d4_sldemp": 0,
+        "d4_sldemp2": 0,
+        "d4_qtneces": 0,
+        "d4_qsusp": 0,
+        "d4_qtsegum": 0,
+        "d4_data": data,
+        "d4_roteiro": "01",
+        "d4_trt": estrutura,
+        "d_e_l_e_t_": "",
+        "r_e_c_d_e_l_": 0,
+    }
+
+
 def _incluir_empenho(
     conn, *, filial: str, op: str, produto: str, local: str,
-    quantidade: float, data: str,
+    quantidade: float, data: str, produto_pai: str = "",
+    estrutura: str = "",
 ) -> None:
+    values = _sd4_commitment_values(
+        filial=filial,
+        op=op,
+        produto=produto,
+        produto_pai=produto_pai or _produto_da_op(conn, filial, op),
+        local=local,
+        quantidade=quantidade,
+        data=data,
+        estrutura=estrutura,
+    )
     db.inserir(
         conn,
         db.config.tabela("SD4"),
-        {
-            "d4_filial": filial,
-            "d4_op": op,
-            "d4_cod": produto,
-            "d4_produto": produto,
-            "d4_local": local,
-            "d4_quant": quantidade,
-            "d4_qtdeori": quantidade,
-            "d4_sldemp": quantidade,
-            "d4_data": data,
-        },
+        values,
     )
     # Empenhar reserva saldo: sobe `b2_qemp` sem mexer no que há fisicamente.
     _mexer_saldo(conn, filial, produto, local, qemp=quantidade)
@@ -274,10 +333,11 @@ def alterar_empenho(conn, mutacao) -> tuple[str, dict]:
         # Mudar de almoxarifado é mover a linha: a reserva sai de um lugar e
         # entra no outro.
         conn.execute(
-            f"UPDATE {sd4} SET d4_local = %s, d4_quant = %s, d4_sldemp = %s "
+            f"UPDATE {sd4} SET d4_local = %s, d4_quant = %s, "
+            "d4_sldemp = 0, d4_sldemp2 = 0, d4_qtneces = 0 "
             "WHERE d4_filial = %s AND btrim(d4_op) = %s AND btrim(d4_cod) = %s "
             "AND d4_local = %s",
-            (p.local, p.quantidade, p.quantidade, filial, p.op, p.produto,
+            (p.local, p.quantidade, filial, p.op, p.produto,
              local_anterior),
         )
         _mexer_saldo(
@@ -287,10 +347,11 @@ def alterar_empenho(conn, mutacao) -> tuple[str, dict]:
         _mexer_saldo(conn, filial, p.produto, p.local, qemp=p.quantidade)
     else:
         conn.execute(
-            f"UPDATE {sd4} SET d4_quant = %s, d4_sldemp = %s "
+            f"UPDATE {sd4} SET d4_quant = %s, d4_sldemp = 0, "
+            "d4_sldemp2 = 0, d4_qtneces = 0 "
             "WHERE d4_filial = %s AND btrim(d4_op) = %s AND btrim(d4_cod) = %s "
             "AND d4_local = %s",
-            (p.quantidade, p.quantidade, filial, p.op, p.produto, p.local),
+            (p.quantidade, filial, p.op, p.produto, p.local),
         )
         _mexer_saldo(
             conn, filial, p.produto, p.local,
@@ -424,10 +485,22 @@ def dar_baixa_producao(conn, mutacao) -> tuple[str, dict]:
             },
         )
         conn.execute(
-            f"UPDATE {sd4} SET d4_quant = d4_quant - %s "
-            "WHERE d4_filial = %s AND btrim(d4_op) = %s AND btrim(d4_cod) = %s "
-            "AND d4_local = %s",
-            (c.quantidade, filial, p.op, c.produto, c.local),
+            f"""
+            UPDATE {sd4}
+            SET d4_quant = d4_quant - %s,
+                d4_sldemp = 0,
+                d4_sldemp2 = 0,
+                d4_qtneces = 0,
+                d4_situaca = CASE
+                    WHEN d4_quant - %s <= 0 THEN 'R'
+                    ELSE d4_situaca
+                END
+            WHERE d4_filial = %s
+              AND btrim(d4_op) = %s
+              AND btrim(d4_cod) = %s
+              AND d4_local = %s
+            """,
+            (c.quantidade, c.quantidade, filial, p.op, c.produto, c.local),
         )
         _mexer_saldo(
             conn, filial, c.produto, c.local, qatu=-c.quantidade, qemp=-c.quantidade

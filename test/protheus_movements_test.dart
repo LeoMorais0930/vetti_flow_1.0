@@ -39,6 +39,7 @@ void main() {
             currentStock: 3803,
             committedQuantity: 5284,
             requirementSource: 'SG1',
+            structureSequence: '010',
           ),
           ProductionComponent(
             code: 'MOD-001',
@@ -107,7 +108,12 @@ void main() {
       expect(movement.sd4Payload['d4_cod'], '100-010');
       expect(movement.sd4Payload['d4_local'], '05');
       expect(movement.sd4Payload['d4_quant'], 10);
-      expect(movement.sd4Payload['d4_sldemp'], 10);
+      expect(movement.sd4Payload['d4_qtdeori'], 10);
+      expect(movement.sd4Payload['d4_sldemp'], 0);
+      expect(movement.sd4Payload['d4_sldemp2'], 0);
+      expect(movement.sd4Payload['d4_qtneces'], 0);
+      expect(movement.sd4Payload['d4_roteiro'], '01');
+      expect(movement.sd4Payload['d4_trt'], '010');
       expect(movement.sd4Payload['vettiflow_order_number'], 'OP-2026-564351');
       expect(movement.sd4Payload['vettiflow_operator_name'], 'Tatiane');
       expect(movement.sd4Payload['vettiflow_operator_pin'], '2001');
@@ -262,6 +268,7 @@ void main() {
     expect(movement.returnWarehouse, '05');
     expect(movement.emissionDate, '20260804');
     expect(movement.sd4CancelPayload['d4_sldemp'], 0);
+    expect(movement.sd4CancelPayload['d4_situaca'], 'D');
     expect(movement.sd4CancelPayload['d4_op'], '56511101001');
     expect(movement.sd4CancelPayload['d_e_l_e_t_'], '*');
     expect(movement.sd4CancelPayload['vettiflow_origin'], 'op_cancel');
@@ -300,6 +307,7 @@ void main() {
           stock: 3803,
           filial: '04',
           armazem: '01',
+          structureSequence: '010',
         ),
         ProductionComponent(
           code: 'MOD-001',
@@ -333,6 +341,7 @@ void main() {
     expect(physicalConsumption.sd3Payload['d3_op'], '56522201001');
     expect(physicalConsumption.sd3Payload['d3_cod'], '100-010');
     expect(physicalConsumption.sd3Payload['d3_local'], '01');
+    expect(physicalConsumption.sd3Payload['d3_numseq'], '010');
 
     final modConsumption = completion.consumptions.firstWhere(
       (item) => item.componentCode == 'MOD-001',

@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS vettiflow.production_components (
   description text NOT NULL,
   quantity numeric(14,4) NOT NULL DEFAULT 0,
   stock numeric(14,4) NOT NULL DEFAULT 0,
+  structure_sequence text NOT NULL DEFAULT '',
   source_payload jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );

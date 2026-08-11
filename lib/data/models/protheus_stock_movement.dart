@@ -304,7 +304,9 @@ class ProtheusStockMovementPlan {
             ProtheusStockMovement.fromComponent(
               order: order,
               component: catalogItem.components[index],
-              structureSequence: (index + 1).toString().padLeft(3, '0'),
+              structureSequence: _structureSequence(
+                catalogItem.components[index],
+              ),
               operatorName: operatorName,
               operatorPin: operatorPin,
             ),
@@ -316,6 +318,12 @@ class ProtheusStockMovementPlan {
     if (component.code.trim().isEmpty) return false;
     if (component.armazem.trim().isEmpty) return false;
     return component.quantity > 0;
+  }
+
+  static String _structureSequence(ProductionComponent component) {
+    final sequence = component.structureSequence.trim();
+    if (sequence.isNotEmpty) return sequence;
+    return '';
   }
 
   static String _operatorName(String? value) {
@@ -366,7 +374,9 @@ class ProtheusStockCancelationPlan {
             ProtheusStockCancelationMovement.fromComponent(
               order: order,
               component: catalogItem.components[index],
-              structureSequence: (index + 1).toString().padLeft(3, '0'),
+              structureSequence: ProtheusStockMovementPlan._structureSequence(
+                catalogItem.components[index],
+              ),
               returnWarehouse:
                   returnWarehouses[catalogItem.components[index].code],
               operatorName: signerName,
@@ -416,7 +426,9 @@ class ProtheusProductionCompletionPlan {
               order: order,
               component: catalogItem.components[index],
               producedQuantity: producedQuantity,
-              structureSequence: (index + 1).toString().padLeft(3, '0'),
+              structureSequence: ProtheusStockMovementPlan._structureSequence(
+                catalogItem.components[index],
+              ),
               operatorName: operatorName,
               operatorPin: operatorPin,
             ),
@@ -641,16 +653,17 @@ class ProtheusStockCancelationMovement {
     'd4_op': ProtheusProductionOrder._protheusOpCode(orderNumber),
     'd4_data': emissionDate,
     'd4_qsusp': 0,
-    'd4_situaca': 'C',
+    'd4_situaca': 'D',
     'd4_qtdeori': quantity,
     'd4_quant': quantity,
     'd4_trt': structureSequence,
+    'd4_roteiro': '01',
     'd4_oporig': '',
     'd4_qtsegum': 0,
     'd4_sldemp': 0,
     'd4_sldemp2': 0,
     'd4_produto': productCode,
-    'd4_qtneces': quantity,
+    'd4_qtneces': 0,
     'd_e_l_e_t_': '*',
     'r_e_c_d_e_l_': 0,
     'd4_ok': '',
@@ -722,12 +735,13 @@ class ProtheusStockMovement {
     'd4_qtdeori': quantity,
     'd4_quant': quantity,
     'd4_trt': structureSequence,
+    'd4_roteiro': '01',
     'd4_oporig': '',
     'd4_qtsegum': 0,
-    'd4_sldemp': quantity,
-    'd4_sldemp2': quantity,
+    'd4_sldemp': 0,
+    'd4_sldemp2': 0,
     'd4_produto': productCode,
-    'd4_qtneces': quantity,
+    'd4_qtneces': 0,
     'd_e_l_e_t_': '',
     'r_e_c_d_e_l_': 0,
     'd4_ok': '',

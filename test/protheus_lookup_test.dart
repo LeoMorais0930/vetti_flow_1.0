@@ -183,6 +183,7 @@ void main() {
                 'committedQuantity': 100,
                 'reservedQuantity': 0,
                 'requirementSource': 'SG1',
+                'structureSequence': '010',
                 'warehouseBalances': [
                   {
                     'filial': '04',
@@ -227,6 +228,7 @@ void main() {
     expect(lookup?.defaultWarehouse, '05');
     expect(lookup?.components.single.code, '100-010');
     expect(lookup?.components.single.currentStock, 7514);
+    expect(lookup?.components.single.structureSequence, '010');
     expect(lookup?.components.single.warehouseBalances.last.armazem, '05');
     expect(lookup?.components.single.childOrders.single.number, '01595801001');
   });

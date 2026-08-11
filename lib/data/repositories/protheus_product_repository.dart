@@ -194,6 +194,12 @@ class ApiProtheusProductRepository implements ProtheusProductRepository {
       commitmentQuantity: _num(
         data['commitmentQuantity'] ?? data['quantidadeEmpenho'],
       ),
+      structureSequence: _text(
+        data['structureSequence'] ??
+            data['sequenciaEstrutura'] ??
+            data['structure_sequence'] ??
+            data['g1_trt'],
+      ),
       warehouseBalances: _list(
         data['warehouseBalances'],
       ).map(_warehouseBalanceFromApi).toList(growable: false),
@@ -464,7 +470,8 @@ class PostgresProtheusProductRepository implements ProtheusProductRepository {
           '' AS source_order,
           '' AS commitment_date,
           0 AS original_quantity,
-          0 AS commitment_quantity
+          0 AS commitment_quantity,
+          COALESCE(s.payload ->> 'g1_trt', s.payload ->> 'G1_TRT', '') AS structure_sequence
         FROM protheus_raw.vw_sg1_product_structures AS s
         LEFT JOIN protheus_raw.vw_sb1_products AS p
           ON p.codigo = s.componente_codigo
@@ -478,7 +485,9 @@ class PostgresProtheusProductRepository implements ProtheusProductRepository {
         WHERE s.produto_codigo = @code
           AND (s.filial = @filial OR s.filial = '')
           AND COALESCE(NULLIF(p.payload ->> 'b1_msblql', ''), NULLIF(p.payload ->> 'B1_MSBLQL', ''), '2') <> '1'
-        ORDER BY s.componente_codigo
+        ORDER BY
+          COALESCE(NULLIF(s.payload ->> 'g1_trt', ''), NULLIF(s.payload ->> 'G1_TRT', ''), s.componente_codigo),
+          s.componente_codigo
       '''),
       parameters: {'code': productCode, 'filial': vtFilial},
       timeout: const Duration(seconds: 8),
@@ -614,6 +623,7 @@ class PostgresProtheusProductRepository implements ProtheusProductRepository {
       commitmentDate: _text(data['commitment_date']),
       originalQuantity: _num(data['original_quantity']),
       commitmentQuantity: _num(data['commitment_quantity']),
+      structureSequence: _text(data['structure_sequence']),
       warehouseBalances: balances,
       childOrders: orderList
           .whereType<Map>()
