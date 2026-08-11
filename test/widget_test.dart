@@ -783,6 +783,62 @@ void main() {
     expect(database.eventTypes.single, 'created');
   });
 
+  test('two apps on the same database never share an OP number', () async {
+    // O cenario real: duas maquinas apontando para o mesmo Postgres. Antes da
+    // sequence cada app carregava seu proprio contador e os dois chegavam no
+    // mesmo `OP-<ano>-N` — e o upsert do `saveOrder` sobrescrevia a OP de quem
+    // gravou primeiro, em silencio.
+    final database = _RecordingProductionFlowDatabase()..nextSequence = 900100;
+    final vitor = ProductionFlowStore(database: database);
+    final leonardo = ProductionFlowStore(database: database);
+
+    Future<String> createOn(ProductionFlowStore store, String operator) async {
+      final order = await store.createOrder(
+        productCode: '575-0845',
+        productName: 'SUB MEC SMART MODULO SIRENE SF',
+        quantity: 10,
+        priority: 'Media',
+        operatorName: operator,
+        orderWarehouse: '05',
+      );
+      return order.number;
+    }
+
+    final numbers = [
+      await createOn(vitor, 'Vitor'),
+      await createOn(leonardo, 'Leonardo'),
+      await createOn(vitor, 'Vitor'),
+    ];
+
+    expect(numbers.toSet(), hasLength(3));
+    expect(numbers, [
+      endsWith('-900100'),
+      endsWith('-900101'),
+      endsWith('-900102'),
+    ]);
+    expect(database.sequenceCalls, 3);
+  });
+
+  test('OP number falls back to the local counter without a database', () async {
+    // Postgres fora do ar: `nextOrderSequence` devolve null e a OP ainda nasce,
+    // com numero local, para o app seguir funcionando offline.
+    final database = _RecordingProductionFlowDatabase();
+    final store = ProductionFlowStore(database: database);
+
+    final created = await store.createOrder(
+      productCode: '575-0845',
+      productName: 'SUB MEC SMART MODULO SIRENE SF',
+      quantity: 10,
+      priority: 'Media',
+      operatorName: 'Tatiane',
+      orderWarehouse: '05',
+    );
+
+    expect(created.number, startsWith('OP-'));
+    expect(database.sequenceCalls, 1);
+    expect(database.savedOrders.single.number, created.number);
+  });
+
   test(
     'cancel order sends stock return choices to the configured database',
     () async {
@@ -2024,6 +2080,18 @@ class _RecordingProductionFlowDatabase implements ProductionFlowDatabase {
   final deletedOrders = <ProductionOrderFlow>[];
   final deletedCatalogItems = <ProductionCatalogItem>[];
   final deletedReturnWarehouses = <Map<String, String>>[];
+
+  /// Numeros que o "banco" devolveu. `null` faz o store cair no contador local.
+  int? nextSequence;
+  var sequenceCalls = 0;
+
+  @override
+  Future<int?> nextOrderSequence() async {
+    sequenceCalls++;
+    final reserved = nextSequence;
+    if (reserved != null) nextSequence = reserved + 1;
+    return reserved;
+  }
 
   @override
   Future<void> deleteOrder(

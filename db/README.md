@@ -13,14 +13,14 @@ O app centraliza os defaults em `lib/data/repositories/postgres_settings.dart`.
 Por padrao, ele procura:
 
 ```text
-postgresql://postgres@localhost:5432/vettiflow
+postgresql://postgres@localhost:5432/vettip12
 ```
 
-Na maquina do Vitor/macOS, quando a copia do Protheus estiver em `vettip12`,
+Na maquina do Leonardo/Windows, onde a copia do Protheus vive em `vettiflow`,
 rode o app informando o banco:
 
 ```bash
-flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettip12
+flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettiflow
 ```
 
 As demais chaves continuam disponiveis:
@@ -57,6 +57,58 @@ psql -h localhost -U postgres -d vettip12 -v ON_ERROR_STOP=1 \
 O passo 3 substitui o `tools/import_protheus_export_to_postgres.ps1`, que existe
 para a maquina do Leonardo (onde a origem e o export em CSV/JSON). Aqui a origem
 ja esta no Postgres, entao e so converter cada linha em `jsonb`.
+
+## Duas maquinas no mesmo banco
+
+Para o app de outra maquina apontar para este Postgres em vez de manter uma
+copia propria. O app fala direto com o banco (as tabelas do fluxo nao passam
+pela API), entao e a porta 5432 que precisa abrir.
+
+**1. Role dedicada.** Nunca exponha a `postgres` na rede: ela e superusuaria e o
+`pg_hba.conf` local a aceita em `trust`, sem senha.
+
+```bash
+psql -h localhost -U postgres -d vettip12 -v ON_ERROR_STOP=1 \
+     -v senha="'senha-forte-aqui'" -f db/local/grant_remote_app_access.sql
+```
+
+O script tambem passa a posse do schema `vettiflow` para a role — o app roda
+`ALTER TABLE`/`CREATE TABLE IF NOT EXISTS` sozinho ao abrir, e isso exige ser
+dono, nao basta `GRANT`.
+
+**2. Servidor ouvindo na rede.** Em
+`~/Library/Application Support/Postgres/var-18/postgresql.conf`:
+
+```text
+listen_addresses = '*'
+```
+
+**3. Liberar so o IP do outro, com senha.** No `pg_hba.conf` da mesma pasta,
+*acima* das linhas existentes:
+
+```text
+host    vettip12    vettiflow_app    <ip-da-outra-maquina>/32    scram-sha-256
+```
+
+As linhas `trust` que ja estao la valem so para `127.0.0.1` — deixe assim. Nunca
+troque o `/32` por uma faixa aberta.
+
+**4. Reiniciar** o Postgres.app e conferir de fora:
+
+```bash
+psql -h <ip-do-servidor> -U vettiflow_app -d vettip12 -c "select count(*) from vettiflow.production_orders;"
+```
+
+**5. Apontar o app da outra maquina:**
+
+```bash
+flutter run --dart-define=VETTIFLOW_PG_HOST=<ip-do-servidor> --dart-define=VETTIFLOW_PG_DATABASE=vettip12 --dart-define=VETTIFLOW_PG_USER=vettiflow_app --dart-define=VETTIFLOW_PG_PASSWORD=senha-forte-aqui
+```
+
+Vale saber: o numero da OP sai da sequence `vettiflow.production_order_number_seq`
+(migration 023), justamente para dois apps no mesmo banco nunca gerarem o mesmo
+`OP-<ano>-N`. O IP do servidor precisa ser fixo, e a maquina que hospeda o
+Postgres nao pode dormir — o Postgres.app roda na sessao do usuario.
 
 ## Postgres local no Windows
 

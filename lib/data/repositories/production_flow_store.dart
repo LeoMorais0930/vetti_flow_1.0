@@ -99,7 +99,7 @@ class ProductionFlowStore extends ChangeNotifier {
       throw StateError('Informe o PIN para movimentar o Protheus.');
     }
     _catalogOverrides[product.code] = product;
-    final number = 'OP-${now.year}-${_nextSequence++}';
+    final number = 'OP-${now.year}-${await _reserveSequence()}';
     final order = ProductionOrderFlow(
       number: number,
       productCode: product.code,
@@ -531,6 +531,24 @@ class ProductionFlowStore extends ChangeNotifier {
       debugPrintStack(stackTrace: stackTrace);
       rethrow;
     }
+  }
+
+  /// Reserva o numero da proxima OP.
+  ///
+  /// O banco e a fonte da verdade: `nextval` e atomico, entao duas maquinas no
+  /// mesmo Postgres nunca recebem o mesmo numero. O contador local so entra
+  /// quando o banco esta fora do ar — e ai a OP fica no cache ate voltar.
+  Future<int> _reserveSequence() async {
+    try {
+      final reserved = await database.nextOrderSequence();
+      if (reserved != null) {
+        if (reserved >= _nextSequence) _nextSequence = reserved + 1;
+        return reserved;
+      }
+    } catch (error) {
+      debugPrint('Erro ao reservar numero de OP no Postgres: $error');
+    }
+    return _nextSequence++;
   }
 
   int _nextSequenceFrom(List<ProductionOrderFlow> orders) {

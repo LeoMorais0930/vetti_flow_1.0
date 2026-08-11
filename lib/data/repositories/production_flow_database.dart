@@ -17,6 +17,15 @@ class ProductionFlowSnapshot {
 
 abstract class ProductionFlowDatabase {
   Future<ProductionFlowSnapshot> loadSnapshot();
+
+  /// Proximo numero de OP, reservado no banco.
+  ///
+  /// Devolve `null` quando nao ha banco para reservar (offline, ou o
+  /// [EmptyProductionFlowDatabase] dos testes); nesse caso quem chama cai no
+  /// contador local. Com o banco de pe o numero e unico entre todas as
+  /// maquinas que compartilham o Postgres.
+  Future<int?> nextOrderSequence();
+
   Future<void> saveOrder(
     ProductionOrderFlow order,
     ProductionCatalogItem catalogItem, {
@@ -49,6 +58,9 @@ class EmptyProductionFlowDatabase implements ProductionFlowDatabase {
   Future<ProductionFlowSnapshot> loadSnapshot() async {
     return const ProductionFlowSnapshot(orders: [], catalogItems: []);
   }
+
+  @override
+  Future<int?> nextOrderSequence() async => null;
 
   @override
   Future<void> saveOrder(
@@ -185,6 +197,19 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     }).toList();
 
     return ProductionFlowSnapshot(orders: orders, catalogItems: catalogItems);
+  }
+
+  @override
+  Future<int?> nextOrderSequence() async {
+    final conn = await _open();
+    final rows = await conn.execute(
+      "SELECT nextval('vettiflow.production_order_number_seq') AS value",
+      timeout: const Duration(seconds: 8),
+    );
+    final value = rows.first.toColumnMap()['value'];
+    if (value is int) return value;
+    if (value is BigInt) return value.toInt();
+    return int.tryParse('$value');
   }
 
   @override
@@ -1289,6 +1314,30 @@ class PostgresProductionFlowDatabase implements ProductionFlowDatabase {
     await conn.execute('''
       ALTER TABLE IF EXISTS vettiflow.production_components
       ADD COLUMN IF NOT EXISTS structure_sequence text NOT NULL DEFAULT ''
+    ''', timeout: const Duration(seconds: 8));
+    await conn.execute('''
+      CREATE SEQUENCE IF NOT EXISTS vettiflow.production_order_number_seq
+        AS bigint START WITH 564351 MINVALUE 1
+    ''', timeout: const Duration(seconds: 8));
+    // So semeia se a sequence nunca foi usada (`last_value` nulo em
+    // `pg_sequences`). Sem essa guarda, um app subindo depois que outra maquina
+    // reservou um numero mas ainda nao gravou a OP jogaria o contador para tras.
+    await conn.execute('''
+      SELECT setval('vettiflow.production_order_number_seq', s.value, true)
+      FROM (
+        SELECT GREATEST(
+                 564350,
+                 COALESCE(max(split_part(number, '-', 3)::bigint), 0)
+               ) AS value
+        FROM vettiflow.production_orders
+        WHERE split_part(number, '-', 3) ~ '^[0-9]+\$'
+      ) AS s
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_sequences
+        WHERE schemaname = 'vettiflow'
+          AND sequencename = 'production_order_number_seq'
+          AND last_value IS NOT NULL
+      )
     ''', timeout: const Duration(seconds: 8));
     _schemaChecked = true;
   }
