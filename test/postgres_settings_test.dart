@@ -5,7 +5,7 @@ void main() {
   test('centraliza os defaults de conexao do Postgres', () {
     expect(PostgresSettings.defaultHost, 'localhost');
     expect(PostgresSettings.defaultPort, 5432);
-    expect(PostgresSettings.defaultDatabase, 'vettiflow');
+    expect(PostgresSettings.defaultDatabase, 'vettip12');
     expect(PostgresSettings.defaultUsername, 'postgres');
     expect(PostgresSettings.defaultPassword, '093003');
   });
