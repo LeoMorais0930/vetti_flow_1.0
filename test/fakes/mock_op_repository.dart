@@ -3,6 +3,7 @@ import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_publisher.dart';
 
 class MockOpRepository implements OpRepository {
   final List<OrdemProducao> _ordens = [
@@ -227,6 +228,9 @@ class MockOpRepository implements OpRepository {
   @override
   Future<List<OrdemArmazenada>> fetchOrdensArmazenadas() async =>
       List.unmodifiable(_armazenadas);
+
+  @override
+  ProtheusPublishOutcome? get ultimoEnvioProtheus => null;
 
   @override
   Future<OrdemProducao> criarOrdem(NovaOrdemDTO dto) async {

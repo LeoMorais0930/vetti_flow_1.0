@@ -73,6 +73,75 @@ class MutationSyncService extends ChangeNotifier {
     }
   }
 
+  /// Manda uma mutacao sozinha e ja aplica: armazenar e finalizar em seguida.
+  ///
+  /// Diferente de [sync], que empurra a fila inteira, aqui so esta mutacao
+  /// anda — abrir uma OP nao pode arrastar junto o que alguem deixou pendente
+  /// de proposito. Devolve o status em que a mutacao parou; qualquer coisa
+  /// diferente de [MutationStatus.enviado] significa que o Protheus nao foi
+  /// gravado, e o motivo fica no `erro` da mutacao.
+  Future<MutationStatus> enviarEFinalizar(PendingMutation mutation) async {
+    _lastError = null;
+    store.updateStatus(mutation.id, status: MutationStatus.enviando);
+
+    try {
+      final armazenada = _resultadoDe(
+        await client.push([mutation]),
+        mutation.id,
+      );
+      if (armazenada == null) {
+        store.updateStatus(
+          mutation.id,
+          status: MutationStatus.pendente,
+          erro: 'a API nao respondeu sobre esta mutacao',
+        );
+        return MutationStatus.pendente;
+      }
+
+      store.updateStatus(
+        mutation.id,
+        status: armazenada.status,
+        erro: armazenada.erro,
+        protheusRef: armazenada.protheusRef,
+      );
+      if (armazenada.status != MutationStatus.armazenado) {
+        return armazenada.status;
+      }
+
+      final aplicada = _resultadoDe(
+        await client.finalizar([mutation.id]),
+        mutation.id,
+      );
+      if (aplicada == null) return MutationStatus.armazenado;
+
+      store.updateStatus(
+        mutation.id,
+        status: aplicada.status,
+        erro: aplicada.erro,
+        protheusRef: aplicada.protheusRef,
+      );
+      _lastSyncAt = DateTime.now();
+      return aplicada.status;
+    } on SyncUnavailableException catch (error) {
+      store.updateStatus(
+        mutation.id,
+        status: MutationStatus.pendente,
+        erro: error.motivo,
+      );
+      _lastError = error.motivo;
+      return MutationStatus.pendente;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  MutationResult? _resultadoDe(List<MutationResult> results, String id) {
+    for (final result in results) {
+      if (result.id == id) return result;
+    }
+    return null;
+  }
+
   Future<int> finalizar(List<String> ids) async {
     if (_finalizing || ids.isEmpty) return 0;
 

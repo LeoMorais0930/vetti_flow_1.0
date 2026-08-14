@@ -126,10 +126,15 @@ Rodam contra o banco configurado em `VF_DSN` e desfazem o que fizeram.
 | `VF_API_TOKEN`    | vazio                                    | Exigido em `X-API-Token`; vazio = só loopback |
 | `VF_CORS_ORIGINS` | `*`                                      | Origens aceitas, separadas por vírgula       |
 
-O `VF_DSN` aqui usa a role **`postgres`**, não a `vettiflow_app`. A API roda na
-mesma máquina do banco e precisa criar/gravar a tabela de auditoria
-`vf_mutations` — a `vettiflow_app` só tem `SELECT` no schema `public` e a API
-morre no startup com ela. A role restrita existe para o acesso pela rede.
+O `VF_DSN` usa a role **`postgres`**: a API roda na mesma máquina do banco e
+precisa criar/gravar a tabela de auditoria `vf_mutations`, então uma role só de
+leitura morre no startup. Existiu uma role restrita `vettiflow_app` para acesso
+pela rede; ela foi removida em 14/08/2026, quando cada máquina voltou a ter a
+própria cópia do `vettip12` (ver `db/README.md`).
+
+Cada dev tem o próprio `api/.env`, que **não entra no Git** — o modelo versionado
+é o `api/.env.example`. É ele que guarda DSN, token e senha de cada máquina sem
+gerar conflito.
 
 ## Acesso de outra máquina
 

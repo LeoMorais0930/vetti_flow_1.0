@@ -138,7 +138,8 @@ class _WarehousePageState extends State<WarehousePage> {
     required int quantity,
     required String priority,
   }) async {
-    final order = await context.read<ProductionFlowStore>().createOrder(
+    final store = context.read<ProductionFlowStore>();
+    final order = await store.createOrder(
       productCode: productCode,
       quantity: quantity,
       priority: priority,
@@ -148,6 +149,27 @@ class _WarehousePageState extends State<WarehousePage> {
     setState(() {
       _selectedIndex = 0;
     });
+
+    final envio = store.protheusOutcome(order.number);
+    if (envio != null && !envio.gravouNoProtheus) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 12),
+            content: Text(
+              '${order.number} criada no Almoxarifado, mas ${envio.aviso}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${order.number} criada no Almoxarifado.')),
     );

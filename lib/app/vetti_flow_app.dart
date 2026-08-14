@@ -8,6 +8,7 @@ import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart'
 import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_database.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_publisher.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_connection_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_product_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_sync_client.dart';
@@ -55,9 +56,29 @@ class VettiFlowApp extends StatelessWidget {
               ? PostgresProductionFlowDatabase()
               : const EmptyProductionFlowDatabase(),
         ),
+        // A fila de mutacoes nasce antes do fluxo de producao: abrir OP ja
+        // manda para o Protheus, entao o store precisa do publicador pronto.
+        ChangeNotifierProvider<PendingMutationStore>(
+          create: (_) => PendingMutationStore(),
+        ),
+        Provider<ProtheusSyncClient>(
+          create: (_) =>
+              ProtheusSyncClient(baseUrl: _apiBaseUrl, apiToken: _apiToken),
+          dispose: (_, client) => client.dispose(),
+        ),
+        ChangeNotifierProvider<MutationSyncService>(
+          create: (context) => MutationSyncService(
+            store: context.read<PendingMutationStore>(),
+            client: context.read<ProtheusSyncClient>(),
+          ),
+        ),
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (context) => ProductionFlowStore(
             database: context.read<ProductionFlowDatabase>(),
+            protheusPublisher: MutationProtheusOrderPublisher(
+              mutations: context.read<PendingMutationStore>(),
+              sync: context.read<MutationSyncService>(),
+            ),
           ),
         ),
         ChangeNotifierProvider<OperatorAssignmentStore>(
@@ -72,20 +93,6 @@ class VettiFlowApp extends StatelessWidget {
             database: _useDirectPostgres()
                 ? PostgresWarehouseRequestDatabase()
                 : const EmptyWarehouseRequestDatabase(),
-          ),
-        ),
-        ChangeNotifierProvider<PendingMutationStore>(
-          create: (_) => PendingMutationStore(),
-        ),
-        Provider<ProtheusSyncClient>(
-          create: (_) =>
-              ProtheusSyncClient(baseUrl: _apiBaseUrl, apiToken: _apiToken),
-          dispose: (_, client) => client.dispose(),
-        ),
-        ChangeNotifierProvider<MutationSyncService>(
-          create: (context) => MutationSyncService(
-            store: context.read<PendingMutationStore>(),
-            client: context.read<ProtheusSyncClient>(),
           ),
         ),
         ProxyProvider<ProtheusConnectionStore, ProtheusProductRepository>(

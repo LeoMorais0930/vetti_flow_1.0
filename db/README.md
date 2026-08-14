@@ -58,67 +58,44 @@ O passo 3 substitui o `tools/import_protheus_export_to_postgres.ps1`, que existe
 para a maquina do Leonardo (onde a origem e o export em CSV/JSON). Aqui a origem
 ja esta no Postgres, entao e so converter cada linha em `jsonb`.
 
-## Duas maquinas no mesmo banco
+## Uma copia por maquina
 
-Para o app de outra maquina apontar para este Postgres em vez de manter uma
-copia propria. O app fala direto com o banco (as tabelas do fluxo nao passam
-pela API), entao e a porta 5432 que precisa abrir.
+Cada dev roda o proprio Postgres, com **o mesmo nome de banco, de schemas e de
+tabelas** nos dois lados (`vettip12`; `public`, `protheus_raw`, `vettiflow`). E
+essa igualdade de nomes que deixa o mesmo codigo e o mesmo SQL rodarem aqui e la
+sem ajuste.
 
-**1. Role dedicada.** Nunca exponha a `postgres` na rede: ela e superusuaria e o
-`pg_hba.conf` local a aceita em `trust`, sem senha.
+Entre 11/08 e 14/08/2026 o Mac do Vitor serviu as duas maquinas pela rede, com
+uma role `vettiflow_app` travada no IP do outro. **Isso foi desfeito em
+14/08/2026**: `listen_addresses` voltou para `localhost`, a linha do `pg_hba.conf`
+saiu e a role foi removida (com `REASSIGN OWNED ... TO postgres` antes, porque
+ela era dona do schema `vettiflow`). O Postgres so aceita conexao local.
 
-```bash
-psql -h localhost -U postgres -d vettip12 -v ON_ERROR_STOP=1 \
-     -v senha="'senha-forte-aqui'" -f db/local/grant_remote_app_access.sql
+Para escrever no Protheus, o caminho combinado agora e a FastAPI, nao o Postgres
+direto:
+
+```text
+Flutter -> FastAPI -> PostgreSQL/Protheus
 ```
 
-O script tambem passa a posse do schema `vettiflow` para a role — o app roda
-`ALTER TABLE`/`CREATE TABLE IF NOT EXISTS` sozinho ao abrir, e isso exige ser
-dono, nao basta `GRANT`.
+Ver `api/README.md`. O modo Postgres direto continua existindo para
+desenvolvimento local.
 
-No lado Protheus a role tem `SELECT`, `INSERT`, `UPDATE` e `DELETE` em todo o
-schema `protheus_raw` — as duas maquinas trabalham a copia em pe de igualdade. E
-o app que move essas tabelas, direto pelo Postgres: abertura de OP grava SC2 e
-SD4, a baixa grava SD3, e o saldo da SB2 anda junto.
+Se o seu banco tiver so `protheus_raw.*` e faltarem as tabelas fisicas que a API
+de mutacoes usa (`public.sc2010`, `public.sd4010`, `public.sb2010`, ...):
 
-Se a copia sair torta, ela se refaz do zero com
+```bash
+psql -d vettip12 -f db/local/create_public_protheus_tables_from_raw.sql
+```
+
+E seguro rodar mais de uma vez — nao duplica registro.
+
+Se a copia do `protheus_raw` sair torta, ela se refaz do zero com
 `db/local/load_protheus_raw_from_vettip12.sql`, que le do schema `public` do
-proprio banco. O `public` continua so leitura para a role, entao a fonte da
-recarga esta protegida.
-
-**2. Servidor ouvindo na rede.** Em
-`~/Library/Application Support/Postgres/var-18/postgresql.conf`:
-
-```text
-listen_addresses = '*'
-```
-
-**3. Liberar so o IP do outro, com senha.** No `pg_hba.conf` da mesma pasta,
-*acima* das linhas existentes:
-
-```text
-host    vettip12    vettiflow_app    <ip-da-outra-maquina>/32    scram-sha-256
-```
-
-As linhas `trust` que ja estao la valem so para `127.0.0.1` — deixe assim. Nunca
-troque o `/32` por uma faixa aberta.
-
-**4. Reiniciar** o Postgres.app e conferir de fora:
-
-```bash
-psql -h <ip-do-servidor> -U vettiflow_app -d vettip12 -c "select count(*) from vettiflow.production_orders;"
-```
-
-**5. Apontar o app da outra maquina:**
-
-```bash
-flutter run --dart-define=VETTIFLOW_PG_HOST=<ip-do-servidor> --dart-define=VETTIFLOW_PG_DATABASE=vettip12 --dart-define=VETTIFLOW_PG_USER=vettiflow_app --dart-define=VETTIFLOW_PG_PASSWORD=senha-forte-aqui
-```
+proprio banco.
 
 Vale saber: o numero da OP sai da sequence `vettiflow.production_order_number_seq`
-(migration 023), justamente para dois apps no mesmo banco nunca gerarem o mesmo
-`OP-<ano>-N`. O IP do servidor precisa ser fixo, e a maquina que hospeda o
-Postgres nao pode dormir — o Postgres.app roda na sessao do usuario.
+(migration 023), para dois apps nunca gerarem o mesmo `OP-<ano>-N`.
 
 ## Postgres local no Windows
 

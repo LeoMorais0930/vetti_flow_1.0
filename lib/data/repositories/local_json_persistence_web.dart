@@ -7,6 +7,10 @@ class LocalJsonPersistence {
 
   final String key;
 
+  /// Sem efeito no navegador, onde o storage e o do proprio browser. Fica aqui
+  /// so para a superficie bater com a implementacao de `dart:io`.
+  static String? directoryOverride;
+
   String? read() => web.window.localStorage.getItem(key);
 
   void write(String payload) {

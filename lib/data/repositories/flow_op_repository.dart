@@ -4,6 +4,7 @@ import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_publisher.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_product_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_request_store.dart';
 import 'package:vetti_flow_1_0/shared/models/operator.dart';
@@ -22,6 +23,8 @@ class FlowOpRepository implements OpRepository {
   final ProductionFlowStore _store;
   final ProtheusProductRepository protheusProducts;
   final WarehouseRequestStore? warehouseRequests;
+
+  ProtheusPublishOutcome? _ultimoEnvioProtheus;
 
   static const _meses = [
     'jan',
@@ -152,8 +155,12 @@ class FlowOpRepository implements OpRepository {
       orderWarehouse: dto.armazem,
       requestedBy: dto.openedBy ?? dto.responsavel,
     );
+    _ultimoEnvioProtheus = _store.protheusOutcome(order.number);
     return _toOrdem(order);
   }
+
+  @override
+  ProtheusPublishOutcome? get ultimoEnvioProtheus => _ultimoEnvioProtheus;
 
   @override
   Future<ProtheusProductLookup?> lookupProdutoPorCodigo(String code) async {

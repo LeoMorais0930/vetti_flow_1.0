@@ -15,6 +15,7 @@ import 'package:vetti_flow_1_0/data/models/responsavel.dart';
 import 'package:vetti_flow_1_0/data/models/warehouse_request.dart';
 import 'package:vetti_flow_1_0/data/repositories/mutation_sync_service.dart';
 import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_publisher.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
@@ -357,6 +358,9 @@ class _FullSmokeRepository implements OpRepository {
       ],
     );
   }
+
+  @override
+  ProtheusPublishOutcome? get ultimoEnvioProtheus => null;
 
   @override
   Future<OrdemProducao> criarOrdem(NovaOrdemDTO dto) async {

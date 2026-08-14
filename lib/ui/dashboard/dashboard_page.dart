@@ -25,6 +25,7 @@ import 'package:vetti_flow_1_0/ui/dashboard/widgets/nova_op_dialog.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/op_detail_panel.dart';
 import 'package:vetti_flow_1_0/ui/dashboard/widgets/sidebar.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/firmware_completion_dialogs.dart';
+import 'package:vetti_flow_1_0/ui/protheus/fila_protheus_page.dart';
 import 'package:vetti_flow_1_0/ui/firmware/widgets/firmware_models.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -59,19 +60,63 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isDesktop = constraints.maxWidth >= 920;
-            if (isDesktop) return _DesktopLayout(constraints: constraints);
-            return _MobileLayout(constraints: constraints);
-          },
+    return BlocListener<DashboardCubit, DashboardState>(
+      listenWhen: (antes, agora) =>
+          antes.protheusAviso != agora.protheusAviso &&
+          agora.protheusAviso.isNotEmpty,
+      listener: (context, state) {
+        _avisarProtheusForaDoAr(context, state.protheusAviso);
+        context.read<DashboardCubit>().limparAvisoProtheus();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth >= 920;
+              if (isDesktop) return _DesktopLayout(constraints: constraints);
+              return _MobileLayout(constraints: constraints);
+            },
+          ),
         ),
       ),
     );
   }
+}
+
+/// A OP existe no VettiFlow mas nao no Protheus. Fica longo de proposito: o
+/// operador precisa saber que a SC2/SD4 nao foram gravadas e que ha trabalho
+/// pendente na fila, senao ele segue achando que a OP esta no ERP.
+void _avisarProtheusForaDoAr(BuildContext context, String aviso) {
+  ScaffoldMessenger.of(context)
+    ..clearSnackBars()
+    ..showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.danger,
+        duration: const Duration(seconds: 12),
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                aviso,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Ver fila',
+          textColor: Colors.white,
+          onPressed: () => Navigator.of(context).pushNamed(FilaProtheusPage.rota),
+        ),
+      ),
+    );
 }
 
 class _DesktopLayout extends StatelessWidget {

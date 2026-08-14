@@ -229,7 +229,8 @@ class DashboardCubit extends Cubit<DashboardState> {
       ),
     );
     try {
-      await _repository.criarOrdem(dto);
+      final criada = await _repository.criarOrdem(dto);
+      final envio = _repository.ultimoEnvioProtheus;
       final ordens = await _repository.fetchOrdens();
       final armazenadas = await _repository.fetchOrdensArmazenadas();
       final produtos = await _repository.fetchProdutos();
@@ -241,12 +242,22 @@ class DashboardCubit extends Cubit<DashboardState> {
           novaOPOpen: false,
           databaseSyncing: false,
           databaseSyncMessage: '',
+          protheusAviso: envio == null || envio.gravouNoProtheus
+              ? ''
+              : '${criada.numero}: ${envio.aviso}',
         ),
       );
     } catch (_) {
       emit(state.copyWith(databaseSyncing: false, databaseSyncMessage: ''));
       rethrow;
     }
+  }
+
+  /// Some com o aviso depois que a tela ja mostrou, para nao repetir a cada
+  /// rebuild.
+  void limparAvisoProtheus() {
+    if (state.protheusAviso.isEmpty) return;
+    emit(state.copyWith(protheusAviso: ''));
   }
 
   void openFiltros() {

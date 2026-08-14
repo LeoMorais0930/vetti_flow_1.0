@@ -4,10 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_database.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_persistence.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_publisher.dart';
 
 class ProductionFlowStore extends ChangeNotifier {
   ProductionFlowStore({
     this.database = const EmptyProductionFlowDatabase(),
+    this.protheusPublisher,
+    this.filial = '04',
     List<ProductionOrderFlow> seedOrders = const [],
   }) {
     if (!_restore(_persistence.read())) {
@@ -21,10 +24,29 @@ class ProductionFlowStore extends ChangeNotifier {
   }
 
   final ProductionFlowDatabase database;
+
+  /// Quem leva a abertura de OP ate a SC2/SD4. Nulo desliga o envio — e o que
+  /// os testes e o modo offline usam.
+  final ProtheusOrderPublisher? protheusPublisher;
+  final String filial;
+
   final _persistence = ProductionFlowPersistence();
   final _orders = <ProductionOrderFlow>[];
   final _catalogOverrides = <String, ProductionCatalogItem>{};
+  final _protheusOutcomes = <String, ProtheusPublishOutcome>{};
   var _nextSequence = 564351;
+
+  /// Como foi a ida da OP ao Protheus. `null` quando nao houve tentativa.
+  ///
+  /// Vale ler logo depois de [createOrder]: ele so retorna depois de tentar.
+  ProtheusPublishOutcome? protheusOutcome(String number) =>
+      _protheusOutcomes[number];
+
+  /// OPs criadas que nao chegaram ao Protheus.
+  List<String> get ordersNotInProtheus => [
+    for (final entry in _protheusOutcomes.entries)
+      if (!entry.value.gravouNoProtheus) entry.key,
+  ];
 
   static const catalog = <ProductionCatalogItem>[];
 
@@ -123,7 +145,41 @@ class ProductionFlowStore extends ChangeNotifier {
     _persist();
     notifyListeners();
     await _syncOrder(order, 'created');
+    await _publishToProtheus(order, product);
     return order;
+  }
+
+  /// Tenta gravar a OP no Protheus e guarda o resultado, sucesso ou nao.
+  ///
+  /// Nao propaga excecao de proposito: a OP ja existe no fluxo do app e nao
+  /// pode sumir porque a API caiu. O que nao pode acontecer e ficar em
+  /// silencio — por isso o resultado fica em [protheusOutcome] para a tela
+  /// avisar.
+  Future<void> _publishToProtheus(
+    ProductionOrderFlow order,
+    ProductionCatalogItem product,
+  ) async {
+    final publisher = protheusPublisher;
+    if (publisher == null) return;
+
+    ProtheusPublishOutcome outcome;
+    try {
+      outcome = await publisher.publishOrder(
+        order: order,
+        product: product,
+        filial: filial,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Erro ao enviar ${order.number} ao Protheus: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      outcome = ProtheusPublishOutcome.naFila(
+        mutationId: '',
+        motivo: '$error',
+      );
+    }
+
+    _protheusOutcomes[order.number] = outcome;
+    notifyListeners();
   }
 
   Future<void> startStage(

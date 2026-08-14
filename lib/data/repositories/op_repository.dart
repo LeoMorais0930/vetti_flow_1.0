@@ -2,6 +2,7 @@ import 'package:vetti_flow_1_0/data/models/ordem_producao.dart';
 import 'package:vetti_flow_1_0/data/models/protheus_product_lookup.dart';
 import 'package:vetti_flow_1_0/data/models/production_flow.dart';
 import 'package:vetti_flow_1_0/data/models/responsavel.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_order_publisher.dart';
 
 class NovaOrdemDTO {
   final String produto;
@@ -41,6 +42,14 @@ abstract class OpRepository {
   Future<List<OrdemProducao>> fetchOrdens();
   Future<List<OrdemArmazenada>> fetchOrdensArmazenadas();
   Future<OrdemProducao> criarOrdem(NovaOrdemDTO dto);
+
+  /// Como foi a ida ao Protheus da ultima OP aberta por [criarOrdem].
+  ///
+  /// `null` quando nao houve tentativa (repositorio mock, modo offline). Quem
+  /// implementa de verdade sobrescreve; a tela le logo apos o `await` para
+  /// avisar o operador quando a SC2/SD4 nao foram gravadas.
+  ProtheusPublishOutcome? get ultimoEnvioProtheus => null;
+
   Future<void> avancarStatus(
     String numero, {
     int quantidadeArmazenada = 0,
