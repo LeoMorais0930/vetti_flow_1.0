@@ -286,6 +286,36 @@ void main() {
     expect(lookup?.components.single.childOrders.single.number, '01595801001');
   });
 
+  test('API repository sends configured token header', () async {
+    final repository = ApiProtheusProductRepository(
+      baseUrl: 'http://api.local',
+      apiToken: 'segredo-teste',
+      httpClient: MockClient((request) async {
+        expect(request.headers['X-API-Token'], 'segredo-teste');
+        return http.Response(
+          jsonEncode({
+            'filial': '04',
+            'armazem': '05',
+            'product': {
+              'filial': '04',
+              'code': '730-0863',
+              'description': 'SMART ALARM',
+              'type': 'PA',
+              'unit': 'PC',
+              'group': '730',
+            },
+            'components': [],
+            'smdReleaseOrders': [],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    await repository.lookupByCode('730-0863');
+  });
+
   test(
     'API-first repository falls back to local Postgres repository',
     () async {

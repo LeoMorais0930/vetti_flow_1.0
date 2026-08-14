@@ -38,20 +38,34 @@ class SyncUnavailableException implements Exception {
 }
 
 class ProtheusSyncClient {
-  ProtheusSyncClient({required this.baseUrl, http.Client? httpClient})
-    : _http = httpClient ?? http.Client();
+  ProtheusSyncClient({
+    required this.baseUrl,
+    this.apiToken = '',
+    http.Client? httpClient,
+  }) : _http = httpClient ?? http.Client();
 
   final String baseUrl;
+  final String apiToken;
   final http.Client _http;
 
   static const _timeout = Duration(seconds: 20);
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
+  Map<String, String> _headers({bool json = false}) {
+    final token = apiToken.trim().isNotEmpty
+        ? apiToken.trim()
+        : ApiSettings.token;
+    return {
+      if (json) 'Content-Type': 'application/json',
+      if (token.isNotEmpty) 'X-API-Token': token,
+    };
+  }
+
   Future<bool> health() async {
     try {
       final response = await _http
-          .get(_uri('/api/v1/health'), headers: ApiSettings.headers())
+          .get(_uri('/api/v1/health'), headers: _headers())
           .timeout(_timeout);
       return response.statusCode == 200;
     } catch (_) {
@@ -67,7 +81,7 @@ class ProtheusSyncClient {
       response = await _http
           .post(
             _uri('/api/v1/mutations'),
-            headers: ApiSettings.headers(json: true),
+            headers: _headers(json: true),
             body: jsonEncode({
               'mutations': [
                 for (final mutation in mutations) mutation.toJson(),
@@ -104,7 +118,7 @@ class ProtheusSyncClient {
       response = await _http
           .post(
             _uri('/api/v1/finalizar'),
-            headers: ApiSettings.headers(json: true),
+            headers: _headers(json: true),
             body: jsonEncode({'ids': ids}),
           )
           .timeout(_timeout);

@@ -191,13 +191,13 @@ class _NovaOpDialogState extends State<NovaOpDialog> {
         _isLookingUp = false;
       });
     } catch (e, st) {
-      debugPrint('Erro ao consultar produto no Postgres: $e');
+      debugPrint('Erro ao consultar produto no Protheus/FastAPI: $e');
       debugPrintStack(stackTrace: st);
       if (!mounted || request != _lookupRequest) return;
       setState(() {
         _lookup = null;
         _produtoController.clear();
-        _lookupMessage = 'Não consegui consultar o Postgres agora.';
+        _lookupMessage = 'Não consegui consultar o Protheus/FastAPI agora.';
         _isLookingUp = false;
         _showAllCommitments = false;
         _openComponentWarehousePickers.clear();

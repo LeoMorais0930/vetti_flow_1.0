@@ -4,7 +4,7 @@ O que cada uma toca:
 
 - **abertura de OP**  -> SC2 (a ordem) + SD4 (os empenhos) + SB2 (`b2_qemp`)
 - **empenho**         -> SD4 + SB2 (`b2_qemp`)
-- **transferência**   -> SB2 (`b2_qatu` nas duas pontas)
+- **transferência**   -> SB2 (`b2_qatu` nas duas pontas) + SD3 (`RE4`/`DE4`)
 
 Isto é o comportamento do Protheus reconstruído a partir das tabelas, não uma
 chamada ao ERP. Existe para ver o efeito real das mutações — quais linhas
@@ -25,6 +25,19 @@ class RecusaProtheus(Exception):
     """
 
 
+_SF5_EXPECTED_TYPE = {
+    "PR0": "P",
+    "PR1": "P",
+    "RE1": "R",
+    "RE4": "R",
+    "DE4": "D",
+    # ER é estorno de produção, mas a SF5 só classifica como D/P/R. Mantemos
+    # P até a SF5 real da Vetti dizer outro fluxo.
+    "ER0": "P",
+    "ER1": "P",
+}
+
+
 def _data_protheus(br: str | None) -> str:
     """`31/07/2026` -> `20260731`. Vazio vira hoje."""
     if not br:
@@ -36,6 +49,98 @@ def _data_protheus(br: str | None) -> str:
     if not (dia.isdigit() and mes.isdigit() and ano.isdigit()):
         raise RecusaProtheus(f"Data fora do formato dd/mm/aaaa: {br!r}")
     return f"{ano.zfill(4)}{mes.zfill(2)}{dia.zfill(2)}"
+
+
+def _relacao_existe(conn, nome: str) -> bool:
+    linha = conn.execute("SELECT to_regclass(%s) AS rel", (nome,)).fetchone()
+    return linha is not None and linha["rel"] is not None
+
+
+def _validar_tipo_movimento_sf5(conn, filial: str, cf: str) -> str:
+    """Valida o tipo de movimento contra a SF5 e devolve o D3_TM.
+
+    `D3_CF` guarda a família operacional (`PR0`, `RE1`, `RE4`, `DE4`), mas
+    `D3_TM` precisa apontar para um `F5_CODIGO` real. Na VM, ligue
+    `VF_REQUIRE_SF5_MOVEMENTS=1` e informe `VF_TM_RE1`/`VF_TM_PR0` etc.
+    """
+    cf = cf.strip().upper()
+    tm = config.SF5_TM_BY_CF.get(cf, "").strip()
+    esperado = _SF5_EXPECTED_TYPE.get(cf)
+
+    if not config.REQUIRE_SF5_MOVEMENTS:
+        return tm
+
+    if esperado is None:
+        raise RecusaProtheus(f"Tipo D3_CF {cf} não mapeado para validação SF5")
+    if not tm:
+        raise RecusaProtheus(
+            f"Configure VF_TM_{cf} com o F5_CODIGO da SF5 antes de gravar {cf}"
+        )
+
+    sf5 = db.config.tabela("SF5")
+    if not _relacao_existe(conn, sf5):
+        raise RecusaProtheus(
+            f"Tabela {sf5} não encontrada; não dá para validar D3_TM {tm}"
+        )
+
+    linha = conn.execute(
+        f"""
+        SELECT btrim(f5_codigo) AS codigo,
+               btrim(f5_tipo) AS tipo,
+               btrim(COALESCE(f5_texto, '')) AS descricao
+        FROM {sf5}
+        WHERE d_e_l_e_t_ <> '*'
+          AND (btrim(f5_filial) = %s OR btrim(f5_filial) = '')
+          AND btrim(f5_codigo) = %s
+        ORDER BY CASE WHEN btrim(f5_filial) = %s THEN 0 ELSE 1 END
+        LIMIT 1
+        """,
+        (filial, tm, filial),
+    ).fetchone()
+    if linha is None:
+        raise RecusaProtheus(f"SF5 não tem F5_CODIGO {tm} para {cf}")
+    if linha["tipo"] != esperado:
+        raise RecusaProtheus(
+            f"SF5 {tm} ({linha['descricao']}) é tipo {linha['tipo']}; "
+            f"{cf} exige tipo {esperado}"
+        )
+    return tm
+
+
+def _campos_movimento_sd3(conn, filial: str, cf: str) -> dict:
+    tm = _validar_tipo_movimento_sf5(conn, filial, cf)
+    return {
+        "d3_cf": cf,
+        **({"d3_tm": tm} if tm else {}),
+    }
+
+
+def _inserir_movimento_sd3(
+    conn,
+    *,
+    filial: str,
+    cf: str,
+    produto: str,
+    local: str,
+    quantidade: float,
+    doc: str,
+    emissao: str,
+    op: str = "",
+) -> None:
+    db.inserir(
+        conn,
+        db.config.tabela("SD3"),
+        {
+            "d3_filial": filial,
+            **_campos_movimento_sd3(conn, filial, cf),
+            "d3_cod": produto,
+            "d3_local": local,
+            "d3_quant": float(quantidade),
+            "d3_doc": doc,
+            "d3_emissao": emissao,
+            "d3_op": op,
+        },
+    )
 
 
 def _existe_produto(conn, codigo: str) -> bool:
@@ -385,10 +490,36 @@ def transferir(conn, mutacao) -> tuple[str, dict]:
 
     # Saldo negativo é permitido no Protheus e acontece de verdade quando o
     # material está a caminho — a API não bloqueia o que o ERP aceita.
+    sd3 = db.config.tabela("SD3")
+    doc = f"TR{db.proximo_recno(conn, sd3):07d}"
+    emissao = date.today().strftime("%Y%m%d")
+
+    _inserir_movimento_sd3(
+        conn,
+        filial=filial,
+        cf="RE4",
+        produto=p.produto,
+        local=p.localOrigem,
+        quantidade=p.quantidade,
+        doc=doc,
+        emissao=emissao,
+        op=getattr(p, "op", "") or "",
+    )
+    _inserir_movimento_sd3(
+        conn,
+        filial=filial,
+        cf="DE4",
+        produto=p.produto,
+        local=p.localDestino,
+        quantidade=p.quantidade,
+        doc=doc,
+        emissao=emissao,
+        op=getattr(p, "op", "") or "",
+    )
     _mexer_saldo(conn, filial, p.produto, p.localOrigem, qatu=-p.quantidade)
     _mexer_saldo(conn, filial, p.produto, p.localDestino, qatu=p.quantidade)
 
-    ref = f"TRF:{p.produto}:{p.localOrigem}>{p.localDestino}"
+    ref = f"SD3:{doc}"
     return ref, antes
 
 
@@ -440,19 +571,16 @@ def dar_baixa_producao(conn, mutacao) -> tuple[str, dict]:
     doc = f"BX{db.proximo_recno(conn, sd3):07d}"
     emissao = date.today().strftime("%Y%m%d")
 
-    db.inserir(
+    _inserir_movimento_sd3(
         conn,
-        sd3,
-        {
-            "d3_filial": filial,
-            "d3_cf": "PR0",
-            "d3_cod": p.produto,
-            "d3_local": p.localProducao,
-            "d3_quant": float(p.quantidadeProduzida),
-            "d3_doc": doc,
-            "d3_emissao": emissao,
-            "d3_op": p.op,
-        },
+        filial=filial,
+        cf="PR0",
+        produto=p.produto,
+        local=p.localProducao,
+        quantidade=p.quantidadeProduzida,
+        doc=doc,
+        emissao=emissao,
+        op=p.op,
     )
     _mexer_saldo(
         conn, filial, p.produto, p.localProducao, qatu=float(p.quantidadeProduzida)
@@ -470,19 +598,16 @@ def dar_baixa_producao(conn, mutacao) -> tuple[str, dict]:
                 f"Empenho de {c.produto} no almox. {c.local} não existe na OP {p.op}"
             )
 
-        db.inserir(
+        _inserir_movimento_sd3(
             conn,
-            sd3,
-            {
-                "d3_filial": filial,
-                "d3_cf": "RE1",
-                "d3_cod": c.produto,
-                "d3_local": c.local,
-                "d3_quant": float(c.quantidade),
-                "d3_doc": doc,
-                "d3_emissao": emissao,
-                "d3_op": p.op,
-            },
+            filial=filial,
+            cf="RE1",
+            produto=c.produto,
+            local=c.local,
+            quantidade=c.quantidade,
+            doc=doc,
+            emissao=emissao,
+            op=p.op,
         )
         conn.execute(
             f"""

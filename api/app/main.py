@@ -13,6 +13,7 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date
+from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -783,7 +784,7 @@ def empenhos(op: str, filial: str = config.FILIAL_PADRAO) -> list[dict]:
     produzidos"), não entra em conta de saldo nenhuma.
     """
     with db.conexao() as conn:
-        return conn.execute(
+        linhas = conn.execute(
             f"""
             SELECT btrim(d4_op) AS op, btrim(d4_cod) AS produto,
                    btrim(d4_local) AS local, d4_quant AS quantidade,
@@ -794,6 +795,11 @@ def empenhos(op: str, filial: str = config.FILIAL_PADRAO) -> list[dict]:
             """,
             (filial, op),
         ).fetchall()
+    for linha in linhas:
+        for campo in ("quantidade", "quantidadeOriginal"):
+            if isinstance(linha.get(campo), Decimal):
+                linha[campo] = float(linha[campo])
+    return linhas
 
 
 def _data_br(yyyymmdd: str | None) -> str | None:

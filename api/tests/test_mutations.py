@@ -413,6 +413,44 @@ class TestTransferencia:
         assert depois_o["b2_qatu"] == pytest.approx(saldo_o - 30)
         assert depois_d["b2_qatu"] == pytest.approx(saldo_d + 30)
 
+    def test_transferencia_grava_sd3_com_re4_e_de4(self, conn):
+        produto = "100-003"
+        origem, destino = "01", "05"
+
+        ref, _ = protheus.transferir(
+            conn,
+            TransferenciaMutation(
+                id="teste-transf-sd3",
+                kind="transferencia",
+                filial=FILIAL,
+                criadoEm=AGORA,
+                autor="teste",
+                payload={
+                    "produto": produto,
+                    "quantidade": 12,
+                    "localOrigem": origem,
+                    "localDestino": destino,
+                },
+            ),
+        )
+
+        doc = ref.removeprefix("SD3:")
+        movimentos = conn.execute(
+            f"""
+            SELECT btrim(d3_cf) AS cf, btrim(d3_cod) AS cod,
+                   btrim(d3_local) AS local, d3_quant
+            FROM {config.tabela('SD3')}
+            WHERE btrim(d3_doc) = %s
+            ORDER BY r_e_c_n_o_
+            """,
+            (doc,),
+        ).fetchall()
+
+        assert [m["cf"] for m in movimentos] == ["RE4", "DE4"]
+        assert [m["local"] for m in movimentos] == [origem, destino]
+        assert all(m["cod"] == produto for m in movimentos)
+        assert all(m["d3_quant"] == pytest.approx(12) for m in movimentos)
+
     def test_o_empenhado_nao_se_move_junto(self, conn):
         produto = "100-003"
         antes = protheus._saldo(conn, FILIAL, produto, "01")

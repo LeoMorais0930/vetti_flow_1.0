@@ -76,11 +76,13 @@ class ApiFirstProtheusProductRepository implements ProtheusProductRepository {
 class ApiProtheusProductRepository implements ProtheusProductRepository {
   ApiProtheusProductRepository({
     required String baseUrl,
+    this.apiToken = '',
     http.Client? httpClient,
   }) : baseUrl = baseUrl.replaceFirst(RegExp(r'/+$'), ''),
        _http = httpClient ?? http.Client();
 
   final String baseUrl;
+  final String apiToken;
   final http.Client _http;
 
   static const _timeout = Duration(seconds: 12);
@@ -89,6 +91,13 @@ class ApiProtheusProductRepository implements ProtheusProductRepository {
     final uri = Uri.parse('$baseUrl$path');
     if (query == null || query.isEmpty) return uri;
     return uri.replace(queryParameters: query);
+  }
+
+  Map<String, String> _headers() {
+    final token = apiToken.trim().isNotEmpty
+        ? apiToken.trim()
+        : ApiSettings.token;
+    return {if (token.isNotEmpty) 'X-API-Token': token};
   }
 
   @override
@@ -103,10 +112,7 @@ class ApiProtheusProductRepository implements ProtheusProductRepository {
     if (normalizedCode.isEmpty) return null;
 
     final response = await _http
-        .get(
-          _uri('/api/v1/produtos/$normalizedCode'),
-          headers: ApiSettings.headers(),
-        )
+        .get(_uri('/api/v1/produtos/$normalizedCode'), headers: _headers())
         .timeout(_timeout);
     if (response.statusCode == 404) return null;
     _ensureOk(response);
@@ -125,7 +131,7 @@ class ApiProtheusProductRepository implements ProtheusProductRepository {
             'query': query.trim(),
             'limit': limit.toString(),
           }),
-          headers: ApiSettings.headers(),
+          headers: _headers(),
         )
         .timeout(_timeout);
     _ensureOk(response);

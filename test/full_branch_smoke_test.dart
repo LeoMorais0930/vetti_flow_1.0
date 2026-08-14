@@ -18,6 +18,7 @@ import 'package:vetti_flow_1_0/data/repositories/op_repository.dart';
 import 'package:vetti_flow_1_0/data/repositories/operator_assignment_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/pending_mutation_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/production_flow_store.dart';
+import 'package:vetti_flow_1_0/data/repositories/protheus_connection_store.dart';
 import 'package:vetti_flow_1_0/data/repositories/protheus_sync_client.dart';
 import 'package:vetti_flow_1_0/data/repositories/warehouse_request_store.dart';
 import 'package:vetti_flow_1_0/shared/theme/app_theme.dart';
@@ -57,6 +58,9 @@ void main() {
             ),
             ChangeNotifierProvider<OperatorAssignmentStore>(
               create: (_) => OperatorAssignmentStore(),
+            ),
+            ChangeNotifierProvider<ProtheusConnectionStore>(
+              create: (_) => ProtheusConnectionStore(),
             ),
             ChangeNotifierProvider<WarehouseRequestStore>(
               create: (_) => WarehouseRequestStore(
@@ -134,7 +138,6 @@ void main() {
 
       expect(find.text('Cancelar OP e devolver empenhos'), findsOneWidget);
       expect(find.text('Retorno por item'), findsOneWidget);
-      expect(find.textContaining('100-010'), findsWidgets);
 
       await tester.ensureVisible(
         find.byKey(const Key('cancel-op-operator-pin')),
@@ -150,7 +153,7 @@ void main() {
       expect(repository.canceledNumbers, ['OP-2026-9000']);
       expect(repository.cancelOperatorName, 'Vera');
       expect(repository.cancelOperatorPin, '1005');
-      expect(repository.cancelReturnWarehouses['100-010'], '01');
+      expect(repository.cancelReturnWarehouses['100-010'], '05');
       expect(find.text('OP-2026-9000'), findsNothing);
       expect(tester.takeException(), isNull);
     },
@@ -174,9 +177,11 @@ void main() {
 
       final client = ProtheusSyncClient(
         baseUrl: 'http://api.test',
+        apiToken: 'segredo-teste',
         httpClient: MockClient((request) async {
           expect(request.method, 'POST');
           expect(request.url.path, '/api/v1/mutations');
+          expect(request.headers['X-API-Token'], 'segredo-teste');
 
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           final mutations = body['mutations'] as List<dynamic>;

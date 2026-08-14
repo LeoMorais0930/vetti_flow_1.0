@@ -8,7 +8,7 @@ cache local no app. Esta API é o que leva esse cache para o outro lado.
 
 ## Onde ela grava — leia antes de subir
 
-Hoje aplica no banco **`vettiflow`**, a cópia do Protheus migrada para o
+Hoje aplica no banco **`vettip12`**, a cópia do Protheus migrada para o
 PostgreSQL. **Não é o Protheus de produção.** É de propósito: o objetivo é ver
 o efeito real das mutações nas tabelas — quais linhas nascem, quais saldos se
 mexem — antes de encostar no ERP de verdade.
@@ -39,16 +39,54 @@ python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
 ```
 
 ```bash
+cp .env.example .env
+# edite .env com o host, usuário, senha e token desta máquina
 ./venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
+O arquivo `api/.env` é local e ignorado pelo Git. Cada máquina pode ter seu
+próprio `VF_DSN`/`VF_API_TOKEN` sem gerar conflito de merge.
+
 Documentação interativa em <http://localhost:8000/docs>.
+
+## Modo servidor / teste pesado
+
+Na VM/servidor, suba a API com token e sem depender dos defaults locais:
+
+```bash
+export VF_DSN="postgresql://usuario:senha@localhost:5432/vettip12"
+export VF_API_TOKEN="trocar-por-um-token-interno"
+export VF_CORS_ORIGINS="http://localhost:8080,http://IP-OU-HOST-DO-SERVIDOR:8080"
+export VF_APPLY=0
+export VF_REQUIRE_SF5_MOVEMENTS=1
+export VF_TM_PR0="CODIGO-PR0-DA-SF5"
+export VF_TM_RE1="CODIGO-RE1-DA-SF5"
+export VF_TM_RE4="CODIGO-RE4-DA-SF5"
+export VF_TM_DE4="CODIGO-DE4-DA-SF5"
+./venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Use `VF_APPLY=0` na primeira rodada para simular e auditar sem mexer em
+SC2/SD4/SB2. Depois da conferência no banco dev, troque para `VF_APPLY=1`.
+Com `VF_REQUIRE_SF5_MOVEMENTS=1`, qualquer gravação em SD3 é recusada se o
+tipo de movimento (`D3_TM`) não existir na SF5 ou se o `F5_TIPO` não combinar
+com o movimento (`P` produção, `R` requisição, `D` devolução).
+
+Da maquina que roda o app, valide a API antes de criar OP:
+
+```powershell
+.\tools\check_protheus_server_api.ps1 `
+  -ApiUrl 'http://IP-OU-HOST-DO-SERVIDOR:8000' `
+  -ApiToken 'trocar-por-um-token-interno' `
+  -SampleProduct '730-0863'
+```
 
 Apontar o app para cá:
 
 ```bash
 flutter run \
   --dart-define=VETTIFLOW_API_URL=http://localhost:8000 \
+  --dart-define=VETTIFLOW_API_TOKEN=trocar-por-um-token-interno \
   --dart-define=VETTIFLOW_ALLOW_DIRECT_POSTGRES_FALLBACK=false
 ```
 
@@ -66,9 +104,22 @@ Rodam contra o banco configurado em `VF_DSN` e desfazem o que fizeram.
 
 ## Configuração
 
+| Variável     | Padrão                                   | O que faz                                    |
+|--------------|------------------------------------------|----------------------------------------------|
+| `VF_DSN`     | `postgresql://localhost:5432/vettip12`   | Banco onde aplica                            |
+| `VF_API_TOKEN` | vazio                                  | Token exigido nos endpoints de dados/mutação |
+| `VF_CORS_ORIGINS` | `*`                                 | Origens web liberadas, separadas por vírgula |
+| `VF_EMPRESA` | `010`                                    | Sufixo das tabelas (`SC2` → `sc2010`)        |
+| `VF_APPLY`   | `1`                                      | `0` valida e audita, mas não grava           |
+| `VF_FILIAL`  | `04`                                     | Filial padrão das consultas                  |
+| `VF_REQUIRE_SF5_MOVEMENTS` | `0`                         | `1` exige validar `D3_TM` na `SF5` antes de gravar `SD3` |
+| `VF_TM_PR0`  | vazio                                    | `F5_CODIGO` usado no `D3_TM` para produção manual (`D3_CF=PR0`) |
+| `VF_TM_RE1`  | vazio                                    | `F5_CODIGO` usado no `D3_TM` para requisição automática (`D3_CF=RE1`) |
+| `VF_TM_RE4`  | vazio                                    | `F5_CODIGO` usado no `D3_TM` para saída por transferência (`D3_CF=RE4`) |
+| `VF_TM_DE4`  | vazio                                    | `F5_CODIGO` usado no `D3_TM` para entrada/devolução da transferência (`D3_CF=DE4`) |
 | Variável          | Padrão                                   | O que faz                                    |
 |-------------------|------------------------------------------|----------------------------------------------|
-| `VF_DSN`          | `postgresql://localhost:5432/vettiflow`  | Banco onde aplica                            |
+| `VF_DSN`          | `postgresql://localhost:5432/vettip12`   | Banco onde aplica                            |
 | `VF_EMPRESA`      | `010`                                    | Sufixo das tabelas (`SC2` → `sc2010`)        |
 | `VF_APPLY`        | `1`                                      | `0` valida e audita, mas não grava           |
 | `VF_FILIAL`       | `04`                                     | Filial padrão das consultas                  |
@@ -138,7 +189,7 @@ O `id` de cada mutação continua sendo a chave de idempotência: reenviar para
 |------------------|--------------------------------------------------------|
 | `aberturaOp`     | `SC2` (a ordem) + `SD4` (empenhos) + `SB2` (`b2_qemp`) |
 | `empenho`        | `SD4` + `SB2` (`b2_qemp`)                              |
-| `transferencia`  | `SB2` (`b2_qatu` nas duas pontas)                      |
+| `transferencia`  | `SB2` (`b2_qatu` nas duas pontas) + `SD3` (`RE4`/`DE4`) |
 
 Sem empenhos no pedido, a abertura de OP explode a estrutura vigente do produto
 (`SG1`), que é o que o Protheus faz sozinho. Com empenhos, eles substituem a

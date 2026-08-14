@@ -1,13 +1,10 @@
 /// Conexao com o Postgres local que serve o VettiFlow.
 ///
-/// O nome do banco muda por maquina: o padrao e `vettip12`, onde o dump do
-/// Protheus foi restaurado na maquina do Vitor/macOS (schemas `vettiflow` e
-/// `protheus_raw` criados por `db/migrations`); na maquina do Leonardo o mesmo
-/// conteudo vive em `vettiflow`. Por isso todo valor pode ser sobrescrito em
-/// tempo de build:
+/// O nome do banco local padronizado e `vettip12`, igual ao ambiente do
+/// Vitor/macOS, com schemas `vettiflow` e `protheus_raw`.
 ///
 /// ```bash
-/// flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettiflow
+/// flutter run --dart-define=VETTIFLOW_PG_DATABASE=vettip12
 /// ```
 class PostgresSettings {
   const PostgresSettings({

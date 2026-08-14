@@ -23,6 +23,8 @@ class VettiFlowApp extends StatelessWidget {
     defaultValue: 'http://localhost:8000',
   );
 
+  static const _apiToken = String.fromEnvironment('VETTIFLOW_API_TOKEN');
+
   static const _connectionMode = String.fromEnvironment(
     'VETTIFLOW_PROTHEUS_CONNECTION_MODE',
   );
@@ -40,12 +42,18 @@ class VettiFlowApp extends StatelessWidget {
     return ProtheusConnectionMode.automatic;
   }
 
+  static bool _useDirectPostgres() =>
+      _allowDirectPostgresFallback &&
+      _initialConnectionMode() != ProtheusConnectionMode.fastApi;
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         Provider<ProductionFlowDatabase>(
-          create: (_) => PostgresProductionFlowDatabase(),
+          create: (_) => _useDirectPostgres()
+              ? PostgresProductionFlowDatabase()
+              : const EmptyProductionFlowDatabase(),
         ),
         ChangeNotifierProvider<ProductionFlowStore>(
           create: (context) => ProductionFlowStore(
@@ -61,14 +69,17 @@ class VettiFlowApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<WarehouseRequestStore>(
           create: (_) => WarehouseRequestStore(
-            database: PostgresWarehouseRequestDatabase(),
+            database: _useDirectPostgres()
+                ? PostgresWarehouseRequestDatabase()
+                : const EmptyWarehouseRequestDatabase(),
           ),
         ),
         ChangeNotifierProvider<PendingMutationStore>(
           create: (_) => PendingMutationStore(),
         ),
         Provider<ProtheusSyncClient>(
-          create: (_) => ProtheusSyncClient(baseUrl: _apiBaseUrl),
+          create: (_) =>
+              ProtheusSyncClient(baseUrl: _apiBaseUrl, apiToken: _apiToken),
           dispose: (_, client) => client.dispose(),
         ),
         ChangeNotifierProvider<MutationSyncService>(
@@ -81,6 +92,7 @@ class VettiFlowApp extends StatelessWidget {
           update: (_, connection, _) {
             final apiRepository = ApiProtheusProductRepository(
               baseUrl: _apiBaseUrl,
+              apiToken: _apiToken,
             );
             switch (connection.mode) {
               case ProtheusConnectionMode.fastApi:
