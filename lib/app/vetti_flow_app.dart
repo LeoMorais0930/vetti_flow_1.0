@@ -28,7 +28,7 @@ class VettiFlowApp extends StatelessWidget {
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'VettiFlow 1.0',
+        title: 'VettiFlow',
         theme: AppTheme.light,
         initialRoute: '/login',
         routes: vettiFlowRoutes(),

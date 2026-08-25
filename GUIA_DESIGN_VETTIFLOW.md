@@ -1,4 +1,4 @@
-# VettiFlow 1.0 — Guia de Design e Estilizacao
+# VettiFlow Flutter App — Guia de Design e Estilizacao
 
 > Use este documento como referencia absoluta ao construir qualquer tela do VettiFlow.
 > Todas as decisoes de cor, espacamento, tipografia, layout responsivo e fluxo funcional

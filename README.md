@@ -1,4 +1,4 @@
-# VettiFlow 1.0
+# VettiFlow Flutter App
 
 [Portugues](#portugues) | [English](#english)
 
@@ -12,7 +12,7 @@ A operacao precisava de uma interface simples para visualizar ordens, status, pr
 
 ### A solucao
 
-O VettiFlow 1.0 entrega uma base de frontend para uso interno, com:
+O VettiFlow Flutter App entrega uma base de frontend para uso interno, com:
 
 - Login e estrutura de rotas.
 - Dashboard com cards, tabela, kanban, filtros e KPIs.
@@ -80,7 +80,7 @@ The operation needed a simple interface to track orders, status, priorities, and
 
 ### Solution
 
-VettiFlow 1.0 provides an internal frontend foundation with:
+VettiFlow Flutter App provides an internal frontend foundation with:
 
 - Login and route structure.
 - Dashboard with cards, table, kanban, filters, and KPIs.

@@ -1,4 +1,4 @@
-# VettiFlow 1.0
+# VettiFlow Flutter App
 
 Flutter app for production flow management at Vetti.
 
